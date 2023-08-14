@@ -1,0 +1,6 @@
+[submodule "third-party/libspdm"]
+	path = third-party/libspdm
+	url = https://github.com/DMTF/libspdm.git
+[submodule "third-party/SPDM-Responder-Validator"]
+	path = third-party/SPDM-Responder-Validator
+	url = https://github.com/DMTF/SPDM-Responder-Validator.git

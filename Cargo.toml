@@ -1,0 +1,31 @@
+[package]
+name = "SPDM-Utils"
+repository = "https://github.com/westerndigitalcorporation/SPDM-Utils"
+description = "SPDM-Utils is a Linux application designed to support, test and develop SPDM requesters and responders."
+version = "1.0.0"
+authors = ["Alistair Francis <alistair.francis@wdc.com>", "Wilfred Mallawa <wilfred.mallawa@wdc.com"]
+edition = "2021"
+readme = "README.md"
+
+[features]
+no_std = []
+
+[lib]
+name = "no_std_responder"
+required-features = ["no_std"]
+
+[build-dependencies]
+bindgen = "0.63"
+
+[dependencies]
+clap = { version = "4.0", features = ["derive"] }
+libc = "0.2"
+memmap2 = "0.5"
+once_cell = "1.16"
+uio = "0.2.0"
+volatile-register = "0.2"
+ciborium-ll = "0.2"
+subslice = "0.2"
+sha2 = "0.10"
+log = "0.4.20"
+env_logger = "0.7.0"

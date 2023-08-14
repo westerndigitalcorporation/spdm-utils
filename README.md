@@ -1,0 +1,270 @@
+# SPDM-Utils
+
+SPDM-Utils is a Linux application designed to support, test and
+develop SPDM requesters and responders.
+
+SPDM-Utils uses [libspdm](https://github.com/DMTF/libspdm) as the backend to
+perform SPDM communication. SPDM-Utils currently supports the PCIe
+Data Object Exchange (DOE) Capability.
+
+SPDM-Utils is in charge of passing data from the DOE mailbox implemented in
+hardware to [libspdm](https://github.com/DMTF/libspdm).
+
+# Copyright
+
+Copyright (c) 2022 Western Digital
+
+SPDM-Utils source code is dual licensed under the Apache-2.0 license and MIT license. A copy of these licenses can be found either in the LICENSE-APACHE or LICENSE-MIT files. Versions are also available at http://www.apache.org/licenses/LICENSE-2.0 and http://opensource.org/licenses/MIT.
+
+See LICENSE-APACHE, LICENSE-MIT, and COPYRIGHT for details.
+
+# Dependencies
+
+First you need to install Rust, instructions for that are available at: https://rustup.rs/
+
+You will also need a few host dependencies
+
+## Fedora
+
+```shell
+sudo dnf install cmake clang-libs clang-devel pciutils-devel openssl openssl-devel
+```
+
+# Building
+
+Initialise all sub-modules
+
+```shell
+cd third-party/
+git submodule init; git submodule update --recursive
+```
+
+## Build libspdm
+
+To build libspdm in the third-party directory
+
+```shell
+cd libspdm/
+mkdir build; cd build
+cmake -DARCH=x64 -DTOOLCHAIN=GCC -DTARGET=Debug -DCRYPTO=openssl -DENABLE_BINARY_BUILD=1 -DCOMPILED_LIBCRYPTO_PATH=/usr/lib/ -DCOMPILED_LIBSSL_PATH=/usr/lib/ -DDISABLE_TESTS=1 -DDISABLE_EDDSA=1 ..
+make -j8
+```
+
+## Build the binary
+
+Then you can build SPDM-Utils with
+
+```shell
+cargo build --bin SPDM-Utils
+```
+
+## Build the `no_std` library
+
+This is currently a work in progress
+
+
+```shell
+cargo build --lib
+```
+
+## Generate mutable certificates
+
+Generate the certificates with
+
+```shell
+cd certs
+./setup_certs.sh ../target/debug/SPDM-Utils
+cd ../
+```
+
+
+## Configuring the Logger
+
+SPDM-Utils supports logging. The following log levels are supported:
+
+- trace
+- debug
+- info
+- warn
+- error
+
+By default SPDM-Utils will build with `trace` log level, meaning that the log
+outputs are very verbose containing all logs. To change this, set the `LOG_LEVEL`
+environment variable to the desired level when building. The logger also takes a
+`LOG_STYLE` parameter which may be used to set the character style. This
+defaults to `always` but can be changed to one of (see
+[here](https://docs.rs/env_logger/latest/env_logger/#disabling-colors) for more):
+
+- always
+- never
+- auto
+
+```shell
+LOG_LEVEL=info LOG_STYLE=never cargo build
+```
+
+# Testing
+
+All changes should go through the Cargo formatter and tests, which can be run with
+
+```shell
+cargo fmt; cargo clippy; cargo test
+```
+
+## Optional for running libspdm tests through SPDM-Utils:
+
+Also setup and build `SPDM-Responder-Validator` in the third-party directory
+
+```shell
+cd third-party/
+git submodule init; git submodule update --recursive
+cd SPDM-Responder-Validator/
+rm -rf libspdm/
+
+# This assumes that `third-party/libspdm` is configured correctly as above
+# The symlink here ensures that the tests are build against the same version of libspdm
+ln -s ../libspdm/ libspdm
+mkdir build; cd build
+
+cmake -DARCH=x64 -DTOOLCHAIN=GCC -DTARGET=Debug -DCRYPTO=openssl ..
+make -j8
+```
+
+We can now build SPDM-Utils with
+
+```shell
+RUSTFLAGS='--cfg libspdm_tests' cargo build
+```
+
+## Testing completely on the host
+
+You can run SPDM-Utils completely on the host using unix sockets.
+In this case you can run the server side with
+
+```shell
+cargo run -- --socket-server request get-digests
+```
+
+and the client side with
+
+```shell
+./target/debug/SPDM-Utils --socket-client response
+```
+
+Note that the server must be run first. You can also swap the server/client
+specification between the request or response side as well.
+
+You can also run the libspdm tests by running tests on the socket server with:
+
+```shell
+cargo run -- --socket-server tests
+```
+
+## Testing a real device
+
+You can run SPDM-Utils on the host to interact with a real DOE device. To do
+that you can run the following example to get digest information
+
+```shell
+./target/debug/SPDM-Utils --doe-pci-cfg request get-digests
+```
+
+## Setting the certificate
+
+From a host you can set the certificate of the device. As SPDM-Utils uses
+the Alias cert model you can only set the root certificate to the device
+certificate with the `SET_CERTIFICATE` command (see section 117 on the
+SPDM spec).
+
+For example to set the certificate run:
+
+```shell
+SPDM-Utils --doe-pci-cfg request --cert-path ./certs/slot0/immutable.der set-certificate
+```
+
+## Getting a Certificate Signing Request
+
+A requester can get the Certificate Signing Request (CSR) from the device
+with a command similar to this:
+
+```shell
+SPDM-Utils --doe-pci-cfg request get-csr
+```
+
+Which will save the file to `csr_response.der`. You can then verify the CSR
+with openssl
+
+```shell
+openssl req -text -noout -inform der -verify -in ./csr_response.der
+```
+
+## Signing a Certificate Signing Request
+
+Once you have a `csr_response.der` from the responder, you first want to
+convert it to a PEM format with
+
+```shell
+openssl req -inform der -in ./csr_response.der -out csr_response.req
+```
+
+You can now sign the CSR
+
+```shell
+openssl x509 -req -in csr_response.req -out csr_response.cert -CA ./certs/slot0/evice.der -sha384 -days 3650 -set_serial 3 -extensions v3_inter -extfile ./certs/penssl-alias.cnf
+```
+
+Then convert the certificate back to DER
+
+```shell
+openssl asn1parse -in csr_response.cert -out csr_response.cert.der
+```
+
+Combine all of the immutable certs
+
+```shell
+cat ./certs/slot0/ca.cert.der ./certs/slot0/inter.cert.der ./certs/slot0/evice.cert.der ./csr_response.cert.der > set-cert.der
+```
+
+Now you can set the certificate of a slot
+
+```shell
+SPDM-Utils --doe-pci-cfg request --cert-slot-id 1 --cert-path ./set-cert.der set-certificate
+```
+
+
+# QEMU SPDM Device Emulation
+
+SPDM-Utils supports binding to QEMU to implement an SPDM responder side to
+an emulated device in QEMU. SPDM support for QEMU is not upstream yet, however,
+[this fork](https://github.com/qemu/qemu/compare/master...twilfredo:qemu:wilfred/spdm-a)
+has the necessary changes required to emulated an NVMe device with SPDM support
+over DOE.
+
+For example, this may be an emulated NVMe device
+in QEMU that binds to SPDM-Utils for the SPDM responder implementation.
+
+With the current SPDM implementation in QEMU, the only transport layer supported
+is DOE. SPDM-Utils must be started before QEMU for this to work.
+
+```shell
+$ ./target/debug/SPDM-Utils --qemu-server response
+
+[2023-08-29T06:21:47Z DEBUG SPDM-Utils] Logger initialisation [OK]
+[2023-08-29T06:21:47Z DEBUG SPDM-Utils::qemu_server] Setting up a server on [port: 2323, ip: 127.0.0.1]
+[2023-08-29T06:21:47Z INFO  SPDM-Utils::qemu_server] Server started, waiting for qemu on port: 2323
+```
+
+Note: You can provide `--qemu-port <QEMU_PORT>` to specify a port for the server
+and also `--qemu-transport <QEMU_TRANSPORT>` to specify the transport layer
+(currently only DOE is supported).
+
+This will start SPDM-Utils responder server on port 2323 (default). QEMU can now be
+started. Once QEMU starts, if the connection is successful, the following logs
+should show (ensure that INFO log level is enabled in SPDM-Utils).
+
+```shell
+[2023-08-29T06:22:01Z INFO  SPDM-Utils::qemu_server] New connection: 127.0.0.1:40528
+[2023-08-29T06:22:01Z INFO  SPDM-Utils::responder] Running in a response loop
+```
+
+Now QEMU is ready to use SPDM-Utils as an SPDM responder for an emulated device.
