@@ -673,7 +673,6 @@ pub fn start_session(
             return Err(ret);
         }
     }
-    println!("{}", session_info);
     Ok(session_info)
 }
 
