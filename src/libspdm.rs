@@ -828,7 +828,7 @@ pub unsafe extern "C" fn libspdm_write_certificate_to_nvm(
     };
 
     let mut writer = BufWriter::new(file);
-    let slice = std::slice::from_raw_parts(cert_chain as *const u8, cert_chain_size);
+    let slice = core::slice::from_raw_parts(cert_chain as *const u8, cert_chain_size);
 
     writer.write_all(slice).unwrap();
 
@@ -1115,7 +1115,7 @@ unsafe fn libspdm_fill_measurement_image_hash_block(
         (*measurement_block)
             .measurement_block_common_header
             .measurement_size =
-            (std::mem::size_of::<spdm_measurement_block_dmtf_header_t>() + hash_size) as u16;
+            (core::mem::size_of::<spdm_measurement_block_dmtf_header_t>() + hash_size) as u16;
 
         if !libspdm_measurement_hash_all(
             measurement_hash_algo,
@@ -1126,7 +1126,7 @@ unsafe fn libspdm_fill_measurement_image_hash_block(
             return 0;
         }
 
-        std::mem::size_of::<spdm_measurement_block_dmtf_t>() + hash_size
+        core::mem::size_of::<spdm_measurement_block_dmtf_t>() + hash_size
     } else {
         (*measurement_block)
             .measurement_block_dmtf_header
@@ -1138,12 +1138,12 @@ unsafe fn libspdm_fill_measurement_image_hash_block(
 
         (*measurement_block)
             .measurement_block_common_header
-            .measurement_size = std::mem::size_of::<spdm_measurement_block_dmtf_header_t>() as u16
+            .measurement_size = core::mem::size_of::<spdm_measurement_block_dmtf_header_t>() as u16
             + SPDM_MEASUREMENT_SPECIFICATION_DMTF as u16;
 
         (measurement_block.add(1) as *mut u8).copy_from(data.as_ptr(), data.len());
 
-        std::mem::size_of::<spdm_measurement_block_dmtf_t>() + data.len()
+        core::mem::size_of::<spdm_measurement_block_dmtf_t>() + data.len()
     }
 }
 
@@ -1608,7 +1608,7 @@ pub unsafe extern "C" fn libspdm_psk_handshake_secret_hkdf_expand(
         return false;
     }
 
-    let psk_hint = std::slice::from_raw_parts(psk_hint, psk_hint_size);
+    let psk_hint = core::slice::from_raw_parts(psk_hint, psk_hint_size);
 
     debug!("[PSK_HINT]: {:?} || SIZE {}", psk_hint, psk_hint_size);
 
@@ -1698,7 +1698,7 @@ pub unsafe extern "C" fn libspdm_psk_master_secret_hkdf_expand(
         return false;
     }
 
-    let psk_hint = std::slice::from_raw_parts(psk_hint, psk_hint_size);
+    let psk_hint = core::slice::from_raw_parts(psk_hint, psk_hint_size);
 
     debug!("[PSK_HINT]: {:?}", psk_hint);
 
@@ -1813,7 +1813,7 @@ pub unsafe extern "C" fn libspdm_measurement_opaque_data(
 ) -> bool {
     let opaque_len = OPAQUE_SIZE.min(*opaque_data_size);
     let opaque_buf = opaque_data as *mut u8;
-    let opaque = unsafe { std::slice::from_raw_parts_mut(opaque_buf, opaque_len) };
+    let opaque = unsafe { core::slice::from_raw_parts_mut(opaque_buf, opaque_len) };
 
     *opaque_data_size = opaque_len;
 
@@ -1835,7 +1835,7 @@ pub unsafe extern "C" fn libspdm_challenge_opaque_data(
 ) -> bool {
     let opaque_len = OPAQUE_SIZE.min(*opaque_data_size);
     let opaque_buf = opaque_data as *mut u8;
-    let opaque = unsafe { std::slice::from_raw_parts_mut(opaque_buf, opaque_len) };
+    let opaque = unsafe { core::slice::from_raw_parts_mut(opaque_buf, opaque_len) };
 
     *opaque_data_size = opaque_len;
 
@@ -1857,7 +1857,7 @@ pub unsafe extern "C" fn libspdm_encap_challenge_opaque_data(
 ) -> bool {
     let opaque_len = OPAQUE_SIZE.min(*opaque_data_size);
     let opaque_buf = opaque_data as *mut u8;
-    let opaque = unsafe { std::slice::from_raw_parts_mut(opaque_buf, opaque_len) };
+    let opaque = unsafe { core::slice::from_raw_parts_mut(opaque_buf, opaque_len) };
 
     *opaque_data_size = opaque_len;
 
