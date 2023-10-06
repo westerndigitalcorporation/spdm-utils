@@ -1,4 +1,6 @@
-# SPDM-Utils
+<div align="center">
+    <h1>SPDM-Utils</h1>
+</div>
 
 SPDM-Utils is a Linux application designed to support, test and
 develop SPDM requesters and responders.
@@ -17,6 +19,25 @@ Copyright (c) 2022 Western Digital
 SPDM-Utils source code is dual licensed under the Apache-2.0 license and MIT license. A copy of these licenses can be found either in the LICENSE-APACHE or LICENSE-MIT files. Versions are also available at http://www.apache.org/licenses/LICENSE-2.0 and http://opensource.org/licenses/MIT.
 
 See LICENSE-APACHE, LICENSE-MIT, and COPYRIGHT for details.
+
+# Table of Contents
+
+- [Dependencies](#dependencies)
+    - [Fedora](#fedora)
+- [Building](#building)
+    - [Build libspdm](#build-libspdm)
+    - [Build the binary](#build-the-binary)
+    - [Build the `no_std` library](#build-the-no_std-library)
+    - [Generate mutable certificates](#Generate-mutable-certificates)
+    - [Configuring the Logger](#configuring-the-logger)
+- [Testing](#testing)
+    - [Running libspdm tests](#running-libspdm-tests)
+    - [Testing completely on the host](#testing-completely-on-the-host)
+    - [Testing a real device](#testing-a-real-device)
+    - [Setting the certificate](#setting-the-certificate)
+    - [Getting a Certificate Signing Request](#getting-a-certificate-signing-request)
+    - [Signing a Certificate Signing Request](#signing-a-certificate-signing-request)
+- [QEMU SPDM Device Emulation](#qemu-spdm-device-emulation)
 
 # Dependencies
 
@@ -111,9 +132,9 @@ All changes should go through the Cargo formatter and tests, which can be run wi
 cargo fmt; cargo clippy; cargo test
 ```
 
-## Optional for running libspdm tests through SPDM-Utils:
+## Running libspdm tests
 
-Also setup and build `SPDM-Responder-Validator` in the third-party directory
+Setup and build `SPDM-Responder-Validator` in the third-party directory
 
 ```shell
 cd third-party/
@@ -181,6 +202,9 @@ For example to set the certificate run:
 ```shell
 SPDM-Utils --doe-pci-cfg request --cert-path ./certs/slot0/immutable.der set-certificate
 ```
+
+You can additionally specify `--cert-slot-id` to specify the target slot number, valid slot numbers range from
+0-7.
 
 ## Getting a Certificate Signing Request
 
