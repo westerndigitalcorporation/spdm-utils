@@ -874,7 +874,7 @@ pub unsafe extern "C" fn libspdm_gen_csr(
     csr_pointer: *mut u8,
     is_device_cert_model: bool,
 ) -> bool {
-    let mut context: *mut c_void = ptr::null_mut();
+    let mut ec_context: *mut c_void = ptr::null_mut();
     let csr_buffer_size: size_t = *csr_len;
 
     *need_reset = false;
@@ -900,7 +900,7 @@ pub unsafe extern "C" fn libspdm_gen_csr(
         key_buffer,
         buffer_len,
         ptr::null_mut(),
-        &mut context,
+        &mut ec_context,
     );
     if !result {
         key_buffer.write_bytes(0, buffer_len);
@@ -919,13 +919,13 @@ pub unsafe extern "C" fn libspdm_gen_csr(
         requester_info,
         requester_info_length,
         !is_device_cert_model,
-        context,
+        ec_context,
         subject_name.into_raw(),
         csr_len,
         csr_pointer,
     );
 
-    libspdm_asym_free(base_asym_algo, context);
+    libspdm_asym_free(base_asym_algo, ec_context);
     key_buffer.write_bytes(0, buffer_len);
     dealloc(key_buffer, key_buffer_layout);
 

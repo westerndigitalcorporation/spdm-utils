@@ -210,7 +210,7 @@ openssl req -inform der -in ./csr_response.der -out csr_response.req
 You can now sign the CSR
 
 ```shell
-openssl x509 -req -in csr_response.req -out csr_response.cert -CA ./certs/slot0/evice.der -sha384 -days 3650 -set_serial 3 -extensions v3_inter -extfile ./certs/penssl-alias.cnf
+openssl x509 -req -in csr_response.req -out csr_response.cert -CA ./certs/slot0/inter.der -sha384 -days 3650 -set_serial 3 -extensions v3_inter -extfile ./certs/openssl-alias.cnf
 ```
 
 Then convert the certificate back to DER
@@ -222,7 +222,7 @@ openssl asn1parse -in csr_response.cert -out csr_response.cert.der
 Combine all of the immutable certs
 
 ```shell
-cat ./certs/slot0/ca.cert.der ./certs/slot0/inter.cert.der ./certs/slot0/evice.cert.der ./csr_response.cert.der > set-cert.der
+cat ./certs/slot0/ca.cert.der ./certs/slot0/inter.cert.der ./csr_response.cert.der > set-cert.der
 ```
 
 Now you can set the certificate of a slot
@@ -231,6 +231,20 @@ Now you can set the certificate of a slot
 SPDM-Utils --doe-pci-cfg request --cert-slot-id 1 --cert-path ./set-cert.der set-certificate
 ```
 
+Then you request the certificate back
+
+```shell
+SPDM-Utils --doe-pci-cfg request --cert-slot-id 1 get-certificate
+```
+
+If you are running the socket/client mode you will have to simulate a
+device reset and certificate re-gen. That can be done by running this
+
+```shell
+cd certs
+./setup_certs.sh ../target/debug/SPDM-Utils
+cd ../
+```
 
 # QEMU SPDM Device Emulation
 

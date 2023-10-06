@@ -21,11 +21,15 @@ openssl x509 -req -in device.req -out device.cert -CA inter.cert -CAkey inter.ke
 
 # Generate der files
 openssl asn1parse -in ca.cert -out ca.cert.der
+
+# Generate the inter public and private key
 openssl asn1parse -in inter.cert -out inter.cert.der
-openssl asn1parse -in device.cert -out device.cert.der
-openssl asn1parse -in device.key -out device.key.der
+openssl asn1parse -in inter.key -out inter.key.der
+cat inter.cert.der inter.key.der > inter.der
 
 # Generate the device public and private key
+openssl asn1parse -in device.cert -out device.cert.der
+openssl asn1parse -in device.key -out device.key.der
 cat device.cert.der device.key.der > device.der
 
 # Save all of the immutable certificates
