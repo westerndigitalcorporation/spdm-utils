@@ -362,7 +362,7 @@ fn main() -> Result<(), ()> {
                 unsafe {
                     test_suite::start_tests(cntx_ptr, test_suite::TestBackend::DoeBackend);
                 }
-            } else if cli.socket_server {
+            } else if cli.socket_server || cli.socket_client {
                 unsafe {
                     test_suite::start_tests(cntx_ptr, test_suite::TestBackend::SocketBackend);
                 }
