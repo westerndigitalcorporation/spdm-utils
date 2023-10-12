@@ -67,7 +67,7 @@ To build libspdm in the third-party directory
 ```shell
 cd libspdm/
 mkdir build; cd build
-cmake -DARCH=x64 -DTOOLCHAIN=GCC -DTARGET=Debug -DCRYPTO=openssl -DENABLE_BINARY_BUILD=1 -DCOMPILED_LIBCRYPTO_PATH=/usr/lib/ -DCOMPILED_LIBSSL_PATH=/usr/lib/ -DDISABLE_TESTS=1 -DDISABLE_EDDSA=1 ..
+cmake -DARCH=x64 -DTOOLCHAIN=GCC -DTARGET=Debug -DCRYPTO=openssl -DENABLE_BINARY_BUILD=1 -DCOMPILED_LIBCRYPTO_PATH=/usr/lib/ -DCOMPILED_LIBSSL_PATH=/usr/lib/ -DDISABLE_TESTS=1 ..
 make -j8
 ```
 
