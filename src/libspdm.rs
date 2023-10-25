@@ -878,39 +878,60 @@ pub unsafe extern "C" fn libspdm_gen_csr(
 
     *need_reset = false;
 
-    let path = Path::new("certs/slot0/device.key");
+    let key_path = Path::new("certs/slot0/device.key");
 
-    let file = match OpenOptions::new().read(true).write(false).open(path) {
-        Err(why) => panic!("couldn't open {}: {}", path.display(), why),
+    let key_file = match OpenOptions::new().read(true).write(false).open(key_path) {
+        Err(why) => panic!("couldn't open {}: {}", key_path.display(), why),
         Ok(file) => file,
     };
 
-    let mut reader = BufReader::new(file);
-    let buffer = reader.fill_buf().unwrap();
-    let buffer_len = buffer.len();
+    let mut key_reader = BufReader::new(key_file);
+    let key_buffer = key_reader.fill_buf().unwrap();
+    let key_buffer_len = key_buffer.len();
 
-    let key_buffer_layout = Layout::from_size_align(buffer_len, 8).unwrap();
-    let key_buffer = alloc(key_buffer_layout);
+    let key_buffer_layout = Layout::from_size_align(key_buffer_len, 8).unwrap();
+    let alloc_key_buffer = alloc(key_buffer_layout);
 
-    key_buffer.copy_from(buffer.as_ptr(), buffer_len);
+    alloc_key_buffer.copy_from(key_buffer.as_ptr(), key_buffer_len);
 
     let result = libspdm_asym_get_private_key_from_pem(
         base_asym_algo,
-        key_buffer,
-        buffer_len,
+        alloc_key_buffer,
+        key_buffer_len,
         ptr::null_mut(),
         &mut ec_context,
     );
     if !result {
-        key_buffer.write_bytes(0, buffer_len);
-        dealloc(key_buffer, key_buffer_layout);
+        alloc_key_buffer.write_bytes(0, key_buffer_len);
+        dealloc(alloc_key_buffer, key_buffer_layout);
         return false;
     }
+
+    let cert_path = Path::new("certs/slot0/device.cert.der");
+
+    let cert_file = match OpenOptions::new().read(true).write(false).open(cert_path) {
+        Err(why) => panic!("couldn't open {}: {}", cert_path.display(), why),
+        Ok(file) => file,
+    };
+
+    let mut cert_reader = BufReader::new(cert_file);
+    let cert_buffer = cert_reader.fill_buf().unwrap();
+    let cert_buffer_len = cert_buffer.len();
+
+    let cert_buffer_layout = Layout::from_size_align(cert_buffer_len, 8).unwrap();
+    let mut alloc_cert_buffer = alloc(cert_buffer_layout);
+
+    libspdm_x509_construct_certificate(
+        cert_buffer.as_ptr(),
+        cert_buffer_len,
+        &mut alloc_cert_buffer,
+    );
 
     let hash_nid = libspdm_get_hash_nid(base_hash_algo);
     let asym_nid = libspdm_get_aysm_nid(base_asym_algo);
 
-    let subject_name = CString::new("C=AU,O=Test Org,CN=Test CSR").unwrap();
+    let subject_name =
+        CString::new("C=AU,O=Western Digital Test,CN=Western Digital AN300 Test CSR").unwrap();
 
     let result = libspdm_gen_x509_csr(
         hash_nid,
@@ -922,11 +943,12 @@ pub unsafe extern "C" fn libspdm_gen_csr(
         subject_name.into_raw(),
         csr_len,
         csr_pointer,
+        alloc_cert_buffer as *mut c_void,
     );
 
     libspdm_asym_free(base_asym_algo, ec_context);
-    key_buffer.write_bytes(0, buffer_len);
-    dealloc(key_buffer, key_buffer_layout);
+    alloc_key_buffer.write_bytes(0, key_buffer_len);
+    dealloc(alloc_key_buffer, key_buffer_layout);
 
     if csr_buffer_size < *csr_len {
         return false;
