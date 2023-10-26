@@ -11,8 +11,12 @@ readme = "README.md"
 no_std = []
 
 [lib]
-name = "no_std_responder"
-required-features = ["no_std"]
+name = "libspdm"
+path = "src/libspdm/lib.rs"
+
+[[bin]]
+name = "spdm_utils"
+path = "src/main.rs"
 
 [build-dependencies]
 bindgen = "0.63"

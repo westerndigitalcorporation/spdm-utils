@@ -4,9 +4,9 @@
 
 //! Contains all of the handlers for creating SPDM responder.
 
-use crate::libspdm::LibspdmReturnStatus;
 use crate::*;
 use core::ffi::c_void;
+use libspdm::spdm::LibspdmReturnStatus;
 use std::path::Path;
 
 /// # Summary
@@ -200,7 +200,7 @@ pub fn setup_capabilities(
         let path = Path::new(&file_path);
 
         let (cert_chain_buffer, cert_chain_size) =
-            libspdm::get_local_certchain(path, asym_algo, hash_algo, false);
+            libspdm::spdm::get_local_certchain(path, asym_algo, hash_algo, false);
         if LibspdmReturnStatus::libspdm_status_is_error(libspdm_set_data(
             context,
             libspdm_data_type_t_LIBSPDM_DATA_LOCAL_PUBLIC_CERT_CHAIN,

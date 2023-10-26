@@ -6,9 +6,9 @@
 //! to implement and emulate an SPDM responder.
 //!
 
-use crate::libspdm::LIBSPDM_MAX_SPDM_MSG_SIZE;
 use crate::*;
 use libc::size_t;
+use libspdm::spdm::LIBSPDM_MAX_SPDM_MSG_SIZE;
 use once_cell::sync::OnceCell;
 use std::ffi::c_void;
 use std::io::{Read, Write};

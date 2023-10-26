@@ -9,10 +9,10 @@
 //! If libspdm behaves in a manor we don't expect this will be very bad,
 //! so we are trusting libspdm here.
 
-use crate::libspdm::LIBSPDM_MAX_SPDM_MSG_SIZE;
 use crate::*;
 use core::ffi::c_void;
 use libc::size_t;
+use libspdm::spdm::LIBSPDM_MAX_SPDM_MSG_SIZE;
 use once_cell::sync::OnceCell;
 use std::io::{Read, Write};
 use std::os::unix::net::UnixStream;

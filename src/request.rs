@@ -4,11 +4,11 @@
 
 //! Contains all of the handlers for creating SPDM requests.
 
-use crate::libspdm::get_local_certchain;
-use crate::libspdm::LibspdmReturnStatus;
-use crate::libspdm::SpdmSessionInfo;
 use crate::*;
 use core::ffi::c_void;
+use libspdm::libspdm_rs::libspdm_data_parameter_t;
+use libspdm::spdm::{get_local_certchain, LibspdmReturnStatus, SpdmSessionInfo};
+use libspdm::{libspdm_status_code, libspdm_status_source};
 use std::fs::OpenOptions;
 use std::io::BufWriter;
 use std::io::Write;
@@ -227,7 +227,7 @@ pub fn setup_capabilities(
         }
 
         let (cert_chain_buffer, cert_chain_size) =
-            libspdm::get_local_certchain(path, asym_algo, hash_algo, true);
+            libspdm::spdm::get_local_certchain(path, asym_algo, hash_algo, true);
         if LibspdmReturnStatus::libspdm_status_is_error(libspdm_set_data(
             context,
             libspdm_data_type_t_LIBSPDM_DATA_LOCAL_PUBLIC_CERT_CHAIN,
@@ -374,7 +374,7 @@ pub fn prepare_request(
             }
             RequestCode::GetVersion {} => {
                 let parameter = libspdm_data_parameter_t::new_connection(session_info.slot_id);
-                let mut spdm_version = libspdm::SpdmVersionNumber(0);
+                let mut spdm_version = spdm::SpdmVersionNumber(0);
                 let mut data_size: usize = core::mem::size_of::<u32>();
                 let data_ptr = &mut spdm_version.0 as *mut _ as *mut c_void;
 
@@ -391,7 +391,7 @@ pub fn prepare_request(
                 info!("Responder {}", spdm_version);
             }
             RequestCode::GetMeasurements {} => {
-                libspdm::get_measurement(cntx_ptr, session_info.slot_id)?;
+                spdm::get_measurement(cntx_ptr, session_info.slot_id)?;
             }
             RequestCode::GetCapabilities {} => {
                 get_responder_capabilities(cntx_ptr);
@@ -401,7 +401,7 @@ pub fn prepare_request(
                 let ret = libspdm_heartbeat(cntx_ptr, session_info.session_id);
                 if LibspdmReturnStatus::libspdm_status_is_error(ret) {
                     if libspdm_status_source!(ret) == LIBSPDM_SOURCE_CORE
-                        && libspdm_status_code!(ret) == libspdm::LIBSPDM_STATUS_UNSUPPORTED_CAP
+                        && libspdm_status_code!(ret) == spdm::LIBSPDM_STATUS_UNSUPPORTED_CAP
                     {
                         // Don't need to error here since it's the responder
                         // that does not support this feature.
@@ -416,7 +416,7 @@ pub fn prepare_request(
 
                 if LibspdmReturnStatus::libspdm_status_is_error(ret) {
                     if libspdm_status_source!(ret) == LIBSPDM_SOURCE_CORE
-                        && libspdm_status_code!(ret) == libspdm::LIBSPDM_STATUS_UNSUPPORTED_CAP
+                        && libspdm_status_code!(ret) == spdm::LIBSPDM_STATUS_UNSUPPORTED_CAP
                     {
                         // Don't need to error here since it's the responder
                         // that does not support this feature.
@@ -438,7 +438,7 @@ pub fn prepare_request(
 
                 if LibspdmReturnStatus::libspdm_status_is_error(ret) {
                     if libspdm_status_source!(ret) == LIBSPDM_SOURCE_CORE
-                        && libspdm_status_code!(ret) == libspdm::LIBSPDM_STATUS_UNSUPPORTED_CAP
+                        && libspdm_status_code!(ret) == spdm::LIBSPDM_STATUS_UNSUPPORTED_CAP
                     {
                         // Don't need to error here since it's the responder
                         // that does not support this feature.
@@ -549,7 +549,7 @@ pub fn prepare_request(
                 unimplemented!()
             }
             RequestCode::RespondIfReady {} => {
-                return libspdm::requester_respond_if_ready(cntx_ptr, session_info, 0);
+                return spdm::requester_respond_if_ready(cntx_ptr, session_info, 0);
             }
             RequestCode::Custom { value: _ } => {
                 unimplemented!()
