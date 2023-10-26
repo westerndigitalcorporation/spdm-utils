@@ -13,10 +13,10 @@
 //! so we are trusting libspdm here.
 //!
 
-use crate::libspdm::LIBSPDM_MAX_SPDM_MSG_SIZE;
 use crate::*;
 use core::ffi::c_void;
 use libc::size_t;
+use libspdm::spdm::LIBSPDM_MAX_SPDM_MSG_SIZE;
 use once_cell::sync::OnceCell;
 use std::fmt;
 use std::slice::{from_raw_parts, from_raw_parts_mut};

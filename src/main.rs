@@ -8,24 +8,19 @@
 //! (which is generated from here) or the README
 //!
 
-#![allow(non_upper_case_globals)]
-#![allow(non_camel_case_types)]
-#![allow(non_snake_case)]
-include!(concat!(env!("OUT_DIR"), "/bindings.rs"));
-
 use clap::{Parser, Subcommand};
+use libspdm::libspdm_rs::*;
 use std::fs::OpenOptions;
 use std::path::Path;
 #[macro_use]
 extern crate log;
 use env_logger::Env;
+use libspdm::spdm;
 
 pub static SOCKET_PATH: &str = "SPDM-Utils-loopback-socket";
 
 mod cli_helpers;
 mod doe_pci_cfg;
-#[macro_use]
-mod libspdm;
 mod qemu_server;
 mod request;
 mod responder;
@@ -251,7 +246,7 @@ fn main() -> Result<(), ()> {
     init_logger();
     let cli = Args::parse();
 
-    let cntx_ptr = libspdm::initialise_spdm_context();
+    let cntx_ptr = spdm::initialise_spdm_context();
 
     let mut count = 0;
 
@@ -296,7 +291,9 @@ fn main() -> Result<(), ()> {
         return Err(());
     }
 
-    libspdm::setup_transport_layer(cntx_ptr).unwrap();
+    unsafe {
+        spdm::setup_transport_layer(cntx_ptr).unwrap();
+    }
 
     match cli.command {
         Commands::Request {
@@ -319,11 +316,15 @@ fn main() -> Result<(), ()> {
                 cli_helpers::parse_aead_cipher_suite(aead_cipher_suites).unwrap(),
             )
             .unwrap();
-            libspdm::initialise_connection(cntx_ptr, slot_id).unwrap();
+            unsafe {
+                spdm::initialise_connection(cntx_ptr, slot_id).unwrap();
+            }
             let mut session_info =
-                libspdm::start_session(cntx_ptr, slot_id, use_psk_exchange).unwrap();
+                unsafe { spdm::start_session(cntx_ptr, slot_id, use_psk_exchange).unwrap() };
             // Print out the negotiated algorithms
-            libspdm::get_negotiated_algos(cntx_ptr, slot_id).unwrap();
+            unsafe {
+                spdm::get_negotiated_algos(cntx_ptr, slot_id).unwrap();
+            }
             request::prepare_request(cntx_ptr, code, cert_slot_id, cert_path, &mut session_info)
                 .unwrap();
         }
