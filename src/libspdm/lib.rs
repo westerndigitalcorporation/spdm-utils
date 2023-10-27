@@ -8,6 +8,8 @@
 //! (which is generated from here) or the README
 //!
 
+#![cfg_attr(feature = "no_std", no_std)]
+
 #[macro_use]
 extern crate log;
 extern crate alloc;

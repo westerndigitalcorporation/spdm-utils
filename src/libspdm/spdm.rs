@@ -18,10 +18,23 @@ use core::ffi::c_void;
 use core::fmt;
 use core::ptr;
 use libc::size_t;
+
+#[cfg(feature = "no_std")]
+use alloc::alloc::alloc;
+#[cfg(feature = "no_std")]
+use alloc::string::String;
+#[cfg(feature = "no_std")]
+use core::alloc::Layout;
+
+#[cfg(not(feature = "no_std"))]
 use std::alloc::{alloc, dealloc, Layout};
+#[cfg(not(feature = "no_std"))]
 use std::ffi::CString;
+#[cfg(not(feature = "no_std"))]
 use std::fs::OpenOptions;
+#[cfg(not(feature = "no_std"))]
 use std::io::{BufRead, BufReader, BufWriter, Write};
+#[cfg(not(feature = "no_std"))]
 use std::path::Path;
 
 pub struct LibspdmReturnStatus;
@@ -703,6 +716,7 @@ pub unsafe extern "C" fn libspdm_requester_data_sign(
 /// # Returns
 ///
 /// True  signing success, false otherwise
+#[cfg(not(feature = "no_std"))]
 #[no_mangle]
 pub unsafe extern "C" fn libspdm_responder_data_sign(
     spdm_version: libspdm_rs::spdm_version_number_t,
@@ -793,6 +807,7 @@ pub unsafe extern "C" fn libspdm_responder_data_sign(
 /// # Returns
 ///
 /// True if certificate saved to NV successfully, otherwise, false
+#[cfg(not(feature = "no_std"))]
 #[no_mangle]
 pub unsafe extern "C" fn libspdm_write_certificate_to_nvm(
     slot_id: u8,
@@ -846,6 +861,7 @@ pub unsafe extern "C" fn libspdm_write_certificate_to_nvm(
 /// # Returns
 ///
 /// True if CSR generation was a success, false otherwise
+#[cfg(not(feature = "no_std"))]
 #[no_mangle]
 pub unsafe extern "C" fn libspdm_gen_csr(
     base_hash_algo: u32,
@@ -1619,6 +1635,7 @@ pub unsafe extern "C" fn libspdm_measurement_collection(
 /// # Returns
 ///
 /// True if Hkdf generated successfully, false otherwise
+#[cfg(not(feature = "no_std"))]
 #[no_mangle]
 pub unsafe extern "C" fn libspdm_psk_handshake_secret_hkdf_expand(
     _spdm_version: libspdm_rs::spdm_version_number_t,
@@ -1709,6 +1726,7 @@ pub unsafe extern "C" fn libspdm_psk_handshake_secret_hkdf_expand(
 /// # Returns
 ///
 /// True if Hkdf generated successfully, false otherwise
+#[cfg(not(feature = "no_std"))]
 #[no_mangle]
 pub unsafe extern "C" fn libspdm_psk_master_secret_hkdf_expand(
     spdm_version: libspdm_rs::spdm_version_number_t,
@@ -1910,6 +1928,7 @@ pub unsafe extern "C" fn libspdm_encap_challenge_opaque_data(
 ///
 /// Panics if `path` is invalid or if a file I/O error occurs.
 /// Panics if the cert chain failed to verify in `libspdm`
+#[cfg(not(feature = "no_std"))]
 pub unsafe fn get_local_certchain(
     path: &Path,
     _asym_algo: u32,
