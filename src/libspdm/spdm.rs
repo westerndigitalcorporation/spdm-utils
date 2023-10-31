@@ -20,7 +20,7 @@ use core::ptr;
 use libc::size_t;
 
 #[cfg(feature = "no_std")]
-use alloc::alloc::alloc;
+use alloc::alloc::{alloc, dealloc};
 #[cfg(feature = "no_std")]
 use alloc::string::String;
 #[cfg(feature = "no_std")]
@@ -716,7 +716,6 @@ pub unsafe extern "C" fn libspdm_requester_data_sign(
 /// # Returns
 ///
 /// True  signing success, false otherwise
-#[cfg(not(feature = "no_std"))]
 #[no_mangle]
 pub unsafe extern "C" fn libspdm_responder_data_sign(
     spdm_version: libspdm_rs::spdm_version_number_t,
@@ -730,16 +729,27 @@ pub unsafe extern "C" fn libspdm_responder_data_sign(
     sig_size: *mut size_t,
 ) -> bool {
     let mut context: *mut c_void = ptr::null_mut();
+    let buffer;
 
-    let path = Path::new("certs/slot0/end_responder.key");
+    #[cfg(feature = "no_std")]
+    {
+        buffer = include_bytes!("../../certs/slot0/end_responder.key");
+    }
+    #[cfg(not(feature = "no_std"))]
+    let mut reader;
+    #[cfg(not(feature = "no_std"))]
+    {
+        let path = Path::new("certs/slot0/end_responder.key");
 
-    let file = match OpenOptions::new().read(true).write(false).open(path) {
-        Err(why) => panic!("couldn't open {}: {}", path.display(), why),
-        Ok(file) => file,
-    };
+        let file = match OpenOptions::new().read(true).write(false).open(path) {
+            Err(why) => panic!("couldn't open {}: {}", path.display(), why),
+            Ok(file) => file,
+        };
 
-    let mut reader = BufReader::new(file);
-    let buffer = reader.fill_buf().unwrap();
+        reader = BufReader::new(file);
+        buffer = reader.fill_buf().unwrap();
+    }
+
     let buffer_len = buffer.len();
 
     let key_buffer_layout = Layout::from_size_align(buffer_len, 8).unwrap();
