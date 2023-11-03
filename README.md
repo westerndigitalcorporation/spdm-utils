@@ -76,7 +76,7 @@ make -j8
 Then you can build SPDM-Utils with
 
 ```shell
-cargo build --bin SPDM-Utils
+cargo build --bin spdm_utils
 ```
 
 ## Build the `no_std` library
@@ -169,7 +169,7 @@ cargo run -- --socket-server request get-digests
 and the client side with
 
 ```shell
-./target/debug/SPDM-Utils --socket-client response
+./target/debug/spdm_utils --socket-client response
 ```
 
 Note that the server must be run first. You can also swap the server/client
@@ -187,7 +187,7 @@ You can run SPDM-Utils on the host to interact with a real DOE device. To do
 that you can run the following example to get digest information
 
 ```shell
-./target/debug/SPDM-Utils --doe-pci-cfg request get-digests
+./target/debug/spdm_utils --doe-pci-cfg request get-digests
 ```
 
 ## Setting the certificate
@@ -200,7 +200,7 @@ SPDM spec).
 For example to set the certificate run:
 
 ```shell
-SPDM-Utils --doe-pci-cfg request --cert-path ./certs/slot0/immutable.der set-certificate
+spdm_utils --doe-pci-cfg request --cert-path ./certs/slot0/immutable.der set-certificate
 ```
 
 You can additionally specify `--cert-slot-id` to specify the target slot number, valid slot numbers range from
@@ -212,7 +212,7 @@ A requester can get the Certificate Signing Request (CSR) from the device
 with a command similar to this:
 
 ```shell
-SPDM-Utils --doe-pci-cfg request get-csr
+spdm_utils --doe-pci-cfg request get-csr
 ```
 
 Which will save the file to `csr_response.der`. You can then verify the CSR
@@ -252,13 +252,13 @@ cat ./certs/slot0/ca.cert.der ./certs/slot0/inter.cert.der ./csr_response.cert.d
 Now you can set the certificate of a slot
 
 ```shell
-SPDM-Utils --doe-pci-cfg request --cert-slot-id 1 --cert-path ./set-cert.der set-certificate
+spdm_utils --doe-pci-cfg request --cert-slot-id 1 --cert-path ./set-cert.der set-certificate
 ```
 
 Then you request the certificate back
 
 ```shell
-SPDM-Utils --doe-pci-cfg request --cert-slot-id 1 get-certificate
+spdm_utils --doe-pci-cfg request --cert-slot-id 1 get-certificate
 ```
 
 If you are running the socket/client mode you will have to simulate a
@@ -266,7 +266,7 @@ device reset and certificate re-gen. That can be done by running this
 
 ```shell
 cd certs
-./setup_certs.sh ../target/debug/SPDM-Utils
+./setup_certs.sh ../target/debug/spdm_utils
 cd ../
 ```
 
@@ -285,7 +285,7 @@ With the current SPDM implementation in QEMU, the only transport layer supported
 is DOE. SPDM-Utils must be started before QEMU for this to work.
 
 ```shell
-$ ./target/debug/SPDM-Utils --qemu-server response
+$ ./target/debug/spdm_utils --qemu-server response
 
 [2023-08-29T06:21:47Z DEBUG SPDM-Utils] Logger initialisation [OK]
 [2023-08-29T06:21:47Z DEBUG SPDM-Utils::qemu_server] Setting up a server on [port: 2323, ip: 127.0.0.1]
