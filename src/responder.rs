@@ -18,6 +18,7 @@ use std::path::Path;
 ///
 /// * `context`: The SPDM context
 /// * `slot_id`: slot id for this session
+/// * `ver`: SPDM Version
 /// * `asym_algo`: Asymmetric algorithm used
 /// * `hash_algo`: Hashing algorithm used
 ///
@@ -33,6 +34,7 @@ use std::path::Path;
 pub fn setup_capabilities(
     context: *mut c_void,
     slot_id: u8,
+    spdm_ver: Option<u8>,
     asym_algo: u32,
     hash_algo: u32,
 ) -> Result<(), ()> {
@@ -59,6 +61,22 @@ pub fn setup_capabilities(
             data_ptr,
             core::mem::size_of::<u32>(),
         );
+
+        if let Some(ver) = spdm_ver {
+            let mut data: u16 = (ver as u16)
+                .checked_shl(SPDM_VERSION_NUMBER_SHIFT_BIT)
+                .expect("SPDM version shift overflow");
+            let data_ptr = &mut data as *mut _ as *mut c_void;
+            libspdm_set_data(
+                context,
+                libspdm_data_type_t_LIBSPDM_DATA_SPDM_VERSION,
+                &parameter as *const libspdm_data_parameter_t,
+                data_ptr,
+                core::mem::size_of::<u16>(),
+            );
+        } else {
+            warn!("libspdm data SPDM version not specified");
+        }
 
         let mut data: u8 = 0x00;
         let data_ptr = &mut data as *mut _ as *mut c_void;

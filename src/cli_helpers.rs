@@ -26,6 +26,38 @@ pub fn parse_qemu_transport_layer(
 
 /// # Summary
 ///
+/// Parses the CLI argument for the SPDM version used by a responder.
+///
+/// # Parameter
+///
+/// * `spdm_ver`: String option containing the version (1.0, 1,1 ...etc)
+///
+/// # Returns
+///
+/// The corresponding libspdm value for the version, None if not found.
+pub fn parse_spdm_responder_version(spdm_ver: Option<String>) -> Option<u8> {
+    if let Some(ver) = spdm_ver {
+        match ver.as_str() {
+            "1.0" => {
+                return Some(u8::try_from(libspdm::libspdm_rs::SPDM_MESSAGE_VERSION_10).unwrap())
+            }
+            "1.1" => {
+                return Some(u8::try_from(libspdm::libspdm_rs::SPDM_MESSAGE_VERSION_11).unwrap())
+            }
+            "1.2" => {
+                return Some(u8::try_from(libspdm::libspdm_rs::SPDM_MESSAGE_VERSION_12).unwrap())
+            }
+            "1.3" => {
+                return Some(u8::try_from(libspdm::libspdm_rs::SPDM_MESSAGE_VERSION_13).unwrap())
+            }
+            _ => return None,
+        }
+    }
+    None
+}
+
+/// # Summary
+///
 /// Parses the CLI based AEAD Cipher Suites
 ///
 /// # Parameter
