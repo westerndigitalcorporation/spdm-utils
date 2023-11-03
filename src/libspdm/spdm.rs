@@ -1768,7 +1768,6 @@ pub unsafe extern "C" fn libspdm_psk_handshake_secret_hkdf_expand(
 /// # Returns
 ///
 /// True if Hkdf generated successfully, false otherwise
-#[cfg(not(feature = "no_std"))]
 #[no_mangle]
 pub unsafe extern "C" fn libspdm_psk_master_secret_hkdf_expand(
     spdm_version: libspdm_rs::spdm_version_number_t,
