@@ -575,7 +575,7 @@ pub unsafe fn get_measurement(context: *mut c_void, slot_id: u8) -> Result<(), u
         );
 
         if LibspdmReturnStatus::libspdm_status_is_success(ret) {
-            // If it was a success, reduce the numder of mesures
+            // If it was a success, reduce the number of measures
             // we are still looking for
             if num_measures == 0 {
                 // We have found too many measurements
@@ -1071,23 +1071,23 @@ pub unsafe extern "C" fn libspdm_generate_measurement_summary_hash(
 
             /* get required data and hash them*/
             let mut measurement_data = [0u8; LIBSPDM_MAX_MEASUREMENT_RECORD_SIZE as usize];
-            let mut measurment_data_size = 0;
+            let mut measurement_data_size = 0;
 
             let mut device_measurement_offset = 0;
 
             for _i in 0..device_measurement_count {
-                let cached_measurment_block: *mut libspdm_rs::spdm_measurement_block_dmtf_t =
+                let cached_measurement_block: *mut libspdm_rs::spdm_measurement_block_dmtf_t =
                     core::mem::transmute(device_measurement_ptr);
 
-                let measurment_block_size = core::mem::size_of::<
+                let measurement_block_size = core::mem::size_of::<
                     spdm_measurement_block_common_header_t,
-                >() + (*cached_measurment_block)
+                >() + (*cached_measurement_block)
                     .measurement_block_common_header
                     .measurement_size as usize;
                 /* filter unneeded data*/
                 if (measurement_summary_hash_type
                     == SPDM_CHALLENGE_REQUEST_ALL_MEASUREMENTS_HASH as u8)
-                    || ((*cached_measurment_block)
+                    || ((*cached_measurement_block)
                         .measurement_block_dmtf_header
                         .dmtf_spec_measurement_value_type
                         & SPDM_MEASUREMENT_BLOCK_MEASUREMENT_TYPE_MASK as u8)
@@ -1097,7 +1097,7 @@ pub unsafe extern "C" fn libspdm_generate_measurement_summary_hash(
                         < (libspdm_rs::SPDM_MESSAGE_VERSION_12
                             << libspdm_rs::SPDM_VERSION_NUMBER_SHIFT_BIT)
                     {
-                        let length = (*cached_measurment_block)
+                        let length = (*cached_measurement_block)
                             .measurement_block_common_header
                             .measurement_size as usize;
                         let measurement_block_dmtf_header_size =
@@ -1105,28 +1105,29 @@ pub unsafe extern "C" fn libspdm_generate_measurement_summary_hash(
                         let base_offset =
                             device_measurement_offset + measurement_block_dmtf_header_size;
 
-                        measurement_data[measurment_data_size..(measurment_data_size + length)]
+                        measurement_data[measurement_data_size..(measurement_data_size + length)]
                             .copy_from_slice(
                                 &device_measurement[base_offset..(base_offset + length)],
                             );
 
-                        measurment_data_size += (*cached_measurment_block)
+                        measurement_data_size += (*cached_measurement_block)
                             .measurement_block_common_header
                             .measurement_size
                             as usize;
                     } else {
-                        measurement_data
-                            [measurment_data_size..(measurment_data_size + measurment_block_size)]
+                        measurement_data[measurement_data_size
+                            ..(measurement_data_size + measurement_block_size)]
                             .copy_from_slice(
                                 &device_measurement[device_measurement_offset
-                                    ..(device_measurement_offset + measurment_block_size)],
+                                    ..(device_measurement_offset + measurement_block_size)],
                             );
 
-                        measurment_data_size += measurment_block_size;
+                        measurement_data_size += measurement_block_size;
                     }
                 }
-                device_measurement_ptr = device_measurement_ptr.wrapping_add(measurment_block_size);
-                device_measurement_offset += measurment_block_size;
+                device_measurement_ptr =
+                    device_measurement_ptr.wrapping_add(measurement_block_size);
+                device_measurement_offset += measurement_block_size;
             }
 
             let measurement_data_ptr: *mut c_void = &mut measurement_data as *mut _ as *mut c_void;
@@ -1134,7 +1135,7 @@ pub unsafe extern "C" fn libspdm_generate_measurement_summary_hash(
             let result = libspdm_rs::libspdm_hash_all(
                 base_hash_algo,
                 measurement_data_ptr,
-                measurment_data_size,
+                measurement_data_size,
                 measurement_summary_hash,
             );
             if !result {
