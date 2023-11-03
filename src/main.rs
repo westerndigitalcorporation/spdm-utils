@@ -164,7 +164,12 @@ enum Commands {
         use_psk_exchange: bool,
     },
     /// initiate a SPDM response
-    Response {},
+    Response {
+        /// The SPDM (DSP0274) version(s) (1.0, 1.1, 1.2 or 1.3) of an endpoint.
+        /// These are communicated through the `GET_VERSION / VERSION` messages.
+        #[arg(long, default_value = "1.3")]
+        spdm_ver: Option<String>,
+    },
     Tests,
 }
 
@@ -328,7 +333,7 @@ fn main() -> Result<(), ()> {
             request::prepare_request(cntx_ptr, code, cert_slot_id, cert_path, &mut session_info)
                 .unwrap();
         }
-        Commands::Response {} => {
+        Commands::Response { spdm_ver } => {
             for slot_id in 1..8 {
                 let file_name = format!("certs/slot{}/immutable.der", slot_id);
                 let path = Path::new(&file_name);
@@ -342,15 +347,25 @@ fn main() -> Result<(), ()> {
                     responder::setup_capabilities(
                         cntx_ptr,
                         slot_id,
+                        None,
                         SPDM_ALGORITHMS_BASE_ASYM_ALGO_TPM_ALG_ECDSA_ECC_NIST_P384,
                         SPDM_ALGORITHMS_BASE_HASH_ALGO_TPM_ALG_SHA_384,
                     )
                     .unwrap();
                 }
             }
+            // Check if version was specified
+            let ver = cli_helpers::parse_spdm_responder_version(spdm_ver);
+            if ver.is_none() {
+                // spdm_ver has a default value set, if None was returned, it means
+                // the user argument was invalid.
+                error!("Unsupported libspdm data spdm version");
+                return Err(());
+            }
             responder::setup_capabilities(
                 cntx_ptr,
                 0,
+                ver,
                 SPDM_ALGORITHMS_BASE_ASYM_ALGO_TPM_ALG_ECDSA_ECC_NIST_P384,
                 SPDM_ALGORITHMS_BASE_HASH_ALGO_TPM_ALG_SHA_384,
             )
