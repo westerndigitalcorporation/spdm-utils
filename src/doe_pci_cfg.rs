@@ -47,7 +47,7 @@ struct PcieIdentifiers {
 /// # Summary
 ///
 /// Sends message using the PCIe DOE extended capability by writing the
-/// `messasge_ptr` data to the targets `DOE_WRITE_DATA_MAILBOX`.
+/// `message_ptr` data to the targets `DOE_WRITE_DATA_MAILBOX`.
 ///
 /// # Parameter
 ///

@@ -194,7 +194,7 @@ pub enum RequestCode {
     Heartbeat {},
     KeyUpdate {
         /// Setting this flag means that the key update operation is
-        /// `UPDATE_KEY` (single) only. Default means that UPADATE_ALL_KEYS is used where
+        /// `UPDATE_KEY` (single) only. Default means that UPDATE_ALL_KEYS is used where
         /// all keys are updated and verified.
         #[clap(long, default_value_t = false)]
         single_direction: bool,
