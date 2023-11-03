@@ -7,7 +7,6 @@
 //!
 
 use crate::*;
-use libc::size_t;
 use libspdm::spdm::LIBSPDM_MAX_SPDM_MSG_SIZE;
 use once_cell::sync::OnceCell;
 use std::ffi::c_void;
@@ -57,7 +56,7 @@ pub enum QemuTransportLayer {
 #[no_mangle]
 unsafe extern "C" fn qemu_send_message_doe(
     _context: *mut c_void,
-    message_size: size_t,
+    message_size: usize,
     message_ptr: *const c_void,
     timeout: u64,
 ) -> u32 {
@@ -133,7 +132,7 @@ unsafe extern "C" fn qemu_send_message_doe(
 #[no_mangle]
 unsafe extern "C" fn qemu_receive_message_doe(
     _context: *mut c_void,
-    message_size: *mut size_t,
+    message_size: *mut usize,
     msg_buf_ptr: *mut *mut c_void,
     timeout: u64,
 ) -> u32 {

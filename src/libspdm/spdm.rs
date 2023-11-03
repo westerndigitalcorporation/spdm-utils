@@ -17,7 +17,7 @@ use crate::libspdm_rs::*;
 use core::ffi::c_void;
 use core::fmt;
 use core::ptr;
-use libc::size_t;
+use usize;
 
 #[cfg(feature = "no_std")]
 use crate::alloc::string::ToString;
@@ -694,9 +694,9 @@ pub unsafe extern "C" fn libspdm_requester_data_sign(
     _base_hash_algo: u32,
     _is_data_hash: bool,
     _message: *const u8,
-    _message_size: size_t,
+    _message_size: usize,
     _signature: *mut u8,
-    _sig_size: *mut size_t,
+    _sig_size: *mut usize,
 ) -> bool {
     todo!();
 }
@@ -733,9 +733,9 @@ pub unsafe extern "C" fn libspdm_responder_data_sign(
     base_hash_algo: u32,
     is_data_hash: bool,
     message: *const u8,
-    message_size: size_t,
+    message_size: usize,
     signature: *mut u8,
-    sig_size: *mut size_t,
+    sig_size: *mut usize,
 ) -> bool {
     let mut context: *mut c_void = ptr::null_mut();
     let buffer;
@@ -831,7 +831,7 @@ pub unsafe extern "C" fn libspdm_responder_data_sign(
 pub unsafe extern "C" fn libspdm_write_certificate_to_nvm(
     slot_id: u8,
     cert_chain: *const c_void,
-    cert_chain_size: size_t,
+    cert_chain_size: usize,
 ) -> bool {
     #[cfg(feature = "no_std")]
     {
@@ -893,17 +893,17 @@ pub unsafe extern "C" fn libspdm_gen_csr(
     base_asym_algo: u32,
     need_reset: *mut bool,
     _request: *const c_void,
-    _request_size: size_t,
+    _request_size: usize,
     requester_info: *mut u8,
-    requester_info_length: size_t,
+    requester_info_length: usize,
     _opaque_data: *mut u8,
     _opaque_data_length: u16,
-    csr_len: *mut size_t,
+    csr_len: *mut usize,
     csr_pointer: *mut u8,
     is_device_cert_model: bool,
 ) -> bool {
     let mut ec_context: *mut c_void = ptr::null_mut();
-    let csr_buffer_size: size_t = *csr_len;
+    let csr_buffer_size: usize = *csr_len;
     let key_buffer;
 
     *need_reset = false;
@@ -1172,7 +1172,7 @@ unsafe fn libspdm_fill_measurement_image_hash_block(
     measurement_hash_algo: u32,
     measurements_index: u8,
     measurement_block: *mut libspdm_rs::spdm_measurement_block_dmtf_t,
-) -> size_t {
+) -> usize {
     let data = [measurements_index; LIBSPDM_MEASUREMENT_RAW_DATA_SIZE as usize];
     let hash_size = libspdm_rs::libspdm_get_measurement_hash_size(measurement_hash_algo) as usize;
 
@@ -1237,7 +1237,7 @@ unsafe fn libspdm_fill_measurement_image_hash_block(
 /// The measurement block size
 unsafe fn libspdm_fill_measurement_svn_block(
     measurement_block: *mut libspdm_rs::spdm_measurement_block_dmtf_t,
-) -> size_t {
+) -> usize {
     let svn: libspdm_rs::spdm_measurements_secure_version_number_t = 0x7;
 
     (*measurement_block).measurement_block_common_header.index =
@@ -1285,7 +1285,7 @@ unsafe fn libspdm_fill_measurement_manifest_block(
     measurement_block: *mut libspdm_rs::spdm_measurement_block_dmtf_t,
     use_bit_stream: bool,
     measurement_hash_algo: u32,
-) -> size_t {
+) -> usize {
     let data = [0; LIBSPDM_MEASUREMENT_MANIFEST_SIZE as usize];
     let hash_size = libspdm_rs::libspdm_get_measurement_hash_size(measurement_hash_algo) as usize;
     let size = data.len();
@@ -1354,7 +1354,7 @@ unsafe fn libspdm_fill_measurement_manifest_block(
 /// The measurement block size
 unsafe fn libspdm_fill_measurement_device_mode_block(
     measurement_block: *mut libspdm_rs::spdm_measurement_block_dmtf_t,
-) -> size_t {
+) -> usize {
     let device_mode = libspdm_rs::spdm_measurements_device_mode_t {
         operational_mode_capabilities: SPDM_MEASUREMENT_DEVICE_OPERATION_MODE_MANUFACTURING_MODE
             | SPDM_MEASUREMENT_DEVICE_OPERATION_MODE_VALIDATION_MODE
@@ -1459,7 +1459,7 @@ pub unsafe extern "C" fn libspdm_measurement_collection(
     content_changed: *mut u8,
     measurements_count: *mut u8,
     measurements: *mut c_void,
-    measurements_size: *mut size_t,
+    measurements_size: *mut usize,
 ) -> u32 {
     if u32::from(measurement_specification) != libspdm_rs::SPDM_MEASUREMENT_SPECIFICATION_DMTF
         || measurement_hash_algo == 0
@@ -1689,11 +1689,11 @@ pub unsafe extern "C" fn libspdm_psk_handshake_secret_hkdf_expand(
     _spdm_version: libspdm_rs::spdm_version_number_t,
     base_hash_algo: u32,
     psk_hint: *const u8,
-    psk_hint_size: size_t,
+    psk_hint_size: usize,
     info: *const u8,
-    info_size: size_t,
+    info_size: usize,
     out: *mut u8,
-    out_size: size_t,
+    out_size: usize,
 ) -> bool {
     if psk_hint.is_null() {
         return false;
@@ -1704,7 +1704,7 @@ pub unsafe extern "C" fn libspdm_psk_handshake_secret_hkdf_expand(
     debug!("[PSK_HINT]: {:?} || SIZE {}", psk_hint, psk_hint_size);
 
     let mut psk;
-    let psk_size: libc::size_t;
+    let psk_size: usize;
 
     #[allow(clippy::if_same_then_else)]
     if psk_hint_size == 0 {
@@ -1779,11 +1779,11 @@ pub unsafe extern "C" fn libspdm_psk_master_secret_hkdf_expand(
     spdm_version: libspdm_rs::spdm_version_number_t,
     base_hash_algo: u32,
     psk_hint: *const u8,
-    psk_hint_size: size_t,
+    psk_hint_size: usize,
     info: *const u8,
-    info_size: size_t,
+    info_size: usize,
     out: *mut u8,
-    out_size: size_t,
+    out_size: usize,
 ) -> bool {
     if psk_hint.is_null() {
         return false;
@@ -1794,7 +1794,7 @@ pub unsafe extern "C" fn libspdm_psk_master_secret_hkdf_expand(
     debug!("[PSK_HINT]: {:?}", psk_hint);
 
     let mut psk;
-    let psk_size: libc::size_t;
+    let psk_size: usize;
 
     #[allow(clippy::if_same_then_else)]
     if psk_hint_size == 0 {
@@ -1900,7 +1900,7 @@ pub unsafe extern "C" fn libspdm_measurement_opaque_data(
     _measurement_index: u8,
     _request_attribute: u8,
     opaque_data: *mut c_void,
-    opaque_data_size: *mut size_t,
+    opaque_data_size: *mut usize,
 ) -> bool {
     let opaque_len = OPAQUE_SIZE.min(*opaque_data_size);
     let opaque_buf = opaque_data as *mut u8;
@@ -1920,9 +1920,9 @@ pub unsafe extern "C" fn libspdm_challenge_opaque_data(
     _spdm_version: libspdm_rs::spdm_version_number_t,
     _slot_id: u8,
     _measurement_summary_hash: *mut u8,
-    _measurement_summary_hash_size: size_t,
+    _measurement_summary_hash_size: usize,
     opaque_data: *mut c_void,
-    opaque_data_size: *mut size_t,
+    opaque_data_size: *mut usize,
 ) -> bool {
     let opaque_len = OPAQUE_SIZE.min(*opaque_data_size);
     let opaque_buf = opaque_data as *mut u8;
@@ -1942,9 +1942,9 @@ pub unsafe extern "C" fn libspdm_encap_challenge_opaque_data(
     _spdm_version: libspdm_rs::spdm_version_number_t,
     _slot_id: u8,
     _measurement_summary_hash: *mut u8,
-    _measurement_summary_hash_size: size_t,
+    _measurement_summary_hash_size: usize,
     opaque_data: *mut c_void,
-    opaque_data_size: *mut size_t,
+    opaque_data_size: *mut usize,
 ) -> bool {
     let opaque_len = OPAQUE_SIZE.min(*opaque_data_size);
     let opaque_buf = opaque_data as *mut u8;
@@ -2142,13 +2142,13 @@ pub unsafe fn requester_respond_if_ready(
 ) -> Result<(), u32> {
     let context = cntx_ptr as *mut libspdm_rs::libspdm_context_t;
     let session_id_ptr = &mut session_info.session_id as *mut u32;
-    let mut msg_size: libc::size_t = 0;
+    let mut msg_size: usize = 0;
     let mut msg: u8 = 0x00;
     let msg_ptr_ptr = &mut (&mut msg as *mut _) as *mut *mut _ as *mut *mut c_void;
 
     let ret = libspdm_rs::libspdm_acquire_sender_buffer(
         cntx_ptr as *mut libspdm_rs::libspdm_context_t,
-        &mut msg_size as *mut _ as *mut libc::size_t,
+        &mut msg_size as *mut _ as *mut usize,
         msg_ptr_ptr,
     );
     if LibspdmReturnStatus::libspdm_status_is_error(ret) {
@@ -2191,13 +2191,13 @@ pub unsafe fn requester_respond_if_ready(
         return Err(ret);
     }
 
-    let mut response_size: libc::size_t = 0;
+    let mut response_size: usize = 0;
     let mut response: u8 = 0x00;
     let response_ptr_ptr = &mut (&mut response as *mut _) as *mut *mut _ as *mut *mut c_void;
 
     let ret = libspdm_rs::libspdm_acquire_receiver_buffer(
         cntx_ptr as *mut libspdm_rs::libspdm_context_t,
-        &mut response_size as *mut _ as *mut libc::size_t,
+        &mut response_size as *mut _ as *mut usize,
         response_ptr_ptr,
     );
     if LibspdmReturnStatus::libspdm_status_is_error(ret) {

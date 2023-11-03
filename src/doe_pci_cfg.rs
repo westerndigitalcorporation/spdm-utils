@@ -15,7 +15,6 @@
 
 use crate::*;
 use core::ffi::c_void;
-use libc::size_t;
 use libspdm::spdm::LIBSPDM_MAX_SPDM_MSG_SIZE;
 use once_cell::sync::OnceCell;
 use std::fmt;
@@ -67,7 +66,7 @@ struct PcieIdentifiers {
 #[no_mangle]
 unsafe extern "C" fn doe_pci_cfg_send_message(
     _context: *mut c_void,
-    message_size: size_t,
+    message_size: usize,
     message_ptr: *const c_void,
     _timeout: u64,
 ) -> u32 {
@@ -126,7 +125,7 @@ unsafe extern "C" fn doe_pci_cfg_send_message(
 #[no_mangle]
 unsafe extern "C" fn doe_pci_cfg_receive_message(
     _context: *mut c_void,
-    message_size: *mut size_t,
+    message_size: *mut usize,
     message_ptr: *mut *mut c_void,
     _timeout: u64,
 ) -> u32 {
