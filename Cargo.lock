@@ -9,7 +9,6 @@ dependencies = [
  "bindgen",
  "clap",
  "env_logger",
- "libc",
  "log",
  "memmap2",
  "once_cell",
