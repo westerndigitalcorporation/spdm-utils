@@ -7,6 +7,7 @@
 use crate::*;
 use core::ffi::c_void;
 use libspdm::spdm::LibspdmReturnStatus;
+use std::io::{BufRead, BufReader};
 use std::path::Path;
 
 /// # Summary
@@ -217,8 +218,16 @@ pub fn setup_capabilities(
         let file_path = format!("certs/slot{}/bundle_responder.certchain.der", slot_id);
         let path = Path::new(&file_path);
 
+        let file = match OpenOptions::new().read(true).write(false).open(path) {
+            Err(why) => panic!("couldn't open {}: {}", path.display(), why),
+            Ok(file) => file,
+        };
+
+        let mut reader = BufReader::new(file);
+        let buffer = reader.fill_buf().unwrap();
+
         let (cert_chain_buffer, cert_chain_size) =
-            libspdm::spdm::get_local_certchain(path, asym_algo, hash_algo, false);
+            libspdm::spdm::get_local_certchain(buffer, asym_algo, hash_algo, false);
         if LibspdmReturnStatus::libspdm_status_is_error(libspdm_set_data(
             context,
             libspdm_data_type_t_LIBSPDM_DATA_LOCAL_PUBLIC_CERT_CHAIN,

@@ -10,8 +10,7 @@ use libspdm::libspdm_rs::libspdm_data_parameter_t;
 use libspdm::spdm::{get_local_certchain, LibspdmReturnStatus, SpdmSessionInfo};
 use libspdm::{libspdm_status_code, libspdm_status_source};
 use std::fs::OpenOptions;
-use std::io::BufWriter;
-use std::io::Write;
+use std::io::{BufRead, BufReader, BufWriter, Write};
 use std::path::Path;
 use std::ptr;
 
@@ -226,8 +225,16 @@ pub fn setup_capabilities(
             };
         }
 
+        let file = match OpenOptions::new().read(true).write(false).open(path) {
+            Err(why) => panic!("couldn't open {}: {}", path.display(), why),
+            Ok(file) => file,
+        };
+
+        let mut reader = BufReader::new(file);
+        let buffer = reader.fill_buf().unwrap();
+
         let (cert_chain_buffer, cert_chain_size) =
-            libspdm::spdm::get_local_certchain(path, asym_algo, hash_algo, true);
+            libspdm::spdm::get_local_certchain(buffer, asym_algo, hash_algo, true);
         if LibspdmReturnStatus::libspdm_status_is_error(libspdm_set_data(
             context,
             libspdm_data_type_t_LIBSPDM_DATA_LOCAL_PUBLIC_CERT_CHAIN,
@@ -514,12 +521,20 @@ pub fn prepare_request(
                 }
                 let asym_algo = SPDM_ALGORITHMS_BASE_ASYM_ALGO_TPM_ALG_ECDSA_ECC_NIST_P384;
                 let hash_algo = SPDM_ALGORITHMS_BASE_HASH_ALGO_TPM_ALG_SHA_384;
-                let path =
+                let file_path =
                     cert_path.expect("Certificate path was not specified for SetCertificate");
-                let path = Path::new(&path);
+                let path = Path::new(&file_path);
+
+                let file = match OpenOptions::new().read(true).write(false).open(path) {
+                    Err(why) => panic!("couldn't open {}: {}", path.display(), why),
+                    Ok(file) => file,
+                };
+
+                let mut reader = BufReader::new(file);
+                let buffer = reader.fill_buf().unwrap();
 
                 let (cert_chain_buffer, cert_chain_size) =
-                    get_local_certchain(path, asym_algo, hash_algo, true);
+                    get_local_certchain(buffer, asym_algo, hash_algo, true);
 
                 let ret = libspdm_set_certificate(
                     cntx_ptr,
