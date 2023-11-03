@@ -676,7 +676,12 @@ pub unsafe fn start_session(
     );
 
     if LibspdmReturnStatus::libspdm_status_is_error(ret) {
-        return Err(ret);
+        // Gracefully handle an unsupported capability error from a responder
+        if libspdm_status_code!(ret) == LIBSPDM_STATUS_UNSUPPORTED_CAP {
+            error!("Unsupported capability detected from responder");
+        } else {
+            return Err(ret);
+        }
     }
     Ok(session_info)
 }
