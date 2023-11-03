@@ -22,6 +22,8 @@ use libc::size_t;
 #[cfg(feature = "no_std")]
 use alloc::alloc::{alloc, dealloc};
 #[cfg(feature = "no_std")]
+use alloc::ffi::CString;
+#[cfg(feature = "no_std")]
 use alloc::string::String;
 #[cfg(feature = "no_std")]
 use core::alloc::Layout;
@@ -871,7 +873,6 @@ pub unsafe extern "C" fn libspdm_write_certificate_to_nvm(
 /// # Returns
 ///
 /// True if CSR generation was a success, false otherwise
-#[cfg(not(feature = "no_std"))]
 #[no_mangle]
 pub unsafe extern "C" fn libspdm_gen_csr(
     base_hash_algo: u32,
@@ -889,18 +890,29 @@ pub unsafe extern "C" fn libspdm_gen_csr(
 ) -> bool {
     let mut ec_context: *mut c_void = ptr::null_mut();
     let csr_buffer_size: size_t = *csr_len;
+    let key_buffer;
 
     *need_reset = false;
 
-    let key_path = Path::new("certs/slot0/device.key");
+    #[cfg(feature = "no_std")]
+    {
+        key_buffer = include_bytes!("../../certs/slot0/device.key");
+    }
+    #[cfg(not(feature = "no_std"))]
+    let mut key_reader;
+    #[cfg(not(feature = "no_std"))]
+    {
+        let key_path = Path::new("certs/slot0/device.key");
 
-    let key_file = match OpenOptions::new().read(true).write(false).open(key_path) {
-        Err(why) => panic!("couldn't open {}: {}", key_path.display(), why),
-        Ok(file) => file,
-    };
+        let key_file = match OpenOptions::new().read(true).write(false).open(key_path) {
+            Err(why) => panic!("couldn't open {}: {}", key_path.display(), why),
+            Ok(file) => file,
+        };
 
-    let mut key_reader = BufReader::new(key_file);
-    let key_buffer = key_reader.fill_buf().unwrap();
+        key_reader = BufReader::new(key_file);
+        key_buffer = key_reader.fill_buf().unwrap();
+    }
+
     let key_buffer_len = key_buffer.len();
 
     let key_buffer_layout = Layout::from_size_align(key_buffer_len, 8).unwrap();
@@ -921,15 +933,27 @@ pub unsafe extern "C" fn libspdm_gen_csr(
         return false;
     }
 
-    let cert_path = Path::new("certs/slot0/device.cert.der");
+    let cert_buffer;
 
-    let cert_file = match OpenOptions::new().read(true).write(false).open(cert_path) {
-        Err(why) => panic!("couldn't open {}: {}", cert_path.display(), why),
-        Ok(file) => file,
-    };
+    #[cfg(feature = "no_std")]
+    {
+        cert_buffer = include_bytes!("../../certs/slot0/device.cert.der");
+    }
+    #[cfg(not(feature = "no_std"))]
+    let mut cert_reader;
+    #[cfg(not(feature = "no_std"))]
+    {
+        let cert_path = Path::new("certs/slot0/device.cert.der");
 
-    let mut cert_reader = BufReader::new(cert_file);
-    let cert_buffer = cert_reader.fill_buf().unwrap();
+        let cert_file = match OpenOptions::new().read(true).write(false).open(cert_path) {
+            Err(why) => panic!("couldn't open {}: {}", cert_path.display(), why),
+            Ok(file) => file,
+        };
+
+        cert_reader = BufReader::new(cert_file);
+        cert_buffer = cert_reader.fill_buf().unwrap();
+    }
+
     let cert_buffer_len = cert_buffer.len();
 
     let cert_buffer_layout = Layout::from_size_align(cert_buffer_len, 8).unwrap();
