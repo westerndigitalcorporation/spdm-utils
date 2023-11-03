@@ -1969,9 +1969,8 @@ pub unsafe extern "C" fn libspdm_encap_challenge_opaque_data(
 ///
 /// Panics if `path` is invalid or if a file I/O error occurs.
 /// Panics if the cert chain failed to verify in `libspdm`
-#[cfg(not(feature = "no_std"))]
 pub unsafe fn get_local_certchain(
-    path: &Path,
+    buffer: &[u8],
     _asym_algo: u32,
     hash_algo: u32,
     _is_requester_cert: bool,
@@ -1979,13 +1978,6 @@ pub unsafe fn get_local_certchain(
     let mut root_cert_buffer: *const u8 = ptr::null_mut();
     let mut root_cert_size = 0;
 
-    let file = match OpenOptions::new().read(true).write(false).open(path) {
-        Err(why) => panic!("couldn't open {}: {}", path.display(), why),
-        Ok(file) => file,
-    };
-
-    let mut reader = BufReader::new(file);
-    let buffer = reader.fill_buf().unwrap();
     let buffer_len = buffer.len();
 
     let cert_buffer_layout = Layout::from_size_align(4096, 8).unwrap();
