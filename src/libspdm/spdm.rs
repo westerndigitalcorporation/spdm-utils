@@ -1196,7 +1196,7 @@ unsafe fn libspdm_fill_measurement_image_hash_block(
 
         if !libspdm_measurement_hash_all(
             measurement_hash_algo,
-            data.as_ptr() as *mut libc::c_void,
+            data.as_ptr() as *mut c_void,
             data.len(),
             measurement_block.add(1) as *mut u8,
         ) {
@@ -1330,7 +1330,7 @@ unsafe fn libspdm_fill_measurement_manifest_block(
 
         if !libspdm_measurement_hash_all(
             measurement_hash_algo,
-            data.as_ptr() as *mut libc::c_void,
+            data.as_ptr() as *mut c_void,
             data.len(),
             measurement_block.add(1) as *mut u8,
         ) {
