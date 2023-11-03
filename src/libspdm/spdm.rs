@@ -20,6 +20,8 @@ use core::ptr;
 use libc::size_t;
 
 #[cfg(feature = "no_std")]
+use crate::alloc::string::ToString;
+#[cfg(feature = "no_std")]
 use alloc::alloc::{alloc, dealloc};
 #[cfg(feature = "no_std")]
 use alloc::ffi::CString;
@@ -1669,7 +1671,6 @@ pub unsafe extern "C" fn libspdm_measurement_collection(
 /// # Returns
 ///
 /// True if Hkdf generated successfully, false otherwise
-#[cfg(not(feature = "no_std"))]
 #[no_mangle]
 pub unsafe extern "C" fn libspdm_psk_handshake_secret_hkdf_expand(
     _spdm_version: libspdm_rs::spdm_version_number_t,
