@@ -821,35 +821,42 @@ pub unsafe extern "C" fn libspdm_responder_data_sign(
 /// # Returns
 ///
 /// True if certificate saved to NV successfully, otherwise, false
-#[cfg(not(feature = "no_std"))]
+#[allow(unused_variables)]
 #[no_mangle]
 pub unsafe extern "C" fn libspdm_write_certificate_to_nvm(
     slot_id: u8,
     cert_chain: *const c_void,
     cert_chain_size: size_t,
 ) -> bool {
-    let dir_name = format!("certs/slot{}", slot_id);
-    let file_name = format!("{}/immutable.der", dir_name);
-    let path = Path::new(&file_name);
-
-    std::fs::create_dir_all(dir_name).unwrap();
-
-    let file = match OpenOptions::new()
-        .read(true)
-        .write(true)
-        .create(true)
-        .open(path)
+    #[cfg(feature = "no_std")]
     {
-        Err(why) => panic!("couldn't open {}: {}", path.display(), why),
-        Ok(file) => file,
-    };
+        false
+    }
+    #[cfg(not(feature = "no_std"))]
+    {
+        let dir_name = format!("certs/slot{}", slot_id);
+        let file_name = format!("{}/immutable.der", dir_name);
+        let path = Path::new(&file_name);
 
-    let mut writer = BufWriter::new(file);
-    let slice = core::slice::from_raw_parts(cert_chain as *const u8, cert_chain_size);
+        std::fs::create_dir_all(dir_name).unwrap();
 
-    writer.write_all(slice).unwrap();
+        let file = match OpenOptions::new()
+            .read(true)
+            .write(true)
+            .create(true)
+            .open(path)
+        {
+            Err(why) => panic!("couldn't open {}: {}", path.display(), why),
+            Ok(file) => file,
+        };
 
-    true
+        let mut writer = BufWriter::new(file);
+        let slice = core::slice::from_raw_parts(cert_chain as *const u8, cert_chain_size);
+
+        writer.write_all(slice).unwrap();
+
+        true
+    }
 }
 
 /// # Summary
