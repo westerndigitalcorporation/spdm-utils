@@ -71,6 +71,7 @@ fn main() {
         .blocklist_function("qgcvt")
         .blocklist_function("strtold")
         .blocklist_type("_Float64x")
+        .clang_arg(format!("--target={}", env::var("HOST").unwrap()))
         .generate()
         .expect("Unable to generate bindings");
 
