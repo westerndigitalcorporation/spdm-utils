@@ -94,7 +94,7 @@ Generate the certificates with
 
 ```shell
 cd certs
-./setup_certs.sh ../target/debug/SPDM-Utils
+./setup_certs.sh
 cd ../
 ```
 
