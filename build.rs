@@ -5,7 +5,8 @@
 extern crate bindgen;
 
 use std::env;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
+use std::process::Command;
 
 fn main() {
     println!("cargo:rerun-if-changed=wrapper.h");
@@ -81,4 +82,11 @@ fn main() {
         .expect("Couldn't write bindings!");
 
     println!("cargo:rustc-link-arg=-Wl,--end-group");
+
+    if !Path::new("certs/slot0/bundle_responder.certchain.der").is_file() {
+        Command::new("./setup_certs.sh")
+            .current_dir(env::current_dir().unwrap().join("certs"))
+            .output()
+            .expect("Failed to execute command");
+    }
 }
