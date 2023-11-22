@@ -88,17 +88,6 @@ This is currently a work in progress
 cargo build --lib
 ```
 
-## Generate mutable certificates
-
-Generate the certificates with
-
-```shell
-cd certs
-./setup_certs.sh
-cd ../
-```
-
-
 ## Configuring the Logger
 
 SPDM-Utils supports logging. The following log levels are supported:
