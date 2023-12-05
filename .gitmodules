@@ -4,3 +4,12 @@
 [submodule "third-party/SPDM-Responder-Validator"]
 	path = third-party/SPDM-Responder-Validator
 	url = https://github.com/DMTF/SPDM-Responder-Validator.git
+[submodule "tock-responder/libtock-rs"]
+	path = tock-responder/libtock-rs
+	url = https://github.com/tock/libtock-rs.git
+[submodule "tock-responder/libmctp"]
+	path = tock-responder/libmctp
+	url = https://github.com/westerndigitalcorporation/libmctp.git
+[submodule "tock-responder/libtock-c"]
+	path = tock-responder/libtock-c
+	url = https://github.com/tock/libtock-c.git
