@@ -1,0 +1,14 @@
+[alias]
+rriscv32imac = "run --release --target=riscv32imac-unknown-none-elf --example"
+rrv32imac = "rriscv32imac"
+rriscv32imc = "run --release --target=riscv32imc-unknown-none-elf --example"
+rrv32imc = "rriscv32imc"
+rthumbv7em = "run --release --target=thumbv7em-none-eabi --example"
+rtv7em = "rthumbv7em"
+
+# Common settings for all embedded targets
+[target.'cfg(any(target_arch = "arm", target_arch = "riscv32"))']
+rustflags = [
+    "-C", "relocation-model=static",
+]
+runner = ["cargo", "run", "-p", "runner", "--release"]
