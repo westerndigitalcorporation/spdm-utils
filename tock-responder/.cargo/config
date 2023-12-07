@@ -12,8 +12,3 @@ rustflags = [
     "-C", "relocation-model=static",
 ]
 runner = ["cargo", "run", "-p", "runner", "--release"]
-
-[target.'cfg(any(target_arch = "riscv32"))']
-rustflags = [
-    "--cfg", "portable_atomic_unsafe_assume_single_core"
-]

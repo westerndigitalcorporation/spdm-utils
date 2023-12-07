@@ -69,6 +69,8 @@ pub fn convert_elf(cli: &Cli, platform: &str) -> OutFiles {
         "--kernel-minor".as_ref(), "0".as_ref(),
         "-n".as_ref(), package_name,
         "-o".as_ref(), tab_path.as_os_str(),
+        "--app-heap".as_ref(), "10240".as_ref(),
+        "--kernel-heap".as_ref(), "10240".as_ref(),
         "--stack".as_ref(), stack_size.as_ref(),
         format!("{},{}", elf.to_str().unwrap(), architecture).as_ref(),
     ]);

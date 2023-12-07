@@ -17,6 +17,7 @@ version = "0.1.0"
 rust-version = "1.70"
 
 [dependencies]
+# Pull in all of the libtock-rs crates
 libtock = { path = "libtock-rs"}
 libtock_adc = { path = "libtock-rs/apis/adc"}
 libtock_air_quality = { path = "libtock-rs/apis/air_quality" }
@@ -35,12 +36,17 @@ libtock_proximity = { path = "libtock-rs/apis/proximity" }
 libtock_runtime = { path = "libtock-rs/runtime" }
 libtock_sound_pressure = {path = "libtock-rs/apis/sound_pressure"}
 libtock_temperature = { path = "libtock-rs/apis/temperature" }
+
+# MCTP library for encoding/decoding MCTP
 libmctp = { path = "libmctp" }
 
-emballoc = { version = "0.2", features = ["portable_atomic"] }
-
-libc = { version = "0.2", default-features = false }
+# The top level SPDM utils crate
 SPDM-Utils = { path = "../", default-features = false, features = ["no_std"] }
+
+# The emballoc allocator and portable atomics
+emballoc = { version = "0.2", features = ["portable_atomic"] }
+portable-atomic = { version = "1", default-features = false, features = ["critical-section"] }
+critical-section = { version = "1.0" }
 
 [build-dependencies]
 libtock_build_scripts = { path = "libtock-rs/build_scripts"}
