@@ -37,3 +37,8 @@ $(eval $(call spdm_build,nrf52,thumbv7em-none-eabi))
 $(eval $(call spdm_build,imxrt1050,thumbv7em-none-eabi))
 $(eval $(call spdm_build,msp432,thumbv7em-none-eabi))
 $(eval $(call spdm_build,clue_nrf52840,thumbv7em-none-eabi))
+
+.PHONY: clean
+clean:
+		cargo clean
+		rm -rf target
