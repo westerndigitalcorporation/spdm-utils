@@ -83,9 +83,8 @@ cargo build --bin spdm_utils
 
 This is currently a work in progress
 
-
 ```shell
-cargo build --lib
+cargo build --lib --features=no_std
 ```
 
 ## Configuring the Logger
