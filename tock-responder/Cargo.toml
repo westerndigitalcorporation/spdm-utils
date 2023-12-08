@@ -63,4 +63,4 @@ panic = "abort"
 
 [workspace]
 exclude = ["libtock-rs", "libmctp"]
-members = ["runner"]
+members = ["libtock-rs/runner"]
