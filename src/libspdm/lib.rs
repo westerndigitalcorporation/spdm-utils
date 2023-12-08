@@ -18,3 +18,4 @@ extern crate alloc;
 pub mod libspdm_rs;
 #[macro_use]
 pub mod spdm;
+pub mod responder;
