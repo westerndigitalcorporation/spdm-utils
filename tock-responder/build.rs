@@ -55,7 +55,7 @@ fn main() {
     } else if arch == "riscv32i" {
         println!("cargo:rustc-link-arg=libtock-c/libtock/build/rv32i/libtock.a");
     } else if arch == "thumbv7em" {
-        println!("cargo:rustc-link-arg=libtock-c/libtock/build/cortex-m3/libtock.a");
+        println!("cargo:rustc-link-arg=libtock-c/libtock/build/cortex-m4/libtock.a");
     }
 
     if arch == "riscv32imac" {
