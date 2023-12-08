@@ -15,7 +15,7 @@ use std::path::Path;
 #[macro_use]
 extern crate log;
 use env_logger::Env;
-use libspdm::spdm;
+use libspdm::{responder, spdm};
 
 pub static SOCKET_PATH: &str = "SPDM-Utils-loopback-socket";
 
@@ -23,7 +23,6 @@ mod cli_helpers;
 mod doe_pci_cfg;
 mod qemu_server;
 mod request;
-mod responder;
 mod socket_client;
 mod socket_server;
 mod test_suite;
