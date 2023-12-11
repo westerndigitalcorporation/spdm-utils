@@ -169,12 +169,13 @@ dependencies = [
 ]
 
 [[package]]
-name = "emballoc"
-version = "0.2.0"
+name = "embedded-alloc"
+version = "0.5.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "3a1fd30811a003c891a368e0161ab9c4f6f298099a7b22b5f4a6ccdf4045e9f2"
+checksum = "ddae17915accbac2cfbc64ea0ae6e3b330e6ea124ba108dada63646fd3c6f815"
 dependencies = [
- "spin",
+ "critical-section",
+ "linked_list_allocator",
 ]
 
 [[package]]
@@ -438,6 +439,12 @@ dependencies = [
 ]
 
 [[package]]
+name = "linked_list_allocator"
+version = "0.10.5"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "9afa463f5405ee81cdb9cc2baf37e08ec7e4c8209442b5d72c04cfb2cd6e6286"
+
+[[package]]
 name = "linux-raw-sys"
 version = "0.4.12"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -494,15 +501,6 @@ name = "peeking_take_while"
 version = "0.1.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "19b17cddbe7ec3f8bc800887bab5e717348c95ea2ca0b1bf0837fb964dc67099"
-
-[[package]]
-name = "portable-atomic"
-version = "1.6.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "7170ef9988bc169ba16dd36a7fa041e5c4cbeb6a35b76d4c03daded371eae7c0"
-dependencies = [
- "critical-section",
-]
 
 [[package]]
 name = "proc-macro-error"
@@ -640,7 +638,7 @@ version = "0.1.0"
 dependencies = [
  "SPDM-Utils",
  "critical-section",
- "emballoc",
+ "embedded-alloc",
  "libmctp",
  "libtock",
  "libtock_adc",
@@ -661,16 +659,6 @@ dependencies = [
  "libtock_runtime",
  "libtock_sound_pressure",
  "libtock_temperature",
- "portable-atomic",
-]
-
-[[package]]
-name = "spin"
-version = "0.9.8"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "6980e8d7511241f8acf4aebddbb1ff938df5eebe98691418c4468d0b72a96a67"
-dependencies = [
- "portable-atomic",
 ]
 
 [[package]]

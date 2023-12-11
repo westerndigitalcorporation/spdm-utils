@@ -5,8 +5,7 @@
 
 use core::ffi::{c_int, c_void};
 use core::fmt::Write;
-use critical_section::RawRestoreState;
-use emballoc;
+use embedded_alloc::Heap;
 use libspdm::libspdm_rs::{
     SPDM_ALGORITHMS_BASE_ASYM_ALGO_TPM_ALG_ECDSA_ECC_NIST_P384,
     SPDM_ALGORITHMS_BASE_HASH_ALGO_TPM_ALG_SHA_384,
@@ -15,12 +14,13 @@ use libspdm::responder;
 use libspdm::spdm;
 use libtock::console::Console;
 use libtock::runtime::{set_main, stack_size};
+use critical_section::RawRestoreState;
 
 set_main! {main}
-stack_size! {0x400}
+stack_size! {0x800}
 
 #[global_allocator]
-static ALLOCATOR: emballoc::Allocator<4096> = emballoc::Allocator::new();
+static HEAP: Heap = Heap::empty();
 
 struct MyCriticalSection;
 critical_section::set_impl!(MyCriticalSection);
@@ -60,22 +60,40 @@ pub unsafe extern "C" fn _gettimeofday(
     gettimeasticks(tv, tzvp)
 }
 
+// Setup the heap and the global allocator.
+unsafe fn setup_heap() {
+    use core::mem::MaybeUninit;
+    // TODO: We can achieve ~118KB heap on the nrf52840, just need to bump the ram address in
+    // libtock-rs `build_scripts/src/lib.rs:22 to 0x20010000`. This forces MPU alignment to the next
+    // available MPU region calculated by the kernel. This may change as the kernel grows etc...
+    const HEAP_SIZE: usize = 1024 * 64;
+    static mut HEAP_MEM: [MaybeUninit<u8>; HEAP_SIZE] = [MaybeUninit::uninit(); HEAP_SIZE];
+    unsafe { HEAP.init(HEAP_MEM.as_ptr() as usize, HEAP_SIZE) }
+}
+
 fn main() {
-    writeln!(Console::writer(), "spdm-sample app start\r",).unwrap();
+    unsafe {
+        setup_heap();
+    }
+
+    writeln!(Console::writer(), "spdm-sample: app start\r",).unwrap();
     let cntx_ptr = spdm::initialise_spdm_context();
 
-    // register_device(cntx_ptr).unwrap();
+    // TODO: Add MCTP support to spdm-utils
+    //responder::register_device(cntx_ptr).unwrap();
 
     unsafe {
         spdm::setup_transport_layer(cntx_ptr).unwrap();
     }
+    writeln!(Console::writer(), "spdm-sample: setup_transport_layer [ok]\r",).unwrap();
 
-    // responder::setup_capabilities(
-    //     cntx_ptr,
-    //     0,
-    //     None,
-    //     SPDM_ALGORITHMS_BASE_ASYM_ALGO_TPM_ALG_ECDSA_ECC_NIST_P384,
-    //     SPDM_ALGORITHMS_BASE_HASH_ALGO_TPM_ALG_SHA_384,
-    // )
-    // .unwrap();
+    responder::setup_capabilities(
+        cntx_ptr,
+        0,
+        None,
+        SPDM_ALGORITHMS_BASE_ASYM_ALGO_TPM_ALG_ECDSA_ECC_NIST_P384,
+        SPDM_ALGORITHMS_BASE_HASH_ALGO_TPM_ALG_SHA_384,
+    )
+    .unwrap();
+    writeln!(Console::writer(), "spdm-sample: setup_capabilities [ok]\r",).unwrap();
 }

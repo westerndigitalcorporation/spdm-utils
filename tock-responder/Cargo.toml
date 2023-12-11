@@ -43,9 +43,8 @@ libmctp = { path = "libmctp" }
 # The top level SPDM utils crate
 SPDM-Utils = { path = "../", default-features = false, features = ["no_std"] }
 
-# The emballoc allocator and portable atomics
-emballoc = { version = "0.2", features = ["portable_atomic"] }
-portable-atomic = { version = "1", default-features = false, features = ["critical-section"] }
+# The heap allocator and portable atomics
+embedded-alloc = "0.5.1"
 critical-section = { version = "1.0" }
 
 [build-dependencies]
