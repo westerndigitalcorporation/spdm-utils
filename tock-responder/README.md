@@ -10,6 +10,8 @@ cd ../../
 
 ## Build libspdm for no_std targets
 
+Building for RISC-V:
+
 ```shell
 pushd ../third-party/libspdm/
 
@@ -18,10 +20,16 @@ cd build_no_std_riscv
 cmake -DARCH=riscv32 -DTOOLCHAIN=RISCV_NONE -DTARGET=Debug -DCRYPTO=mbedtls -DDISABLE_TESTS=1 ..
 make -j8
 cd ../
+```
 
+Building for ARM:
+
+Note, that the -DMARCH option must be specified with the respective ARM target architecture. This argument is passed directly to the compiler. See `man arm-none-eabi-gcc` for all supported options.
+
+```
 mkdir -p build_no_std_arm
 cd build_no_std_arm
-cmake -DARCH=arm -DTOOLCHAIN=ARM_GNU_BARE_METAL -DTARGET=Debug -DCRYPTO=mbedtls -DDISABLE_TESTS=1 ..
+cmake -DARCH=arm -DTOOLCHAIN=ARM_GNU_BARE_METAL -DTARGET=Release -DCRYPTO=mbedtls -DDISABLE_TESTS=1 -DMARCH=<march> -DDISABLE_LTO=1 ..
 make -j8
 cd ../
 
