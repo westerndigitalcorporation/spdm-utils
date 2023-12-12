@@ -44,6 +44,8 @@ SPDM-Utils = { path = "../", default-features = false, features = ["no_std"] }
 embedded-alloc = "0.5.1"
 critical-section = { version = "1.0" }
 
+once_cell = { version = "1.16", default-features = false, features = ["critical-section"] }
+
 [build-dependencies]
 libtock_build_scripts = { path = "libtock-rs/build_scripts"}
 

@@ -7,6 +7,8 @@
 #![no_main]
 #![no_std]
 
+extern crate alloc;
+
 use core::ffi::{c_int, c_void};
 use core::fmt::Write;
 use critical_section::RawRestoreState;
@@ -19,6 +21,8 @@ use libspdm::responder;
 use libspdm::spdm;
 use libtock::console::Console;
 use libtock::runtime::{set_main, stack_size};
+
+mod mctp;
 
 set_main! {main}
 stack_size! {0xE00}
@@ -81,11 +85,10 @@ fn main() {
     writeln!(Console::writer(), "spdm-sample: app start\r",).unwrap();
     let cntx_ptr = spdm::initialise_spdm_context();
 
-    // TODO: Add MCTP support to spdm-utils
-    //responder::register_device(cntx_ptr).unwrap();
+    mctp::register_device(cntx_ptr).unwrap();
 
     unsafe {
-        spdm::setup_transport_layer(cntx_ptr).unwrap();
+        mctp::setup_transport_layer(cntx_ptr).unwrap();
     }
     writeln!(
         Console::writer(),
@@ -102,4 +105,11 @@ fn main() {
     )
     .unwrap();
     writeln!(Console::writer(), "spdm-sample: setup_capabilities [ok]\r",).unwrap();
+
+    writeln!(
+        Console::writer(),
+        "spdm-sample: starting response_loop...\r",
+    )
+    .unwrap();
+    responder::response_loop(cntx_ptr);
 }
