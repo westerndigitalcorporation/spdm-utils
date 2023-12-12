@@ -1986,13 +1986,8 @@ pub unsafe fn get_local_certchain(
 
     let buffer_len = buffer.len();
 
-    let cert_buffer_layout = Layout::from_size_align(4096, 8).unwrap();
-    let cert_buffer = alloc(cert_buffer_layout);
-
-    cert_buffer.copy_from(buffer.as_ptr(), 4096);
-
     if !libspdm_rs::libspdm_x509_get_cert_from_cert_chain(
-        cert_buffer,
+        buffer.as_ptr(),
         buffer_len,
         0,
         &mut root_cert_buffer,
@@ -2007,6 +2002,9 @@ pub unsafe fn get_local_certchain(
         core::mem::size_of::<libspdm_rs::spdm_cert_chain_t>() + digest_size + buffer_len;
     let cert_chain_layout = Layout::from_size_align(cert_chain_size, 8).unwrap();
     let cert_chain_buffer = alloc(cert_chain_layout);
+
+    assert!(cert_chain_buffer != ptr::null_mut());
+
     let cert_chain = cert_chain_buffer as *mut libspdm_rs::spdm_cert_chain_t;
 
     (*cert_chain).length = cert_chain_size as u16;
@@ -2023,8 +2021,7 @@ pub unsafe fn get_local_certchain(
 
     let cert_buffer_location =
         cert_chain_buffer.add(core::mem::size_of::<libspdm_rs::spdm_cert_chain_t>() + digest_size);
-    cert_buffer_location.copy_from(cert_buffer, buffer_len);
-    dealloc(cert_buffer, cert_buffer_layout);
+    cert_buffer_location.copy_from(buffer.as_ptr(), buffer_len);
 
     (cert_chain_buffer as *mut c_void, cert_chain_size)
 }
