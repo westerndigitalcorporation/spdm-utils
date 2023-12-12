@@ -20,6 +20,8 @@ use libspdm::spdm;
 use libtock::console::Console;
 use libtock::runtime::{set_main, stack_size};
 
+mod mctp;
+
 set_main! {main}
 stack_size! {0xE00}
 
@@ -81,8 +83,7 @@ fn main() {
     writeln!(Console::writer(), "spdm-sample: app start\r",).unwrap();
     let cntx_ptr = spdm::initialise_spdm_context();
 
-    // TODO: Add MCTP support to spdm-utils
-    //responder::register_device(cntx_ptr).unwrap();
+    mctp::register_device(cntx_ptr).unwrap();
 
     unsafe {
         spdm::setup_transport_layer(cntx_ptr).unwrap();
