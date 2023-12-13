@@ -6,6 +6,7 @@
 
 #![no_main]
 #![no_std]
+extern crate alloc;
 
 use core::ffi::{c_int, c_void};
 use core::fmt::Write;
@@ -86,7 +87,7 @@ fn main() {
     mctp::register_device(cntx_ptr).unwrap();
 
     unsafe {
-        spdm::setup_transport_layer(cntx_ptr).unwrap();
+        mctp::setup_transport_layer(cntx_ptr).unwrap();
     }
     writeln!(
         Console::writer(),
@@ -97,10 +98,16 @@ fn main() {
     responder::setup_capabilities(
         cntx_ptr,
         0,
-        None,
+        Some(u8::try_from(libspdm::libspdm_rs::SPDM_MESSAGE_VERSION_13).unwrap()),
         SPDM_ALGORITHMS_BASE_ASYM_ALGO_TPM_ALG_ECDSA_ECC_NIST_P384,
         SPDM_ALGORITHMS_BASE_HASH_ALGO_TPM_ALG_SHA_384,
     )
     .unwrap();
     writeln!(Console::writer(), "spdm-sample: setup_capabilities [ok]\r",).unwrap();
+    writeln!(
+        Console::writer(),
+        "spdm-sample: starting response_loop...\r",
+    )
+    .unwrap();
+    responder::response_loop(cntx_ptr);
 }
