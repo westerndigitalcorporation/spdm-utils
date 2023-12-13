@@ -15,10 +15,20 @@ use libspdm::libspdm_rs::libspdm_data_type_t_LIBSPDM_DATA_CAPABILITY_DATA_TRANSF
 use libspdm::libspdm_rs::{libspdm_data_parameter_t, libspdm_set_data};
 use libspdm::libspdm_rs::{libspdm_register_device_buffer_func, libspdm_register_device_io_func};
 use once_cell::sync::OnceCell;
+use libtock::console::Console;
+use libtock::alarm::{Alarm, Milliseconds};
+use libtock::i2c_master_slave::I2CMasterSlave;
+use core::fmt::Write;
+use core::slice::from_raw_parts_mut;
 
 const SEND_RECEIVE_BUFFER_LEN: usize = 0x100;
 static mut SEND_BUFFER: OnceCell<[u8; SEND_RECEIVE_BUFFER_LEN]> = OnceCell::new();
 static mut RECEIVE_BUFFER: OnceCell<[u8; SEND_RECEIVE_BUFFER_LEN]> = OnceCell::new();
+
+// TODO: We can get away with using the same ID for send/recv as the there's only
+//       two devices and only writes are allowed. So only one should be listening
+//       at a given time (check: might not be mctp compliant)
+pub const TARGET_ID: u8   = 0x22;
 
 /// # Summary
 ///
@@ -42,11 +52,27 @@ static mut RECEIVE_BUFFER: OnceCell<[u8; SEND_RECEIVE_BUFFER_LEN]> = OnceCell::n
 #[no_mangle]
 unsafe extern "C" fn tock_send_message(
     _context: *mut c_void,
-    _message_size: usize,
-    _message_ptr: *const c_void,
+    message_size: usize,
+    message_ptr: *const c_void,
     _timeout: u64,
 ) -> u32 {
-    todo!();
+    let message = message_ptr as *const u8;
+    let send_buf = unsafe { from_raw_parts(message, message_size) };
+    // TODO: Use the libtock-rs I2C api to send the buffer
+    // 1. Master bus
+    // 2. Write out buffer to slave
+    writeln!(Console::writer(), "mctp_send_message: {send_buf:x?}\r",).unwrap();
+    // Allow some time for the receiving side to be listening
+    Alarm::sleep_for(Milliseconds(250)).unwrap();
+    if let Err(why) = I2CMasterSlave::i2c_master_slave_write_sync(TARGET_ID as u16, &send_buf, message_size as u16)
+    {
+        panic!(
+            "mctp_send_message: i2c: write operation failed {:?}\r",
+            why
+        )
+    }
+
+    unimplemented!("mctp_send_message");
 }
 
 /// # Summary
@@ -72,11 +98,37 @@ unsafe extern "C" fn tock_send_message(
 #[no_mangle]
 unsafe extern "C" fn tock_receive_message(
     _context: *mut c_void,
-    _message_size: *mut usize,
-    _msg_buf_ptr: *mut *mut c_void,
+    message_size: *mut usize,
+    msg_buf_ptr: *mut *mut c_void,
     _timeout: u64,
 ) -> u32 {
-    todo!();
+    let recv = *msg_buf_ptr as *mut u8;
+    let recv_buf = from_raw_parts_mut(recv, SEND_RECEIVE_BUFFER_LEN);
+    writeln!(Console::writer(), "mctp_receive_message: receiving message\r",).unwrap();
+    // TODO: Verify the slave address symantics due to only writes from both sides.
+    // Setup slave mode
+    I2CMasterSlave::i2c_master_slave_set_slave_address(TARGET_ID)
+        .expect("mctp_receive_message: Failed to listen");
+
+    let r = I2CMasterSlave::i2c_master_slave_write_recv_sync(recv_buf);
+
+    if let Err(why) = r.1 {
+        panic!(
+            "mctp_receive_message: error to receiving data {:?}\r",
+            why
+        );
+    }
+
+    writeln!(
+        Console::writer(),
+        "{:} bytes received \n\r | buf: {:x?}\r",
+        r.0,
+        &recv_buf[0..r.0]
+    )
+    .unwrap();
+
+    *message_size = r.0;
+    0
 }
 
 /// # Summary

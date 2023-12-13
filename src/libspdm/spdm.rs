@@ -261,7 +261,7 @@ impl fmt::Display for SpdmSessionInfo {
  * If chunk is unsupported, it must be same as DATA_TRANSFER_SIZE.
  * If chunk is supported, it must be larger than DATA_TRANSFER_SIZE.
  * It matches MaxSPDMmsgSize in SPDM specification. */
-pub const LIBSPDM_MAX_SPDM_MSG_SIZE: u32 = 0x200; // Reduced for embedded memory constraints
+pub const LIBSPDM_MAX_SPDM_MSG_SIZE: u32 = 0x100; // Reduced for embedded memory constraints
 
 const OPAQUE_SIZE: usize = 0;
 
