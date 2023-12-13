@@ -261,7 +261,7 @@ impl fmt::Display for SpdmSessionInfo {
  * If chunk is unsupported, it must be same as DATA_TRANSFER_SIZE.
  * If chunk is supported, it must be larger than DATA_TRANSFER_SIZE.
  * It matches MaxSPDMmsgSize in SPDM specification. */
-pub const LIBSPDM_MAX_SPDM_MSG_SIZE: u32 = 0x2000;
+pub const LIBSPDM_MAX_SPDM_MSG_SIZE: u32 = 0x200; // Reduced for embedded memory constraints
 
 const OPAQUE_SIZE: usize = 0;
 
@@ -405,10 +405,10 @@ pub unsafe fn setup_transport_layer(context: *mut c_void) -> Result<(), ()> {
     libspdm_register_transport_layer_func(
         context,
         LIBSPDM_MAX_SPDM_MSG_SIZE,
-        LIBSPDM_PCI_DOE_TRANSPORT_HEADER_SIZE,
-        LIBSPDM_PCI_DOE_TRANSPORT_TAIL_SIZE,
-        Some(libspdm_transport_pci_doe_encode_message),
-        Some(libspdm_transport_pci_doe_decode_message),
+        LIBSPDM_MCTP_TRANSPORT_HEADER_SIZE,
+        LIBSPDM_MCTP_TRANSPORT_TAIL_SIZE,
+        Some(libspdm_transport_mctp_encode_message),
+        Some(libspdm_transport_mctp_decode_message),
     );
 
     let parameter = libspdm_rs::libspdm_data_parameter_t::new_connection(0);

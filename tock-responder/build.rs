@@ -24,6 +24,7 @@ fn main() {
     println!("cargo:rustc-link-arg=-lspdm_crypt_lib");
     println!("cargo:rustc-link-arg=-lspdm_crypt_ext_lib");
     println!("cargo:rustc-link-arg=-lspdm_transport_pcidoe_lib");
+    println!("cargo:rustc-link-arg=-lspdm_transport_mctp_lib");
 
     // As we are linking against a C application we need to provide newlib
     // Rust isn't currently able to do this.
