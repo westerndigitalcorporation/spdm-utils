@@ -11,7 +11,7 @@ readme = "README.md"
 default = ["std"]
 
 no_std = []
-std = ["clap", "memmap2", "once_cell", "sha2", "env_logger"]
+std = ["clap", "memmap2", "once_cell", "sha2", "env_logger", "serialport", "lazy_static"]
 
 [lib]
 name = "libspdm"
@@ -26,6 +26,8 @@ bindgen = "0.63"
 
 [dependencies]
 log = "0.4"
+serialport = { version = "4.3.0", optional = true }
+lazy_static = { version = "1.4.0", optional = true }
 
 clap = { version = "4.0", features = ["derive"], optional = true }
 memmap2 = { version = "0.5", optional = true}

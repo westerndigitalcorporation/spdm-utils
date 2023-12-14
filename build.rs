@@ -34,6 +34,7 @@ fn main() {
     println!("cargo:rustc-link-arg=-lspdm_crypt_lib");
     println!("cargo:rustc-link-arg=-lspdm_crypt_ext_lib");
     println!("cargo:rustc-link-arg=-lspdm_transport_pcidoe_lib");
+    println!("cargo:rustc-link-arg=-lspdm_transport_mctp_lib");
 
     // Link SPDM Test Libraries
     let builder = if cfg!(libspdm_tests) {
