@@ -215,6 +215,14 @@ impl fmt::Display for SpdmAlgoKeyScheduleHmacHash {
     }
 }
 
+#[derive(Debug)]
+pub enum TransportLayer {
+    /// PCIe Data Object Exchange
+    Doe,
+    /// DMTF Management Component Transport Protocol
+    Mctp,
+}
+
 /// Contains the information used to setup the current
 /// SPDM session.
 #[derive(Default)]
@@ -401,18 +409,36 @@ pub fn initialise_spdm_context() -> *mut c_void {
 /// # Returns
 ///
 /// Ok(()) on success
-pub unsafe fn setup_transport_layer(context: *mut c_void) -> Result<(), ()> {
-    libspdm_register_transport_layer_func(
-        context,
-        LIBSPDM_MAX_SPDM_MSG_SIZE,
-        LIBSPDM_PCI_DOE_TRANSPORT_HEADER_SIZE,
-        LIBSPDM_PCI_DOE_TRANSPORT_TAIL_SIZE,
-        Some(libspdm_transport_pci_doe_encode_message),
-        Some(libspdm_transport_pci_doe_decode_message),
-    );
+pub unsafe fn setup_transport_layer(
+    context: *mut c_void,
+    trans: TransportLayer,
+    libspdm_max_spdm_msg_size: u32,
+) -> Result<(), ()> {
+    match trans {
+        TransportLayer::Doe => {
+            libspdm_register_transport_layer_func(
+                context,
+                libspdm_max_spdm_msg_size,
+                LIBSPDM_PCI_DOE_TRANSPORT_HEADER_SIZE,
+                LIBSPDM_PCI_DOE_TRANSPORT_TAIL_SIZE,
+                Some(libspdm_transport_pci_doe_encode_message),
+                Some(libspdm_transport_pci_doe_decode_message),
+            );
+        }
+        TransportLayer::Mctp => {
+            libspdm_register_transport_layer_func(
+                context,
+                libspdm_max_spdm_msg_size,
+                LIBSPDM_MCTP_TRANSPORT_HEADER_SIZE,
+                LIBSPDM_MCTP_TRANSPORT_TAIL_SIZE,
+                Some(libspdm_transport_mctp_encode_message),
+                Some(libspdm_transport_mctp_decode_message),
+            );
+        }
+    }
 
     let parameter = libspdm_rs::libspdm_data_parameter_t::new_connection(0);
-    let mut data: u32 = LIBSPDM_MAX_SPDM_MSG_SIZE;
+    let mut data: u32 = libspdm_max_spdm_msg_size;
     let data_ptr = &mut data as *mut _ as *mut c_void;
     if LibspdmReturnStatus::libspdm_status_is_error(libspdm_set_data(
         context,
@@ -461,6 +487,7 @@ pub unsafe fn initialise_connection(context: *mut c_void, slot_id: u8) -> Result
     let ret = libspdm_init_connection(context, false);
 
     if LibspdmReturnStatus::libspdm_status_is_error(ret) {
+        error!("libspdm_init_connection: failed with {:x?}", ret);
         return Err(ret);
     }
 
@@ -477,6 +504,7 @@ pub unsafe fn initialise_connection(context: *mut c_void, slot_id: u8) -> Result
     );
 
     if LibspdmReturnStatus::libspdm_status_is_error(ret) {
+        error!("libspdm_get_digest(): failed with {:x?}", ret);
         return Err(ret);
     }
 
@@ -494,6 +522,7 @@ pub unsafe fn initialise_connection(context: *mut c_void, slot_id: u8) -> Result
     );
 
     if LibspdmReturnStatus::libspdm_status_is_error(ret) {
+        error!("libspdm_get_certificate(): failed with {:x?}", ret);
         return Err(ret);
     }
 
@@ -511,6 +540,7 @@ pub unsafe fn initialise_connection(context: *mut c_void, slot_id: u8) -> Result
     );
 
     if LibspdmReturnStatus::libspdm_status_is_error(ret) {
+        error!("libspdm_challenge(): failed with {:x?}", ret);
         return Err(ret);
     }
 

@@ -67,9 +67,15 @@ To build libspdm in the third-party directory
 ```shell
 cd libspdm/
 mkdir build; cd build
-cmake -DARCH=x64 -DTOOLCHAIN=GCC -DTARGET=Debug -DCRYPTO=openssl -DENABLE_BINARY_BUILD=1 -DCOMPILED_LIBCRYPTO_PATH=/usr/lib/ -DCOMPILED_LIBSSL_PATH=/usr/lib/ -DDISABLE_TESTS=1 ..
+cmake -DARCH=x64 -DTOOLCHAIN=GCC -DTARGET=Debug -DCRYPTO=openssl -DENABLE_BINARY_BUILD=1 -DCOMPILED_LIBCRYPTO_PATH=/usr/lib/ -DCOMPILED_LIBSSL_PATH=/usr/lib/ -DDISABLE_TESTS=1 CFLAGS="-DLIBSPDM_ENABLE_CAPABILITY_CHUNK_CAP=1" ..
 make -j8
 ```
+
+Note that we build `libspdm` with chunking enabled. Chunking allows us to keep the maximum data transferred
+in a single burst down by chunking the SPDM message data into frames of digestible size(s).
+
+For example, `usb_i2c` communication with the `tock-responder` requires it, so we enable it by default.
+You can disable `LIBSPDM_ENABLE_CAPABILITY_CHUNK_CAP` for other targets if required by omitting the `CFLAGS="-DLIBSPDM_ENABLE_CAPABILITY_CHUNK_CAP=1` in the invocation of `cmake`.
 
 ## Build the binary
 
