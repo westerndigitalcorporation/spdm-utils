@@ -6,6 +6,7 @@
 //! to implement and emulate an SPDM responder.
 //!
 
+use crate::spdm::TransportLayer;
 use crate::*;
 use libspdm::spdm::LIBSPDM_MAX_SPDM_MSG_SIZE;
 use once_cell::sync::OnceCell;
@@ -24,13 +25,6 @@ static mut SEND_BUFFER: OnceCell<[u8; SEND_RECEIVE_BUFFER_LEN]> = OnceCell::new(
 static mut RECEIVE_BUFFER: OnceCell<[u8; SEND_RECEIVE_BUFFER_LEN]> = OnceCell::new();
 
 static mut CLIENT_CONNECTION: OnceCell<TcpStream> = OnceCell::new();
-
-/// Emulated transport layer in QEMU
-#[derive(Debug)]
-pub enum QemuTransportLayer {
-    Doe,
-    Mctp,
-}
 
 /// # Summary
 ///
@@ -310,7 +304,7 @@ unsafe extern "C" fn qemu_release_receiver_buffer(
 pub fn register_device(
     context: *mut c_void,
     port: u16,
-    transport: QemuTransportLayer,
+    transport: TransportLayer,
 ) -> Result<(), ()> {
     let buffer_send = [0; SEND_RECEIVE_BUFFER_LEN];
     let buffer_receive = [0; SEND_RECEIVE_BUFFER_LEN];
@@ -348,7 +342,7 @@ pub fn register_device(
         RECEIVE_BUFFER.set(buffer_receive).unwrap();
 
         match transport {
-            QemuTransportLayer::Doe => {
+            TransportLayer::Doe => {
                 libspdm_register_device_io_func(
                     context,
                     Some(qemu_send_message_doe),
