@@ -12,6 +12,7 @@
 #include <library/spdm_return_status.h>
 #include <library/spdm_secured_message_lib.h>
 #include <library/spdm_transport_pcidoe_lib.h>
+#include <library/spdm_transport_mctp_lib.h>
 #ifdef LIBSPDM_TESTS
 #include <library/spdm_responder_conformance_test_lib.h>
 #endif

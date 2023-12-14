@@ -26,6 +26,8 @@ bindgen = "0.63"
 
 [dependencies]
 log = "0.4"
+serialport = "4.3.0"
+lazy_static = "1.4.0"
 
 clap = { version = "4.0", features = ["derive"], optional = true }
 memmap2 = { version = "0.5", optional = true}
