@@ -23,13 +23,14 @@ const SEND_RECEIVE_BUFFER_LEN: usize = LIBSPDM_MAX_SPDM_MSG_SIZE as usize;
 static mut SEND_BUFFER: OnceCell<*mut u8> = OnceCell::new();
 static mut RECEIVE_BUFFER: OnceCell<*mut u8> = OnceCell::new();
 
+// TODO: Make configurable
 pub const TARGET_ID: u8 = 0x22;
 
 /* Maximum size of a large SPDM message.
  * If chunk is unsupported, it must be same as DATA_TRANSFER_SIZE.
  * If chunk is supported, it must be larger than DATA_TRANSFER_SIZE.
  * It matches MaxSPDMmsgSize in SPDM specification. */
-pub const LIBSPDM_MAX_SPDM_MSG_SIZE: u32 = 128;
+pub const LIBSPDM_MAX_SPDM_MSG_SIZE: u32 = 1096;
 
 /// # Summary
 ///
@@ -157,14 +158,30 @@ unsafe extern "C" fn tock_receive_message(
 ) -> u32 {
     let recv = *msg_buf_ptr as *mut u8;
     let recv_buf: &mut [u8] = from_raw_parts_mut(recv, SEND_RECEIVE_BUFFER_LEN);
+    writeln!(
+        Console::writer(),
+        "mctp_receive_message: receiving message\r",
+    )
+    .unwrap();
+
+    I2CMasterSlave::i2c_master_slave_set_slave_address(TARGET_ID)
+        .expect("mctp_receive_message: Failed to listen");
 
     let r = I2CMasterSlave::i2c_master_slave_write_recv_sync(recv_buf);
     if let Err(why) = r.1 {
         panic!("mctp_receive_message: error to receiving data {:?}\r", why);
     }
 
-    *message_size = r.0;
+    writeln!(
+        Console::writer(),
+        "{:} bytes received \n\r buf: {:x?}\r",
+        r.0,
+        &recv_buf[0..r.0]
+    )
+    .unwrap();
 
+    *message_size = r.0;
+    writeln!(Console::writer(), "return from recv_msg").unwrap();
     0
 }
 
