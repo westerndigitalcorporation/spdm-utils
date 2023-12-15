@@ -26,16 +26,14 @@ const SEND_RECEIVE_BUFFER_LEN: usize = LIBSPDM_MAX_SPDM_MSG_SIZE as usize;
 static mut SEND_BUFFER: OnceCell<*mut u8> = OnceCell::new();
 static mut RECEIVE_BUFFER: OnceCell<*mut u8> = OnceCell::new();
 
-// TODO: We can get away with using the same ID for send/recv as the there's only
-//       two devices and only writes are allowed. So only one should be listening
-//       at a given time (check: might not be mctp compliant)
+// TODO: Make configurable
 pub const TARGET_ID: u8 = 0x22;
 
 /* Maximum size of a large SPDM message.
  * If chunk is unsupported, it must be same as DATA_TRANSFER_SIZE.
  * If chunk is supported, it must be larger than DATA_TRANSFER_SIZE.
  * It matches MaxSPDMmsgSize in SPDM specification. */
-pub const LIBSPDM_MAX_SPDM_MSG_SIZE: u32 = 128;
+pub const LIBSPDM_MAX_SPDM_MSG_SIZE: u32 = 1096;
 
 /// # Summary
 ///
@@ -173,8 +171,7 @@ unsafe extern "C" fn tock_receive_message(
         "mctp_receive_message: receiving message\r",
     )
     .unwrap();
-    // TODO: Verify the slave address symantics due to only writes from both sides.
-    // Setup slave mode
+
     I2CMasterSlave::i2c_master_slave_set_slave_address(TARGET_ID)
         .expect("mctp_receive_message: Failed to listen");
 
@@ -185,13 +182,14 @@ unsafe extern "C" fn tock_receive_message(
 
     writeln!(
         Console::writer(),
-        "{:} bytes received \n\r | buf: {:x?}\r",
+        "{:} bytes received \n\r buf: {:x?}\r",
         r.0,
         &recv_buf[0..r.0]
     )
     .unwrap();
 
     *message_size = r.0;
+    writeln!(Console::writer(), "return from recv_msg").unwrap();
     0
 }
 

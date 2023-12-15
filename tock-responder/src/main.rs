@@ -8,7 +8,6 @@
 #![no_std]
 extern crate alloc;
 
-use core::ffi::{c_int, c_void};
 use core::fmt::Write;
 use critical_section::RawRestoreState;
 use embedded_alloc::Heap;
@@ -21,10 +20,11 @@ use libspdm::spdm;
 use libtock::console::Console;
 use libtock::runtime::{set_main, stack_size};
 
+mod libc_stubs;
 mod mctp;
 
 set_main! {main}
-stack_size! {0xE00}
+stack_size! {0x4000}
 
 #[global_allocator]
 static HEAP: Heap = Heap::empty();
@@ -45,33 +45,11 @@ unsafe impl critical_section::Impl for MyCriticalSection {
     unsafe fn release(_token: RawRestoreState) {}
 }
 
-// Based on https://github.com/llvm/llvm-project/blob/main/compiler-rt/lib/builtins/bswapsi2.c
-#[no_mangle]
-pub extern "C" fn __bswapsi2(u: u32) -> u32 {
-    (((u) & 0xff000000) >> 24)
-        | (((u) & 0x00ff0000) >> 8)
-        | (((u) & 0x0000ff00) << 8)
-        | (((u) & 0x000000ff) << 24)
-}
-
-extern "C" {
-    // Provided by libtock-c
-    fn gettimeasticks(tv: *mut libspdm::libspdm_rs::timeval, tzvp: *mut c_void) -> c_int;
-}
-
-#[no_mangle]
-pub unsafe extern "C" fn _gettimeofday(
-    tv: *mut libspdm::libspdm_rs::timeval,
-    tzvp: *mut c_void,
-) -> c_int {
-    gettimeasticks(tv, tzvp)
-}
-
 // Setup the heap and the global allocator.
 unsafe fn setup_heap() {
     use core::mem::MaybeUninit;
 
-    const HEAP_SIZE: usize = 1024 * 64;
+    const HEAP_SIZE: usize = 1024 * 74;
     static mut HEAP_MEM: [MaybeUninit<u8>; HEAP_SIZE] = [MaybeUninit::uninit(); HEAP_SIZE];
     unsafe { HEAP.init(HEAP_MEM.as_ptr() as usize, HEAP_SIZE) }
 }
@@ -98,7 +76,7 @@ fn main() {
     responder::setup_capabilities(
         cntx_ptr,
         0,
-        Some(u8::try_from(libspdm::libspdm_rs::SPDM_MESSAGE_VERSION_13).unwrap()),
+        Some(u8::try_from(libspdm::libspdm_rs::SPDM_MESSAGE_VERSION_12).unwrap()),
         SPDM_ALGORITHMS_BASE_ASYM_ALGO_TPM_ALG_ECDSA_ECC_NIST_P384,
         SPDM_ALGORITHMS_BASE_HASH_ALGO_TPM_ALG_SHA_384,
     )
