@@ -6,4 +6,4 @@
 	url = https://github.com/DMTF/SPDM-Responder-Validator.git
 [submodule "tock-responder/libtock-rs"]
 	path = tock-responder/libtock-rs
-	url = https://github.com/tock/libtock-rs.git
+	url = https://github.com/twilfredo/libtock-rs.git
