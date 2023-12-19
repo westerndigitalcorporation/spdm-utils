@@ -17,7 +17,7 @@ pushd ../third-party/libspdm/
 
 mkdir -p build_no_std_riscv
 cd build_no_std_riscv
-cmake -DARCH=riscv32 -DTOOLCHAIN=RISCV_NONE -DTARGET=Debug -DCRYPTO=mbedtls -DDISABLE_TESTS=1 ..
+cmake -DARCH=riscv32 -DTOOLCHAIN=RISCV_NONE -DTARGET=Debug -DCRYPTO=mbedtls -DDISABLE_TESTS=1 CFLAGS="-DLIBSPDM_ENABLE_CAPABILITY_CHUNK_CAP=1" ..
 make -j8
 cd ../
 ```
@@ -29,7 +29,7 @@ Note, that the -DMARCH option must be specified with the respective ARM target a
 ```
 mkdir -p build_no_std_arm
 cd build_no_std_arm
-cmake -DARCH=arm -DTOOLCHAIN=ARM_GNU_BARE_METAL -DTARGET=Release -DCRYPTO=mbedtls -DDISABLE_TESTS=1 -DMARCH=<march> -DDISABLE_LTO=1 ..
+cmake -DARCH=arm -DTOOLCHAIN=ARM_GNU_BARE_METAL -DTARGET=Release -DCRYPTO=mbedtls -DDISABLE_TESTS=1 -DMARCH=armv7e-m -DDISABLE_LTO=1 CFLAGS="-DLIBSPDM_ENABLE_CAPABILITY_CHUNK_CAP=1" ..
 make -j8
 cd ../
 

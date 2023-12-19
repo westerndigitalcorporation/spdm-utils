@@ -2,6 +2,10 @@
 # Specify Bash instead so we don't have to test against a variety of shells.
 include libtock-rs/Makefile
 
+ifdef FEATURES
+features=--features=$(FEATURES)
+endif
+
 # Creates the `make <BOARD> EXAMPLE=<EXAMPLE>` targets. Arguments:
 #  1) The name of the platform to build for.
 #  2) The target architecture the platform uses.
