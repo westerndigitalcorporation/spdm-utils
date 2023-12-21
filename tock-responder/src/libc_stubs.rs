@@ -8,6 +8,12 @@ use alloc::alloc::{alloc, dealloc, Layout};
 use core::ffi::{c_char, c_void};
 
 #[no_mangle]
+fn libspdm_get_random_number_64(rand_data: *mut u64) -> bool {
+   unsafe {*rand_data = 0xDEAD_BEED_CAFE_BAAD;}
+   true
+}
+
+#[no_mangle]
 pub unsafe extern "C" fn malloc(size: usize) -> *mut c_void {
     // We want to keep track of the Layout so it can be used to dealloc() later.
     // So allocate some extra-space for this metadata.
