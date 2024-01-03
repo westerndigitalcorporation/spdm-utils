@@ -26,6 +26,7 @@ mod request;
 mod socket_client;
 mod socket_server;
 mod test_suite;
+mod usb_i2c;
 
 #[derive(Parser)]
 #[command(author, version, about, long_about = None)]
@@ -49,6 +50,18 @@ struct Args {
     /// Use the Socket Server backend
     #[arg(long)]
     socket_server: bool,
+
+    /// Use the usb-i2c transport layer (for mctp)
+    #[arg(long)]
+    usb_i2c: bool,
+
+    /// Path to the USB/UART device
+    #[arg(long, default_value = "/dev/ttyUSB0")]
+    usb_i2c_dev: Option<String>,
+
+    /// Baud-rate for the USB/UART device
+    #[arg(long, default_value_t = 115200)]
+    usb_i2c_baud: u32,
 
     /// Use the Socket Client backend
     #[arg(long)]
@@ -260,6 +273,9 @@ fn main() -> Result<(), ()> {
     cli.socket_server.then(|| {
         count += 1;
     });
+    cli.usb_i2c.then(|| {
+        count += 1;
+    });
     cli.socket_client.then(|| {
         count += 1;
     });
@@ -283,6 +299,8 @@ fn main() -> Result<(), ()> {
         socket_server::register_device(cntx_ptr).unwrap();
     } else if cli.socket_client {
         socket_client::register_device(cntx_ptr).unwrap();
+    } else if cli.usb_i2c {
+        usb_i2c::register_device(cntx_ptr, cli.usb_i2c_dev, cli.usb_i2c_baud).unwrap();
     } else if cli.qemu_server {
         if let Commands::Request { .. } = cli.command {
             error!("QEMU Server does not support running an SPDM requester");
@@ -296,7 +314,21 @@ fn main() -> Result<(), ()> {
     }
 
     unsafe {
-        spdm::setup_transport_layer(cntx_ptr).unwrap();
+        if cli.usb_i2c {
+            spdm::setup_transport_layer(
+                cntx_ptr,
+                spdm::TransportLayer::Mctp,
+                usb_i2c::LIBSPDM_MAX_SPDM_MSG_SIZE,
+            )
+            .unwrap();
+        } else {
+            spdm::setup_transport_layer(
+                cntx_ptr,
+                spdm::TransportLayer::Doe,
+                spdm::LIBSPDM_MAX_SPDM_MSG_SIZE,
+            )
+            .unwrap();
+        }
     }
 
     match cli.command {

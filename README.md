@@ -71,6 +71,14 @@ cmake -DARCH=x64 -DTOOLCHAIN=GCC -DTARGET=Debug -DCRYPTO=openssl -DENABLE_BINARY
 make -j8
 ```
 
+It is important to note that if the `usb_i2c` transport layer is being used, then, you must build libspdm with
+chunking support enabled. This allows us to keep the maximum data transferred in a single burst down by chunking the the spdm data messages into frames of digestible size. To enable chunking support, libspdm can be built
+with:
+
+```shell
+cmake -DARCH=x64 -DTOOLCHAIN=GCC -DTARGET=Debug -DCRYPTO=openssl -DENABLE_BINARY_BUILD=1 -DCOMPILED_LIBCRYPTO_PATH=/usr/lib/ -DCOMPILED_LIBSSL_PATH=/usr/lib/ -DDISABLE_TESTS=1 CFLAGS="-DLIBSPDM_ENABLE_CAPABILITY_CHUNK_CAP=1" ..
+```
+
 ## Build the binary
 
 Then you can build SPDM-Utils with
