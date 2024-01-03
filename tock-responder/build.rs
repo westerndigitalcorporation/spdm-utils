@@ -10,7 +10,6 @@ fn main() {
     println!("cargo:rustc-link-arg=-ldebuglib");
     println!("cargo:rustc-link-arg=-lplatform_lib");
     println!("cargo:rustc-link-arg=-lcryptlib_mbedtls");
-    println!("cargo:rustc-link-arg=-lrnglib");
 
     println!("cargo:rustc-link-arg=-lmbedtls");
     println!("cargo:rustc-link-arg=-lmbedx509");
