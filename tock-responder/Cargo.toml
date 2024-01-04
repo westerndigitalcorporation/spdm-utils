@@ -62,3 +62,8 @@ panic = "abort"
 [workspace]
 exclude = ["libtock-rs"]
 members = ["libtock-rs/runner"]
+
+[features]
+# Enable debug printing of SPDM buffers, this will
+# significantly affect throughput speed (printing overhead).
+spdm_debug = []

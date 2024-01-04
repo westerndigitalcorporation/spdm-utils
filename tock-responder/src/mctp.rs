@@ -12,24 +12,35 @@
 use alloc::alloc::alloc;
 use core::alloc::Layout;
 use core::ffi::c_void;
+#[allow(unused_imports)]
+use core::fmt::Write;
 use core::slice::from_raw_parts;
 use core::slice::from_raw_parts_mut;
 use libspdm::libspdm_rs::*;
 use libspdm::spdm::LibspdmReturnStatus;
+#[allow(unused_imports)]
+use libtock::console::Console;
 use libtock::i2c_master_slave::I2CMasterSlave;
 use once_cell::sync::OnceCell;
 
-const SEND_RECEIVE_BUFFER_LEN: usize = LIBSPDM_MAX_SPDM_MSG_SIZE as usize;
+/// We will use CHUNKING support from libspdm, SEND_RECEIVE_BUFFER_LEN will also
+/// dictate the number of max bytes per transport layer send/recv
+/// operation.
+///
+/// Note: The kernel I2C buffers initialized by <board>/src/main.rs must
+///       be of length > SEND_RECEIVE_BUFFER_LEN.
+const SEND_RECEIVE_BUFFER_LEN: usize = 255 as usize;
 static mut SEND_BUFFER: OnceCell<*mut u8> = OnceCell::new();
 static mut RECEIVE_BUFFER: OnceCell<*mut u8> = OnceCell::new();
 
+// TODO: Make configurable
 pub const TARGET_ID: u8 = 0x22;
 
 /* Maximum size of a large SPDM message.
  * If chunk is unsupported, it must be same as DATA_TRANSFER_SIZE.
  * If chunk is supported, it must be larger than DATA_TRANSFER_SIZE.
  * It matches MaxSPDMmsgSize in SPDM specification. */
-pub const LIBSPDM_MAX_SPDM_MSG_SIZE: u32 = 128;
+pub const LIBSPDM_MAX_SPDM_MSG_SIZE: u32 = 1096;
 
 /// # Summary
 ///
@@ -56,6 +67,7 @@ pub unsafe fn setup_transport_layer(context: *mut c_void) -> Result<(), ()> {
     );
 
     let parameter = libspdm_data_parameter_t::new_connection(0);
+
     let mut data: u32 = LIBSPDM_MAX_SPDM_MSG_SIZE;
     let data_ptr = &mut data as *mut _ as *mut c_void;
     if LibspdmReturnStatus::libspdm_status_is_error(libspdm_set_data(
@@ -116,6 +128,10 @@ unsafe extern "C" fn tock_send_message(
     let message = message_ptr as *const u8;
     let send_buf = unsafe { from_raw_parts(message, message_size) };
 
+    #[cfg(feature = "spdm_debug")] {
+        writeln!(Console::writer(), "--mctp_send_message: sending message--\r",).unwrap();
+        writeln!(Console::writer(), "mctp_send_message: {send_buf:x?}\r",).unwrap();
+    }
     // Allow some time for the receiving side to be listening
     if let Err(why) = I2CMasterSlave::i2c_master_slave_write_sync(
         TARGET_ID as u16,
@@ -157,14 +173,32 @@ unsafe extern "C" fn tock_receive_message(
 ) -> u32 {
     let recv = *msg_buf_ptr as *mut u8;
     let recv_buf: &mut [u8] = from_raw_parts_mut(recv, SEND_RECEIVE_BUFFER_LEN);
+    #[cfg(feature = "spdm_debug")] {
+        writeln!(
+            Console::writer(),
+            "--mctp_receive_message: receiving message--\r",
+        )
+        .unwrap();
+    }
+    I2CMasterSlave::i2c_master_slave_set_slave_address(TARGET_ID)
+        .expect("mctp_receive_message: Failed to listen");
 
     let r = I2CMasterSlave::i2c_master_slave_write_recv_sync(recv_buf);
     if let Err(why) = r.1 {
         panic!("mctp_receive_message: error to receiving data {:?}\r", why);
     }
 
-    *message_size = r.0;
+    #[cfg(feature = "spdm_debug")] {
+        writeln!(
+            Console::writer(),
+            "{:} bytes received \n\r buf: {:x?}\r",
+            r.0,
+            &recv_buf[0..r.0]
+        )
+        .unwrap();
+    }
 
+    *message_size = r.0;
     0
 }
 
