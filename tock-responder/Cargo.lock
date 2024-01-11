@@ -282,6 +282,7 @@ dependencies = [
  "libtock_ninedof",
  "libtock_platform",
  "libtock_proximity",
+ "libtock_rng",
  "libtock_runtime",
  "libtock_sound_pressure",
  "libtock_temperature",
@@ -392,6 +393,13 @@ version = "0.1.0"
 
 [[package]]
 name = "libtock_proximity"
+version = "0.1.0"
+dependencies = [
+ "libtock_platform",
+]
+
+[[package]]
+name = "libtock_rng"
 version = "0.1.0"
 dependencies = [
  "libtock_platform",
