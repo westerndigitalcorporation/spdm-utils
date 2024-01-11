@@ -6,11 +6,24 @@
 
 use alloc::alloc::{alloc, dealloc, Layout};
 use core::ffi::{c_char, c_void};
+use libtock::rng::Rng;
 
 #[no_mangle]
 fn libspdm_get_random_number_64(rand_data: *mut u64) -> bool {
+    if let Err(why) = Rng::exists() {
+        panic!("rng error: {:?}", why);
+    }
+    // Request 8 bytes of RNG.
+    let mut rng_buf: [u8; 8] = [0; 8];
+    if let Err(why) = Rng::get_bytes_sync(&mut rng_buf, 8) {
+        panic!("rng error: {:?}", why);
+    }
+    assert!(
+        rng_buf.iter().any(|&x| x != 0),
+        "Unlikely that all elements are zero"
+    );
     unsafe {
-        *rand_data = 0xDEAD_BEED_CAFE_BAAD;
+        *rand_data = u64::from_be_bytes(rng_buf);
     }
     true
 }
