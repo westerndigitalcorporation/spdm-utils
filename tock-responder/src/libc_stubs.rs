@@ -123,8 +123,69 @@ pub extern "C" fn time() {
 }
 
 #[no_mangle]
-pub extern "C" fn strncmp() {
-    todo!("libc/stub: strncmp(): not yet implemented");
+/// Compare no more than N characters of S1 and S2,
+/// returning less than, equal to or greater than zero
+/// if S1 is lexicographically less than, equal to or
+/// greater than S2.
+/// Based on: https://github.com/zerovm/glibc/blob/3f07350498160f552350dc39f6fe6d237c7c3b03/string/strncmp.c#L28C4-L29C20
+pub extern "C" fn strncmp(s1: *const c_char, s2: *const c_char, n: usize) -> i32 {
+    let mut s1 = s1;
+    let mut s2 = s2;
+    let mut n = n;
+
+    let mut c1: u8 = b'\0';
+    let mut c2: u8 = b'\0';
+
+    if n >= 4 {
+        let mut n4 = n >> 2;
+        while n4 > 0 {
+            c1 = unsafe { *s1 as u8 };
+            s1 = unsafe { s1.offset(1) };
+            c2 = unsafe { *s2 as u8 };
+            s2 = unsafe { s2.offset(1) };
+            if c1 == b'\0' || c1 != c2 {
+                return (c1 as i32) - (c2 as i32);
+            }
+            c1 = unsafe { *s1 as u8 };
+            s1 = unsafe { s1.offset(1) };
+            c2 = unsafe { *s2 as u8 };
+            s2 = unsafe { s2.offset(1) };
+            if c1 == b'\0' || c1 != c2 {
+                return (c1 as i32) - (c2 as i32);
+            }
+            c1 = unsafe { *s1 as u8 };
+            s1 = unsafe { s1.offset(1) };
+            c2 = unsafe { *s2 as u8 };
+            s2 = unsafe { s2.offset(1) };
+            if c1 == b'\0' || c1 != c2 {
+                return (c1 as i32) - (c2 as i32);
+            }
+            c1 = unsafe { *s1 as u8 };
+            s1 = unsafe { s1.offset(1) };
+            c2 = unsafe { *s2 as u8 };
+            s2 = unsafe { s2.offset(1) };
+            if c1 == b'\0' || c1 != c2 {
+                return (c1 as i32) - (c2 as i32);
+            }
+
+            n4 -= 1;
+        }
+        n &= 3;
+    }
+
+    while n > 0 {
+        c1 = unsafe { *s1 as u8 };
+        s1 = unsafe { s1.offset(1) };
+        c2 = unsafe { *s2 as u8 };
+        s2 = unsafe { s2.offset(1) };
+        if c1 == b'\0' || c1 != c2 {
+            return (c1 as i32) - (c2 as i32);
+        }
+
+        n -= 1;
+    }
+
+    (c1 as i32) - (c2 as i32)
 }
 
 #[no_mangle]
