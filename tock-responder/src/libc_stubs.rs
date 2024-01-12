@@ -18,14 +18,34 @@ fn libspdm_get_random_number_64(rand_data: *mut u64) -> bool {
     if let Err(why) = Rng::get_bytes_sync(&mut rng_buf, 8) {
         panic!("rng error: {:?}", why);
     }
-    assert!(
-        rng_buf.iter().any(|&x| x != 0),
-        "Unlikely that all elements are zero"
-    );
+    let rng = u64::from_be_bytes(rng_buf);
+    assert_ne!(rng, 0);
     unsafe {
-        *rand_data = u64::from_be_bytes(rng_buf);
+        *rand_data = rng;
     }
     true
+}
+
+#[no_mangle]
+/// Return a random integer between [0 and i32::MAX].
+pub extern "C" fn rand() -> i32 {
+    if let Err(why) = Rng::exists() {
+        panic!("rng error: {:?}", why);
+    }
+    // Request 4 bytes of RNG.
+    let mut rng_buf: [u8; 4] = [0; 4];
+    if let Err(why) = Rng::get_bytes_sync(&mut rng_buf, 4) {
+        panic!("rng error: {:?}", why);
+    }
+
+    let mut rng = i32::from_be_bytes(rng_buf);
+    // The valid output range is [0, i32::MAX], so if the signed bit is
+    // set from HW RNG, invert it.
+    if rng < 0 {
+        rng = rng.wrapping_neg();
+    }
+    assert_ne!(rng, 0);
+    rng
 }
 
 // Based on https://github.com/llvm/llvm-project/blob/main/compiler-rt/lib/builtins/bswapsi2.c
@@ -120,9 +140,4 @@ pub extern "C" fn strchr() {
 #[no_mangle]
 pub extern "C" fn strcmp() {
     todo!("libc/stub: strcmp(): not yet implemented");
-}
-
-#[no_mangle]
-pub extern "C" fn rand() {
-    todo!("libc/stub: rand(): not yet implemented");
 }
