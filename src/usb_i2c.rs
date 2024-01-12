@@ -145,46 +145,10 @@ unsafe extern "C" fn usb_i2c_receive_message(
 
     info!("Receiving message");
 
-    let preamble: [u8; 2] = [0xBB, 0xFF];
     let mut port = SERIAL_PORT.lock().unwrap().take().unwrap();
     assert_eq!(port.bytes_to_read().unwrap(), 0);
     let mut header: Vec<u8> = vec![0; HEADER_LEN];
-    let mut i = 0;
     _ = port.read_exact(&mut header).unwrap();
-
-    // Note: This is to address an odd quirk, where after usb-i2c device is newly
-    // flashed (first time) with the libtock-rs app, the first transfer from the
-    // device to us may have an odd offset, as if the TX buffer is non-empty
-    // (perhaps the end of the board boot banner lingering in the internal buffers).
-    loop {
-        if header
-            .windows(preamble.len())
-            .any(|window| window == preamble)
-            && header[0] == 0xBB
-        {
-            // Matched with entire header packet
-            break;
-        } else if header
-            .windows(preamble.len())
-            .any(|window| window == preamble)
-            && header[2] == 0xBB
-        {
-            // Preamble matches but with an offset of 2
-            let (first_part, second_part) = header.split_at_mut(2);
-            // Swap the elements of the two parts
-            first_part.swap_with_slice(second_part);
-            // Get the next two bytes of the header packet
-            port.read_exact(&mut header[2..]).unwrap();
-            break;
-        }
-        _ = port.read_exact(&mut header).unwrap();
-        i += 1;
-        if i > 10 {
-            // If we keep looping here, then the packet header is likely not
-            // going to be received.
-            panic!("RX data corrupted");
-        }
-    }
 
     // Assert the header first
     debug!("packet_header: {:x?}", header);
