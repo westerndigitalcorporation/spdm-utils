@@ -123,8 +123,13 @@ unsafe extern "C" fn tock_send_message(
     let message = message_ptr as *const u8;
     let send_buf = unsafe { from_raw_parts(message, message_size) };
 
-    #[cfg(feature = "spdm_debug")] {
-        writeln!(Console::writer(), "--mctp_send_message: sending message--\r",).unwrap();
+    #[cfg(feature = "spdm_debug")]
+    {
+        writeln!(
+            Console::writer(),
+            "--mctp_send_message: sending message--\r",
+        )
+        .unwrap();
         writeln!(Console::writer(), "mctp_send_message: {send_buf:x?}\r",).unwrap();
     }
     // Allow some time for the receiving side to be listening
@@ -168,7 +173,8 @@ unsafe extern "C" fn tock_receive_message(
 ) -> u32 {
     let recv = *msg_buf_ptr as *mut u8;
     let recv_buf: &mut [u8] = from_raw_parts_mut(recv, SEND_RECEIVE_BUFFER_LEN);
-    #[cfg(feature = "spdm_debug")] {
+    #[cfg(feature = "spdm_debug")]
+    {
         writeln!(
             Console::writer(),
             "--mctp_receive_message: receiving message--\r",
@@ -183,7 +189,8 @@ unsafe extern "C" fn tock_receive_message(
         panic!("mctp_receive_message: error to receiving data {:?}\r", why);
     }
 
-    #[cfg(feature = "spdm_debug")] {
+    #[cfg(feature = "spdm_debug")]
+    {
         writeln!(
             Console::writer(),
             "{:} bytes received \n\r buf: {:x?}\r",
