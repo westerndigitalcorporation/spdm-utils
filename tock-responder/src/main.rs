@@ -77,7 +77,7 @@ fn main() {
     responder::setup_capabilities(
         cntx_ptr,
         0,
-        Some(u8::try_from(libspdm::libspdm_rs::SPDM_MESSAGE_VERSION_12).unwrap()),
+        Some(u8::try_from(libspdm::libspdm_rs::SPDM_MESSAGE_VERSION_13).unwrap()),
         SPDM_ALGORITHMS_BASE_ASYM_ALGO_TPM_ALG_ECDSA_ECC_NIST_P384,
         SPDM_ALGORITHMS_BASE_HASH_ALGO_TPM_ALG_SHA_384,
     )
@@ -89,5 +89,11 @@ fn main() {
         "spdm-sample: starting response_loop...\r",
     )
     .unwrap();
+    responder::set_supported_slots_mask(
+        1,
+        Some(u8::try_from(libspdm::libspdm_rs::SPDM_MESSAGE_VERSION_13).unwrap()),
+        cntx_ptr,
+    )
+    .expect("failed to set supported slot mask");
     responder::response_loop(cntx_ptr);
 }
