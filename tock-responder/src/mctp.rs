@@ -9,20 +9,23 @@
 //! If libspdm behaves in a manor we don't expect this will be very bad,
 //! so we are trusting libspdm here.
 
-use alloc::alloc::alloc;
+use alloc::alloc::{alloc, dealloc};
 use core::alloc::Layout;
 use core::ffi::c_void;
 #[allow(unused_imports)]
 use core::fmt::Write;
 use core::slice::from_raw_parts;
 use core::slice::from_raw_parts_mut;
+use libmctp;
+use libmctp::mctp_traits::SMBusMCTPRequestResponse;
+use libmctp::vendor_packets::VendorIDFormat;
 use libspdm::libspdm_rs::*;
 use libspdm::spdm::LibspdmReturnStatus;
+use libspdm::spdm::LIBSPDM_MAX_SPDM_MSG_SIZE;
 #[allow(unused_imports)]
 use libtock::console::Console;
 use libtock::i2c_master_slave::I2CMasterSlave;
 use once_cell::sync::OnceCell;
-use libspdm::spdm::LIBSPDM_MAX_SPDM_MSG_SIZE;
 
 /// We will use CHUNKING support from libspdm, SEND_RECEIVE_BUFFER_LEN will also
 /// dictate the number of max bytes per transport layer send/recv
@@ -34,8 +37,28 @@ const SEND_RECEIVE_BUFFER_LEN: usize = 255 as usize;
 static mut SEND_BUFFER: OnceCell<*mut u8> = OnceCell::new();
 static mut RECEIVE_BUFFER: OnceCell<*mut u8> = OnceCell::new();
 
+const MCTP_HEADER_LEN: usize = 10;
+const LIBSPDM_BUFFER_LEN: usize = SEND_RECEIVE_BUFFER_LEN - MCTP_HEADER_LEN;
+
+static mut MCTPCONTEXT: OnceCell<libmctp::MCTPSMBusContext> = OnceCell::new();
+
 // TODO: Make configurable
-pub const TARGET_ID: u8 = 0x22;
+/// The address of the target device
+pub const TARGET_ID: u8 = 0x34;
+/// The address of this device
+pub const SOURCE_ID: u8 = 0x22;
+
+pub const MCTP_PAYLOAD_OFFSET: usize = 9;
+
+const MSG_TYPES: [u8; 0] = [0; 0];
+const VENDOR_IDS: [VendorIDFormat; 1] = [VendorIDFormat {
+    // PCI Vendor ID
+    format: 0x00,
+    // PCI VID
+    data: 0x1234,
+    // Extra data
+    numeric_value: 0xAB,
+}];
 
 /// # Summary
 ///
@@ -121,7 +144,28 @@ unsafe extern "C" fn tock_send_message(
     _timeout: u64,
 ) -> u32 {
     let message = message_ptr as *const u8;
-    let send_buf = unsafe { from_raw_parts(message, message_size) };
+    let message_buf = unsafe { from_raw_parts(message, message_size) };
+    let send_buf_layout = Layout::array::<u8>(message_size + 20).unwrap();
+    let send_buf_alloc = alloc(send_buf_layout);
+    let send_buf = from_raw_parts_mut(send_buf_alloc, message_size + 20);
+    let ctx = MCTPCONTEXT.take().unwrap();
+
+    let libspdm_msg_header_type = match libmctp::MessageType::from(message_buf[0]) {
+        libmctp::MessageType::SpdmOverMctp => libmctp::MessageType::SpdmOverMctp,
+        libmctp::MessageType::SecuredMessages => libmctp::MessageType::SecuredMessages,
+        _ => unreachable!("unexpected mctp/spdm message type"),
+    };
+
+    let len = ctx
+        .get_request()
+        .generate_spdm_msg_packet_bytes(
+            TARGET_ID,
+            libspdm_msg_header_type,
+            &None,
+            &message_buf[1..],
+            send_buf,
+        )
+        .unwrap();
 
     #[cfg(feature = "spdm_debug")]
     {
@@ -130,17 +174,25 @@ unsafe extern "C" fn tock_send_message(
             "--mctp_send_message: sending message--\r",
         )
         .unwrap();
-        writeln!(Console::writer(), "mctp_send_message: {send_buf:x?}\r",).unwrap();
+        writeln!(
+            Console::writer(),
+            "mctp_send_message: {len}/{message_size}: {:x?}\r",
+            &send_buf[0..len]
+        )
+        .unwrap();
     }
+
     // Allow some time for the receiving side to be listening
     if let Err(why) = I2CMasterSlave::i2c_master_slave_write_sync(
         TARGET_ID as u16,
-        &send_buf,
-        message_size as u16,
+        &send_buf[1..len],
+        len as u16 - 1,
     ) {
-        panic!("mctp_send_message: i2c: write operation failed {:?}\r", why)
+        panic!("mctp_send_message: i2c: write operation failed {:?}\r", why);
     }
 
+    let _ = MCTPCONTEXT.set(ctx);
+    dealloc(send_buf_alloc, send_buf_layout);
     0
 }
 
@@ -173,6 +225,9 @@ unsafe extern "C" fn tock_receive_message(
 ) -> u32 {
     let recv = *msg_buf_ptr as *mut u8;
     let recv_buf: &mut [u8] = from_raw_parts_mut(recv, SEND_RECEIVE_BUFFER_LEN);
+    recv_buf.fill(0);
+    let ctx = MCTPCONTEXT.take().unwrap();
+
     #[cfg(feature = "spdm_debug")]
     {
         writeln!(
@@ -181,7 +236,8 @@ unsafe extern "C" fn tock_receive_message(
         )
         .unwrap();
     }
-    I2CMasterSlave::i2c_master_slave_set_slave_address(TARGET_ID)
+
+    I2CMasterSlave::i2c_master_slave_set_slave_address(SOURCE_ID)
         .expect("mctp_receive_message: Failed to listen");
 
     let r = I2CMasterSlave::i2c_master_slave_write_recv_sync(recv_buf);
@@ -189,18 +245,40 @@ unsafe extern "C" fn tock_receive_message(
         panic!("mctp_receive_message: error to receiving data {:?}\r", why);
     }
 
+    // Ammed our address to create a valid MCTP packet
+    let mut message_len = r.0;
+    recv_buf.copy_within(0..message_len, 1);
+    recv_buf[0] = SOURCE_ID << 1;
+    message_len = message_len + 1;
+
     #[cfg(feature = "spdm_debug")]
     {
         writeln!(
             Console::writer(),
             "{:} bytes received \n\r buf: {:x?}\r",
-            r.0,
-            &recv_buf[0..r.0]
+            message_len,
+            &recv_buf[0..message_len]
         )
         .unwrap();
     }
 
-    *message_size = r.0;
+    let (_msg_type, payload) = ctx.decode_packet(&recv_buf[..message_len]).unwrap();
+
+    let _ = MCTPCONTEXT.set(ctx);
+
+    let len = payload.len();
+    // The `MCTP_PAYLOAD_OFFSET-1`` is the SPDM MCTP Message type, lets retain this
+    recv_buf.copy_within(
+        MCTP_PAYLOAD_OFFSET - 1..((MCTP_PAYLOAD_OFFSET - 1) + len),
+        0,
+    );
+
+    #[cfg(feature = "spdm_debug")]
+    {
+        writeln!(Console::writer(), "recv_buf: {:x?}", &recv_buf[0..len]).unwrap();
+    }
+
+    *message_size = len;
     0
 }
 
@@ -341,6 +419,12 @@ pub fn register_device(context: *mut c_void) -> Result<(), ()> {
             core::mem::size_of::<u32>(),
         );
 
+        let _ = MCTPCONTEXT.set(libmctp::MCTPSMBusContext::new(
+            SOURCE_ID,
+            &MSG_TYPES,
+            &VENDOR_IDS,
+        ));
+
         SEND_BUFFER.set(buffer_send).unwrap();
         RECEIVE_BUFFER.set(buffer_receive).unwrap();
 
@@ -351,8 +435,8 @@ pub fn register_device(context: *mut c_void) -> Result<(), ()> {
         );
         libspdm_register_device_buffer_func(
             context,
-            SEND_RECEIVE_BUFFER_LEN as u32,
-            SEND_RECEIVE_BUFFER_LEN as u32,
+            LIBSPDM_BUFFER_LEN as u32,
+            LIBSPDM_BUFFER_LEN as u32,
             Some(tock_acquire_sender_buffer),
             Some(tock_release_sender_buffer),
             Some(tock_acquire_receiver_buffer),
