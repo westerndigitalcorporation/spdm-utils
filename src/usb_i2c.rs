@@ -25,6 +25,9 @@
 use crate::*;
 use core::ffi::c_void;
 use lazy_static::lazy_static;
+use libmctp;
+use libmctp::mctp_traits::SMBusMCTPRequestResponse;
+use libmctp::vendor_packets::VendorIDFormat;
 use once_cell::sync::OnceCell;
 use serialport::SerialPort;
 use std::io::Read;
@@ -34,13 +37,38 @@ use std::time::Duration;
 
 // We are using libspdm chunking, so let's use smaller transfer chunks at the hardware
 // layer.
-const SEND_RECEIVE_BUFFER_LEN: usize = 128 as usize;
+const SEND_RECEIVE_BUFFER_LEN: usize = 128;
 static mut SEND_BUFFER: OnceCell<[u8; SEND_RECEIVE_BUFFER_LEN]> = OnceCell::new();
 static mut RECEIVE_BUFFER: OnceCell<[u8; SEND_RECEIVE_BUFFER_LEN]> = OnceCell::new();
+
+const MCTP_HEADER_LEN: usize = 10;
+const LIBSPDM_BUFFER_LEN: usize = SEND_RECEIVE_BUFFER_LEN - MCTP_HEADER_LEN;
+
 /// The length of the packet header sent prior to the SPDM data message by the
 /// usb-i2c bridge device. This packet is used to determine the exact length
 /// of the next incoming data set which contains only the SPDM message data.
 pub const HEADER_LEN: usize = 0x4;
+
+pub const MCTP_BYTE_COUNT: usize = 2;
+pub const MCTP_PAYLOAD_OFFSET: usize = 9;
+
+// TODO: Make these configurable
+/// The address of the target device
+pub const TARGET_ID: u8 = 0x22;
+/// The address of this device
+pub const SOURCE_ID: u8 = 0x34;
+
+const MSG_TYPES: [u8; 0] = [0; 0];
+const VENDOR_IDS: [VendorIDFormat; 1] = [VendorIDFormat {
+    // PCI Vendor ID
+    format: 0x00,
+    // PCI VID
+    data: 0x1234,
+    // Extra data
+    numeric_value: 0xAB,
+}];
+
+static mut MCTPCONTEXT: OnceCell<libmctp::MCTPSMBusContext> = OnceCell::new();
 
 lazy_static! {
     // Let's lock down the serial port, so we don't have to keep opening and
@@ -79,15 +107,20 @@ unsafe extern "C" fn usb_i2c_send_message(
     let msg_buf = unsafe { from_raw_parts(message, message_size) };
     let mut send_buf: [u8; (SEND_RECEIVE_BUFFER_LEN + HEADER_LEN) as usize] =
         [0; (SEND_RECEIVE_BUFFER_LEN + HEADER_LEN) as usize];
+    let ctx = MCTPCONTEXT.take().unwrap();
+
+    let mut len = ctx
+        .get_request()
+        .generate_spdm_msg_packet_bytes(TARGET_ID, &None, &msg_buf[1..], &mut send_buf)
+        .unwrap();
+
+    // We drop the first byte, which is the target address
+    send_buf.copy_within(0..len, 3);
+    len = len - 1;
 
     send_buf[0] = 0xAA; // Preamble
-    send_buf[1] = 0x22; // Target Address. TODO: Make configurable
-                        // Set the 16-bit length value [2] -> upper byte, [3] -> lower byte
-    send_buf[2..=3].copy_from_slice(&u16::to_be_bytes(message_size as u16));
-
-    // Copy the SPDM message buffer into the send buffer
-    assert!(send_buf.len() >= HEADER_LEN + msg_buf.len());
-    send_buf[HEADER_LEN..HEADER_LEN + msg_buf.len()].copy_from_slice(&msg_buf);
+    send_buf[1] = TARGET_ID; // Target Address
+    send_buf[2..=3].copy_from_slice(&u16::to_be_bytes(len as u16)); // Set the 16-bit length value [2] -> upper byte, [3] -> lower byte
 
     // For writes, we transfer the entire buffer of fixed length.
     debug!(
@@ -96,16 +129,14 @@ unsafe extern "C" fn usb_i2c_send_message(
         send_buf.len()
     );
 
-    debug!(
-        "Sending message {:x?}",
-        &send_buf[..HEADER_LEN + msg_buf.len()]
-    );
+    debug!("Sending message {:x?}", &send_buf[..HEADER_LEN + len]);
 
     // Write out the data buffer
     let mut port = SERIAL_PORT.lock().unwrap().take().unwrap();
     port.write(&send_buf).expect("Write failed!");
     info!("Sent!");
 
+    let _ = MCTPCONTEXT.set(ctx);
     *SERIAL_PORT.lock().unwrap() = Some(port);
 
     0
@@ -140,11 +171,11 @@ unsafe extern "C" fn usb_i2c_receive_message(
 ) -> u32 {
     let message = *message_ptr as *mut u8;
     let spdm_msg_buf = from_raw_parts_mut(message, SEND_RECEIVE_BUFFER_LEN);
+    let ctx = MCTPCONTEXT.take().unwrap();
 
     info!("Receiving message");
 
     let mut port = SERIAL_PORT.lock().unwrap().take().unwrap();
-    assert_eq!(port.bytes_to_read().unwrap(), 0);
     let mut header: Vec<u8> = vec![0; HEADER_LEN];
     _ = port.read_exact(&mut header).unwrap();
 
@@ -154,18 +185,36 @@ unsafe extern "C" fn usb_i2c_receive_message(
     assert_eq!(header[1], 0xFF); // Receive Preamble 2 (This is just misc)
 
     // Copy in the 2 bytes (Big Endian as set by target) that corresponds to the
-    // SPDM message length
-    *message_size = u16::from_be_bytes([header[2], header[3]]) as usize;
-    debug!("spdm_msg_len: {:x?}", *message_size);
-    assert!(*message_size <= SEND_RECEIVE_BUFFER_LEN);
-    // SPDM Data length should be non-zero
-    assert_ne!(*message_size, 0x00);
+    // message length
+    let mut message_len = u16::from_be_bytes([header[2], header[3]]) as usize;
+    assert!(message_len <= SEND_RECEIVE_BUFFER_LEN);
+    assert_ne!(message_len, 0x00);
 
     // Read the next set of data, which is just the SPDM message
-    port.read_exact(&mut spdm_msg_buf[0..*message_size])
-        .unwrap();
-    debug!("spdm_msg_data: {:x?}", *message_size);
+    port.read_exact(&mut spdm_msg_buf[0..message_len]).unwrap();
 
+    // Ammed our address to create a valid MCTP packet
+    spdm_msg_buf.copy_within(0..message_len, 1);
+    spdm_msg_buf[0] = SOURCE_ID << 1;
+    message_len = message_len + 1;
+
+    // Get the total length from the MCTP packet
+    let mctp_len = spdm_msg_buf[MCTP_BYTE_COUNT] as usize + 4;
+    assert!(mctp_len <= message_len);
+    assert!(mctp_len <= SEND_RECEIVE_BUFFER_LEN);
+
+    let (_msg_type, payload) = ctx.decode_packet(&spdm_msg_buf[0..mctp_len]).unwrap();
+
+    // Extract the payload and add the mesasge type to please libspdm
+    let len = payload.len() + 1;
+    spdm_msg_buf.copy_within(MCTP_PAYLOAD_OFFSET..(MCTP_PAYLOAD_OFFSET + len), 1);
+    spdm_msg_buf[0] = 0x05;
+
+    debug!("mctp_buf: {:x?}", &spdm_msg_buf[0..len]);
+
+    *message_size = len;
+
+    let _ = MCTPCONTEXT.set(ctx);
     *SERIAL_PORT.lock().unwrap() = Some(port);
 
     0
@@ -329,6 +378,12 @@ pub fn register_device(
         SEND_BUFFER.set(buffer_send).unwrap();
         RECEIVE_BUFFER.set(buffer_receive).unwrap();
 
+        let _ = MCTPCONTEXT.set(libmctp::MCTPSMBusContext::new(
+            SOURCE_ID,
+            &MSG_TYPES,
+            &VENDOR_IDS,
+        ));
+
         libspdm_register_device_io_func(
             context,
             Some(usb_i2c_send_message),
@@ -336,8 +391,8 @@ pub fn register_device(
         );
         libspdm_register_device_buffer_func(
             context,
-            SEND_RECEIVE_BUFFER_LEN as u32,
-            SEND_RECEIVE_BUFFER_LEN as u32,
+            LIBSPDM_BUFFER_LEN as u32,
+            LIBSPDM_BUFFER_LEN as u32,
             Some(usb_i2c_acquire_sender_buffer),
             Some(usb_i2c_release_sender_buffer),
             Some(usb_i2c_acquire_receiver_buffer),
