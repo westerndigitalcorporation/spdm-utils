@@ -44,6 +44,7 @@ pub fn setup_capabilities(
     asym_algo: u32,
     hash_algo: u32,
 ) -> Result<(), ()> {
+    assert!(slot_id < 8);
     unsafe {
         let parameter = libspdm_data_parameter_t::new_local(slot_id);
 
@@ -257,6 +258,57 @@ pub fn setup_capabilities(
     }
 
     Ok(())
+}
+
+/// # Summary
+///
+/// Sets the SupportedSlotMask to indicate that the certificate slots described by,
+/// up-to and including @slots_supported are supported. That is @slots_supported is 3,
+/// then slots 0, 1, 2 and 3 MUST already be provisioned.
+///
+/// # Parameter
+///
+/// * `cntx_ptr`: The SPDM context
+/// * `slots_supported`: Number of certificate slots supported.
+/// * `spdm_ver`: SPDM version
+///
+/// # Returns
+///
+/// Ok(()) if the slot mask was set, Err(()), otherwise.
+pub fn set_supported_slots_mask(slots_supported: u8, spdm_ver: Option<u8>, context: *mut c_void) -> Result<(), ()> {
+        assert!(slots_supported < 8);
+        // As per SPDM version 1.3, SupportedSlotMask field indicates which slots
+        // the responding SPDM endpoint supports.
+        // "SupportedSlotMask. If certificate slot X exists in the responding SPDM
+        // endpoint, the bit in position X of this byte shall be
+        // set. (Bit 0 is the least significant bit of the byte.)
+        // Likewise, if certificate slot X does not exist in the
+        // responding SPDM endpoint, bit X of this byte shall
+        // not be set and certificate slot X shall be an invalid
+        // value in various slot ID fields ( SlotID ) across all
+        // SPDM request messages that contain this field." - SPDM 1.3, 374
+        if spdm_ver.map(|v| v >= u8::try_from(SPDM_MESSAGE_VERSION_13).unwrap()).is_some() {
+            let mut data: u8 = u8::try_from((1u16 << (slots_supported + 1)) - 1).expect("arithemtic overflow");
+            let data_ptr = &mut data as *mut _ as *mut c_void;
+            // Note: The slot_id for local param doesn't matter here, libspdm ignores it for
+            // `LIBSPDM_DATA_LOCAL_SUPPORTED_SLOT_MASK`, we just want to say it's for the local context
+            let parameter = libspdm_data_parameter_t::new_local(0);
+            let rc = unsafe {
+                libspdm_set_data(
+                    context,
+                    libspdm_data_type_t_LIBSPDM_DATA_LOCAL_SUPPORTED_SLOT_MASK,
+                    &parameter as *const libspdm_data_parameter_t,
+                    data_ptr,
+                    core::mem::size_of::<u8>(),
+                )
+            };
+            if LibspdmReturnStatus::libspdm_status_is_error(rc) {
+                error!("failed to set supported slot mask: rc: 0x{:x}", rc);
+                return Err(());
+            }
+            return Ok(());
+        }
+        Err(())
 }
 
 /// # Summary

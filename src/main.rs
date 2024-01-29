@@ -365,6 +365,7 @@ fn main() -> Result<(), ()> {
                 .unwrap();
         }
         Commands::Response { spdm_ver } => {
+            let mut num_provisioned_slots = 0;
             for slot_id in 1..8 {
                 let file_name = format!("certs/slot{}/immutable.der", slot_id);
                 let path = Path::new(&file_name);
@@ -383,6 +384,7 @@ fn main() -> Result<(), ()> {
                         SPDM_ALGORITHMS_BASE_HASH_ALGO_TPM_ALG_SHA_384,
                     )
                     .unwrap();
+                    num_provisioned_slots += 1;
                 }
             }
             // Check if version was specified
@@ -401,6 +403,9 @@ fn main() -> Result<(), ()> {
                 SPDM_ALGORITHMS_BASE_HASH_ALGO_TPM_ALG_SHA_384,
             )
             .unwrap();
+            num_provisioned_slots += 1;
+            assert!(num_provisioned_slots < 8);
+            responder::set_supported_slots_mask(num_provisioned_slots, ver, cntx_ptr).expect("failed to set supported slot mask");
 
             responder::response_loop(cntx_ptr);
         }
