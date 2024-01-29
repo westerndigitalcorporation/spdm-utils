@@ -865,7 +865,7 @@ pub unsafe extern "C" fn libspdm_write_certificate_to_nvm(
 ) -> bool {
     #[cfg(feature = "no_std")]
     {
-        false
+        todo!("implement: non-volatile storage");
     }
     #[cfg(not(feature = "no_std"))]
     {
@@ -1987,6 +1987,28 @@ pub unsafe extern "C" fn libspdm_encap_challenge_opaque_data(
     }
 
     true
+}
+
+use core::ffi::{c_uint, c_uchar};
+
+#[no_mangle]
+pub unsafe extern "C" fn libspdm_gen_csr_ex(
+    _base_hash_algo: c_uint,
+    _base_asym_algo: c_uint,
+    _need_reset: *mut bool,
+    _request: *const c_void,
+    _request_size: usize,
+    _requester_info: *mut c_uchar,
+    _requester_info_length: usize,
+    _opaque_data: *mut c_uchar,
+    _opaque_data_length: u16,
+    _csr_len: usize,
+    _csr_pointer:  *mut c_uchar,
+    _req_cert_model: c_uchar,
+    _csr_tracking_tag: *mut c_uchar,
+    _overwrite: bool
+) -> bool {
+    todo!("libspdm_gen_csr_ex(): Gen CSR, which is used for SPDM 1.3");
 }
 
 /// for the LIBSPDM_DATA_BASE_HASH_ALGO data.
