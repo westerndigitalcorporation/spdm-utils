@@ -118,11 +118,6 @@ pub unsafe extern "C" fn strstr(haystack: *const c_char, needle: *const c_char) 
 }
 
 #[no_mangle]
-pub extern "C" fn time() {
-    todo!("libc/stub: time(): not yet implemented");
-}
-
-#[no_mangle]
 /// Compare no more than N characters of S1 and S2,
 /// returning less than, equal to or greater than zero
 /// if S1 is lexicographically less than, equal to or
@@ -186,11 +181,6 @@ pub extern "C" fn strncmp(s1: *const c_char, s2: *const c_char, n: usize) -> i32
     }
 
     (c1 as i32) - (c2 as i32)
-}
-
-#[no_mangle]
-pub extern "C" fn gmtime() {
-    todo!("libc/stub: gmtime(): not yet implemented");
 }
 
 #[no_mangle]
