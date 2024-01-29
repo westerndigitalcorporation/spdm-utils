@@ -318,7 +318,7 @@ fn main() -> Result<(), ()> {
             spdm::setup_transport_layer(
                 cntx_ptr,
                 spdm::TransportLayer::Mctp,
-                usb_i2c::LIBSPDM_MAX_SPDM_MSG_SIZE,
+                spdm::LIBSPDM_MAX_SPDM_MSG_SIZE,
             )
             .unwrap();
         } else {

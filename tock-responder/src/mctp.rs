@@ -22,6 +22,7 @@ use libspdm::spdm::LibspdmReturnStatus;
 use libtock::console::Console;
 use libtock::i2c_master_slave::I2CMasterSlave;
 use once_cell::sync::OnceCell;
+use libspdm::spdm::LIBSPDM_MAX_SPDM_MSG_SIZE;
 
 /// We will use CHUNKING support from libspdm, SEND_RECEIVE_BUFFER_LEN will also
 /// dictate the number of max bytes per transport layer send/recv
@@ -35,12 +36,6 @@ static mut RECEIVE_BUFFER: OnceCell<*mut u8> = OnceCell::new();
 
 // TODO: Make configurable
 pub const TARGET_ID: u8 = 0x22;
-
-/* Maximum size of a large SPDM message.
- * If chunk is unsupported, it must be same as DATA_TRANSFER_SIZE.
- * If chunk is supported, it must be larger than DATA_TRANSFER_SIZE.
- * It matches MaxSPDMmsgSize in SPDM specification. */
-pub const LIBSPDM_MAX_SPDM_MSG_SIZE: u32 = 1096;
 
 /// # Summary
 ///
