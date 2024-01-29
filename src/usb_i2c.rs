@@ -32,8 +32,6 @@ use std::slice::{from_raw_parts, from_raw_parts_mut};
 use std::sync::Mutex;
 use std::time::Duration;
 
-// Matching size for the tock-responder
-pub const LIBSPDM_MAX_SPDM_MSG_SIZE: u32 = 1906;
 // We are using libspdm chunking, so let's use smaller transfer chunks at the hardware
 // layer.
 const SEND_RECEIVE_BUFFER_LEN: usize = 128 as usize;
