@@ -405,7 +405,8 @@ fn main() -> Result<(), ()> {
             .unwrap();
             num_provisioned_slots += 1;
             assert!(num_provisioned_slots < 8);
-            responder::set_supported_slots_mask(num_provisioned_slots, ver, cntx_ptr).expect("failed to set supported slot mask");
+            responder::set_supported_slots_mask(num_provisioned_slots, ver, cntx_ptr)
+                .expect("failed to set supported slot mask");
 
             responder::response_loop(cntx_ptr);
         }
