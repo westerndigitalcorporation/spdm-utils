@@ -29,18 +29,19 @@ use alloc::ffi::CString;
 use alloc::string::String;
 #[cfg(feature = "no_std")]
 use core::alloc::Layout;
+#[cfg(feature = "no_std")]
+use core::ffi::{c_uchar, c_uint};
 
 #[cfg(not(feature = "no_std"))]
 use std::alloc::{alloc, dealloc, Layout};
 #[cfg(not(feature = "no_std"))]
-use std::ffi::CString;
+use std::ffi::{c_uchar, c_uint, CString};
 #[cfg(not(feature = "no_std"))]
 use std::fs::OpenOptions;
 #[cfg(not(feature = "no_std"))]
 use std::io::{BufRead, BufReader, BufWriter, Write};
 #[cfg(not(feature = "no_std"))]
 use std::path::Path;
-
 pub struct LibspdmReturnStatus;
 pub struct SpdmVersionNumber(pub u16);
 pub struct SpdmAlgoBaseAsym(pub u32);
@@ -1989,26 +1990,91 @@ pub unsafe extern "C" fn libspdm_encap_challenge_opaque_data(
     true
 }
 
-use core::ffi::{c_uint, c_uchar};
-
+/// # Summary
+///
+/// NOTE: This function currently wraps around `libspdm_gen_csr()` to implement
+///       GET_CSR support for libspmd for SPDM versions >= 1.3. We only offer
+///       limited support in that:
+///            i. The responder NEVER returns a CsrTrackingTag, Csr generation
+///                 in immediate (no reset needed).
+///           ii. Requester must not request a CsrTrackingTag [1, 7], only 0
+///                 allowed.
+///
+///       If an spdm-utils responder and requester is used, this should not
+///         be problematic.
+///
+/// Saves a certificate pointed to by `cert_chain` to device non-volatile memory
+/// into the respective `slot_id`. Once saved, import the file and use it as
+///  the certificate
+///
+/// # Parameter
+///
+/// * `base_hash_algo`: Indicates the hash algo for signing
+/// * `base_asym_algo`: The asymmetric public key to set
+/// * `need_reset`: The device needs reset to generate a CSR
+/// * `requester_info`: Requester information to generate a CSR
+/// * `requester_info_length`: The length of `requester_info`
+/// * `csr_len`: For input, csr_len is the size of store CSR buffer.
+///              For output, csr_len is CSR len for DER format
+///
+/// * `csr_pointer`: For input, csr_pointer is buffer address to store CSR.
+///                  For output, csr_pointer is address for stored CSR.
+///                  The csr_pointer address will be changed.
+///
+/// * `req_cert_model`:   libspdm Certificate model
+/// * `csr_tracking_tag`: Responder provided CsrTrackingTag (>=SPDM1.3)
+/// * `overwrite`:        If set, the Responder shall stop processing any existing GET_CSR
+///                       request and overwrite it with this request.
+/// # Returns
+///
+/// True if CSR generation was a success, false otherwise
 #[no_mangle]
 pub unsafe extern "C" fn libspdm_gen_csr_ex(
-    _base_hash_algo: c_uint,
-    _base_asym_algo: c_uint,
-    _need_reset: *mut bool,
-    _request: *const c_void,
-    _request_size: usize,
-    _requester_info: *mut c_uchar,
-    _requester_info_length: usize,
-    _opaque_data: *mut c_uchar,
-    _opaque_data_length: u16,
-    _csr_len: usize,
-    _csr_pointer:  *mut c_uchar,
-    _req_cert_model: c_uchar,
-    _csr_tracking_tag: *mut c_uchar,
-    _overwrite: bool
+    base_hash_algo: c_uint,
+    base_asym_algo: c_uint,
+    need_reset: *mut bool,
+    request: *const c_void,
+    request_size: usize,
+    requester_info: *mut c_uchar,
+    requester_info_length: usize,
+    opaque_data: *mut c_uchar,
+    opaque_data_length: u16,
+    csr_len: *mut usize,
+    csr_pointer: *mut c_uchar,
+    req_cert_model: c_uchar,
+    csr_tracking_tag: *mut c_uchar,
+    overwrite: bool,
 ) -> bool {
-    todo!("libspdm_gen_csr_ex(): Gen CSR, which is used for SPDM 1.3");
+    // TODO: The CSR generation supported by spdm-utils based responder does not currently
+    //       support CSR caching, i.e in a situation where the responder needs a resetto process a
+    //       GET_CSCSR request.
+    //
+    //       so an spdm-utils requester should never request to see a cached
+    //       CSR using a csr_tracking_tag value of [1, 7].
+    assert!(*csr_tracking_tag == 0);
+    // TODO: Overwrite is not supported
+    assert!(!overwrite);
+    let is_device_cert_model = {
+        if req_cert_model == 1 {
+            true
+        } else {
+            false
+        }
+    };
+    return libspdm_gen_csr(
+        base_hash_algo,
+        base_asym_algo,
+        need_reset,
+        request,
+        request_size,
+        requester_info,
+        requester_info_length,
+        opaque_data,
+        opaque_data_length,
+        csr_len,
+        csr_pointer,
+        is_device_cert_model,
+    );
 }
 
 /// for the LIBSPDM_DATA_BASE_HASH_ALGO data.
