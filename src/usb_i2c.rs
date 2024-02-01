@@ -26,7 +26,7 @@ use crate::*;
 use core::ffi::c_void;
 use lazy_static::lazy_static;
 use libmctp;
-use libmctp::mctp_traits::SMBusMCTPRequestResponse;
+use libmctp::mctp_traits::*;
 use libmctp::vendor_packets::VendorIDFormat;
 use once_cell::sync::OnceCell;
 use serialport::SerialPort;
@@ -107,16 +107,28 @@ unsafe extern "C" fn usb_i2c_send_message(
     let msg_buf = unsafe { from_raw_parts(message, message_size) };
     let mut send_buf: [u8; (SEND_RECEIVE_BUFFER_LEN + HEADER_LEN) as usize] =
         [0; (SEND_RECEIVE_BUFFER_LEN + HEADER_LEN) as usize];
+    send_buf.fill(0);
     let ctx = MCTPCONTEXT.take().unwrap();
 
-    let mut len = ctx
+    let libspdm_msg_header_type = match libmctp::MessageType::from(msg_buf[0]) {
+        libmctp::MessageType::SpdmOverMctp => libmctp::MessageType::SpdmOverMctp,
+        libmctp::MessageType::SecuredMessages => libmctp::MessageType::SecuredMessages,
+        _ => unreachable!("unexpected mctp/spdm message type"),
+    };
+
+    let len = ctx
         .get_request()
-        .generate_spdm_msg_packet_bytes(TARGET_ID, &None, &msg_buf[1..], &mut send_buf)
+        .generate_spdm_msg_packet_bytes(
+            TARGET_ID,
+            libspdm_msg_header_type,
+            &None,
+            &msg_buf[1..],
+            &mut send_buf,
+        )
         .unwrap();
 
     // We drop the first byte, which is the target address
-    send_buf.copy_within(0..len, 3);
-    len = len - 1;
+    send_buf.copy_within(0..len, 4);
 
     send_buf[0] = 0xAA; // Preamble
     send_buf[1] = TARGET_ID; // Target Address
@@ -124,12 +136,13 @@ unsafe extern "C" fn usb_i2c_send_message(
 
     // For writes, we transfer the entire buffer of fixed length.
     debug!(
-        "SPDM Message Length {:} || Total TX Length {:?}",
+        "MCTP message Length {:} || SPDM Len: {:} || Total TX Length {:?}",
+        len,
         message_size,
         send_buf.len()
     );
 
-    debug!("Sending message {:x?}", &send_buf[..HEADER_LEN + len]);
+    debug!("Sending message {:x?}", send_buf);
 
     // Write out the data buffer
     let mut port = SERIAL_PORT.lock().unwrap().take().unwrap();
@@ -207,8 +220,11 @@ unsafe extern "C" fn usb_i2c_receive_message(
 
     // Extract the payload and add the mesasge type to please libspdm
     let len = payload.len() + 1;
-    spdm_msg_buf.copy_within(MCTP_PAYLOAD_OFFSET..(MCTP_PAYLOAD_OFFSET + len), 1);
-    spdm_msg_buf[0] = 0x05;
+    // The `MCTP_PAYLOAD_OFFSET-1`` is the SPDM MCTP Message type, lets retain this
+    spdm_msg_buf.copy_within(
+        (MCTP_PAYLOAD_OFFSET - 1)..((MCTP_PAYLOAD_OFFSET - 1) + len),
+        0,
+    );
 
     debug!("mctp_buf: {:x?}", &spdm_msg_buf[0..len]);
 
