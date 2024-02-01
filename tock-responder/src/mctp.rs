@@ -9,7 +9,7 @@
 //! If libspdm behaves in a manor we don't expect this will be very bad,
 //! so we are trusting libspdm here.
 
-use alloc::alloc::alloc;
+use alloc::alloc::{alloc, dealloc};
 use core::alloc::Layout;
 use core::ffi::c_void;
 #[allow(unused_imports)]
@@ -21,11 +21,11 @@ use libmctp::mctp_traits::SMBusMCTPRequestResponse;
 use libmctp::vendor_packets::VendorIDFormat;
 use libspdm::libspdm_rs::*;
 use libspdm::spdm::LibspdmReturnStatus;
+use libspdm::spdm::LIBSPDM_MAX_SPDM_MSG_SIZE;
 #[allow(unused_imports)]
 use libtock::console::Console;
 use libtock::i2c_master_slave::I2CMasterSlave;
 use once_cell::sync::OnceCell;
-use libspdm::spdm::LIBSPDM_MAX_SPDM_MSG_SIZE;
 
 /// We will use CHUNKING support from libspdm, SEND_RECEIVE_BUFFER_LEN will also
 /// dictate the number of max bytes per transport layer send/recv
@@ -144,13 +144,26 @@ unsafe extern "C" fn tock_send_message(
 ) -> u32 {
     let message = message_ptr as *const u8;
     let message_buf = unsafe { from_raw_parts(message, message_size) };
-    let layout = Layout::array::<u8>(message_size + 20).unwrap();
-    let send_buf = from_raw_parts_mut(alloc(layout), message_size + 20);
+    let send_buf_layout = Layout::array::<u8>(message_size + 20).unwrap();
+    let send_buf_alloc = alloc(send_buf_layout);
+    let send_buf = from_raw_parts_mut(send_buf_alloc, message_size + 20);
     let ctx = MCTPCONTEXT.take().unwrap();
+
+    let libspdm_msg_header_type = match libmctp::MessageType::from(message_buf[0]) {
+        libmctp::MessageType::SpdmOverMctp => libmctp::MessageType::SpdmOverMctp,
+        libmctp::MessageType::SecuredMessages => libmctp::MessageType::SecuredMessages,
+        _ => unreachable!("unexpected mctp/spdm message type"),
+    };
 
     let len = ctx
         .get_request()
-        .generate_spdm_msg_packet_bytes(TARGET_ID, &None, &message_buf[1..], send_buf)
+        .generate_spdm_msg_packet_bytes(
+            TARGET_ID,
+            libspdm_msg_header_type,
+            &None,
+            &message_buf[1..],
+            send_buf,
+        )
         .unwrap();
 
     #[cfg(feature = "spdm_debug")]
@@ -178,7 +191,7 @@ unsafe extern "C" fn tock_send_message(
     }
 
     let _ = MCTPCONTEXT.set(ctx);
-
+    dealloc(send_buf_alloc, send_buf_layout);
     0
 }
 
@@ -211,6 +224,7 @@ unsafe extern "C" fn tock_receive_message(
 ) -> u32 {
     let recv = *msg_buf_ptr as *mut u8;
     let recv_buf: &mut [u8] = from_raw_parts_mut(recv, SEND_RECEIVE_BUFFER_LEN);
+    recv_buf.fill(0);
     let ctx = MCTPCONTEXT.take().unwrap();
 
     #[cfg(feature = "spdm_debug")]
@@ -230,11 +244,7 @@ unsafe extern "C" fn tock_receive_message(
         panic!("mctp_receive_message: error to receiving data {:?}\r", why);
     }
 
-    // Ammed our address to create a valid MCTP packet
-    let mut message_len = r.0;
-    recv_buf.copy_within(0..message_len, 1);
-    recv_buf[0] = SOURCE_ID << 1;
-    message_len = message_len + 1;
+    let message_len = r.0;
 
     #[cfg(feature = "spdm_debug")]
     {
@@ -247,16 +257,16 @@ unsafe extern "C" fn tock_receive_message(
         .unwrap();
     }
 
-    let (_msg_type, payload) = ctx.decode_packet(&recv_buf[0..message_len]).unwrap();
+    let (_msg_type, payload) = ctx.decode_packet(&recv_buf[..message_len]).unwrap();
 
     let _ = MCTPCONTEXT.set(ctx);
 
     let len = payload.len() + 1;
-    recv_buf.copy_within(MCTP_PAYLOAD_OFFSET..(MCTP_PAYLOAD_OFFSET + len), 1);
-
-    // libspdm expects the message type to be included, while libmctp treats it
-    // as part of the header
-    recv_buf[0] = 0x05;
+    // The `MCTP_PAYLOAD_OFFSET-1`` is the SPDM MCTP Message type, lets retain this
+    recv_buf.copy_within(
+        MCTP_PAYLOAD_OFFSET - 1..((MCTP_PAYLOAD_OFFSET - 1) + len),
+        0,
+    );
 
     #[cfg(feature = "spdm_debug")]
     {
