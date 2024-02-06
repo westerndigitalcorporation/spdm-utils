@@ -115,7 +115,7 @@ unsafe extern "C" fn usb_i2c_send_message(
         _ => unreachable!("unexpected mctp/spdm message type"),
     };
 
-    let len = ctx
+    let mut len = ctx
         .get_request()
         .generate_spdm_msg_packet_bytes(
             TARGET_ID,
@@ -126,8 +126,11 @@ unsafe extern "C" fn usb_i2c_send_message(
         )
         .unwrap();
 
+    debug!("Full MCTP message {:x?}", &send_buf[..len]);
+
     // We drop the first byte, which is the target address
-    send_buf.copy_within(0..len, 3);
+    send_buf.copy_within(0..len, HEADER_LEN - 1);
+    len = len - 1;
 
     send_buf[0] = 0xAA; // Preamble
     send_buf[1] = TARGET_ID; // Target Address
@@ -141,7 +144,7 @@ unsafe extern "C" fn usb_i2c_send_message(
         send_buf.len()
     );
 
-    debug!("Sending message {:x?}", send_buf);
+    debug!("Sending message {:x?}", &send_buf[..(len + HEADER_LEN)]);
 
     // Write out the data buffer
     let mut port = SERIAL_PORT.lock().unwrap().take().unwrap();
@@ -183,6 +186,7 @@ unsafe extern "C" fn usb_i2c_receive_message(
 ) -> u32 {
     let message = *message_ptr as *mut u8;
     let spdm_msg_buf = from_raw_parts_mut(message, SEND_RECEIVE_BUFFER_LEN);
+    spdm_msg_buf.fill(0);
     let ctx = MCTPCONTEXT.take().unwrap();
 
     info!("Receiving message");
@@ -204,6 +208,8 @@ unsafe extern "C" fn usb_i2c_receive_message(
 
     // Read the next set of data, which is just the SPDM message
     port.read_exact(&mut spdm_msg_buf[0..message_len]).unwrap();
+
+    debug!("Received: {:x?}", &spdm_msg_buf[0..message_len]);
 
     // Ammed our address to create a valid MCTP packet
     spdm_msg_buf.copy_within(0..message_len, 1);
