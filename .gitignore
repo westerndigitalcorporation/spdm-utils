@@ -2,3 +2,10 @@ target
 certs/alias.*
 certs/end_*
 certs/bundle*
+
+certs/slot*/alias.*
+certs/slot*/end_*
+certs/slot*/bundle*
+certs/slot*/immutable.sha
+manifest.cbor
+
