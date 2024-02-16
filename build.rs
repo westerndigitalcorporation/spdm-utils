@@ -37,7 +37,7 @@ fn main() {
     println!("cargo:rustc-link-arg=-lspdm_transport_mctp_lib");
 
     // Link SPDM Test Libraries
-    let builder = if cfg!(libspdm_tests) {
+    let mut builder = if cfg!(libspdm_tests) {
         println!("cargo:rustc-link-arg=-lcommon_test_utility_lib");
         println!("cargo:rustc-link-arg=-lspdm_responder_conformance_test_lib");
 
@@ -55,10 +55,20 @@ fn main() {
             .clang_arg("-Ithird-party/libspdm")
     };
 
-    println!("cargo:rustc-link-search=third-party/libspdm/build/lib/");
-    #[cfg(libspdm_tests)]
-    {
-        println!("cargo:rustc-link-search=third-party/SPDM-Responder-Validator/build/lib/");
+    if let Ok(sysroot) = env::var("STAGING_DIR") {
+        let sysroot_arg = format!("--sysroot={sysroot}");
+        builder = builder.clang_arg(sysroot_arg);
+
+        let include_arg = format!("-I{sysroot}/usr/include/libspdm");
+        builder = builder.clang_arg(include_arg);
+
+        println!("cargo:rustc-link-search={sysroot}/usr/lib/");
+    } else {
+        println!("cargo:rustc-link-search=third-party/libspdm/build/lib/");
+        #[cfg(libspdm_tests)]
+        {
+            println!("cargo:rustc-link-search=third-party/SPDM-Responder-Validator/build/lib/");
+        }
     }
 
     let bindings = builder
