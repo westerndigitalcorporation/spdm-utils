@@ -18,6 +18,8 @@ use crate::manifest;
 use core::ffi::c_void;
 use core::fmt;
 use core::ptr;
+use pyo3::prelude::*;
+use pyo3::types::PyByteArray;
 use usize;
 
 #[cfg(feature = "no_std")]
@@ -288,6 +290,10 @@ pub const _LIBSPDM_STATUS_SUCCESS: u32 = 0x0;
 pub const LIBSPDM_STATUS_UNSUPPORTED_CAP: u32 = 0x2;
 pub const LIBSPDM_STATUS_INVALID_MSG_FIELD: u32 = 0x5;
 pub const LIBSPDM_STATUS_INVALID_MSG_SIZE: u32 = 0x6;
+
+// The index at which the raw bit-stream starts at within the
+// measurement manifest buffer returned by libspdm.
+pub const LIBSPDM_MANIFEST_RAW_BITSTREAM_OFFSET: usize = 0x07;
 
 // This has to be valid during the life of the program due to the way
 // libspdm_set_data() utilizes this by pointer.
@@ -563,7 +569,7 @@ pub unsafe fn initialise_connection(context: *mut c_void, slot_id: u8) -> Result
 /// Ok(()) on success
 /// Err(ret), where ret is a libspdm return status indicating an error.
 pub unsafe fn get_measurement(context: *mut c_void, slot_id: u8) -> Result<(), u32> {
-    let request_attribute: u8 =
+    let mut request_attribute: u8 =
         libspdm_rs::SPDM_GET_MEASUREMENTS_REQUEST_ATTRIBUTES_GENERATE_SIGNATURE as u8;
     let mut num_measures: u8 = 0;
 
@@ -587,18 +593,27 @@ pub unsafe fn get_measurement(context: *mut c_void, slot_id: u8) -> Result<(), u
     // Probe the measurements one by one
     // This is a waste of time as we can just collect all of the measurements,
     // but it provides a useful test
-    for i in 1..0xFF {
+    for measurement_index in 1..0xFF {
         let mut number_of_blocks: u8 = 0;
         let mut measurement_record_length: u32 = LIBSPDM_MAX_MEASUREMENT_RECORD_SIZE;
         let mut measurement_record: [u8; LIBSPDM_MAX_MEASUREMENT_RECORD_SIZE as usize] =
             [0; LIBSPDM_MAX_MEASUREMENT_RECORD_SIZE as usize];
         let measurement_record_ptr: *mut c_void = &mut measurement_record as *mut _ as *mut c_void;
 
+        if measurement_index == SPDM_MEASUREMENT_BLOCK_MEASUREMENT_INDEX_MEASUREMENT_MANIFEST {
+            // Request the raw bitstream, so we can decode it for readability.
+            request_attribute =
+                libspdm_rs::SPDM_GET_MEASUREMENTS_REQUEST_ATTRIBUTES_RAW_BIT_STREAM_REQUESTED as u8;
+        } else {
+            request_attribute =
+                libspdm_rs::SPDM_GET_MEASUREMENTS_REQUEST_ATTRIBUTES_GENERATE_SIGNATURE as u8;
+        }
+
         let ret = libspdm_get_measurement(
             context,
             ptr::null_mut(),
             request_attribute,
-            i as u8,
+            measurement_index as u8,
             slot_id,
             ptr::null_mut(),
             &mut number_of_blocks,
@@ -625,6 +640,30 @@ pub unsafe fn get_measurement(context: *mut c_void, slot_id: u8) -> Result<(), u
             // Wrong index, just continue
         } else {
             return Err(ret);
+        }
+
+        // Measurement Manifest
+        if measurement_index == SPDM_MEASUREMENT_BLOCK_MEASUREMENT_INDEX_MEASUREMENT_MANIFEST {
+            // Let's attempt to decode this (assuming CBOR encoding),
+            // a decoding failure likely implies that this was not CBOR encoded/serialised properly.
+            Python::with_gil(|py| {
+                let measurement_manifest =
+                    &measurement_record[LIBSPDM_MANIFEST_RAW_BITSTREAM_OFFSET..measurement_record_length as usize];
+                let py_measurement_manifest = PyByteArray::new(py, measurement_manifest);
+
+                let cbor2 = PyModule::import(py, "cbor2").expect("cbor2 py module not found");
+                let loads = cbor2.getattr("loads").expect("no loads");
+                let decoded_data = loads
+                    .call1((py_measurement_manifest,))
+                    .expect("failed to decode")
+                    .extract::<&str>()
+                    .expect("failed to decode measurement manifest")
+                    .as_bytes();
+
+                info!("---Decoded measurement manifest received---");
+                info!("{}", String::from_utf8_lossy(decoded_data));
+                info!("---Decoded measurement manifest end---")
+            });
         }
     }
 
