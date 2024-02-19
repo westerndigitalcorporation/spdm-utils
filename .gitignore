@@ -8,4 +8,5 @@ certs/slot*/end_*
 certs/slot*/bundle*
 certs/slot*/immutable.sha
 manifest.cbor
+manifest/manifest.out.cbor
 

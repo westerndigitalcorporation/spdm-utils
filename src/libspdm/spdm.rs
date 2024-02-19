@@ -14,6 +14,7 @@
 use crate::libspdm_rs;
 // TODO: Remove this
 use crate::libspdm_rs::*;
+use crate::manifest;
 use core::ffi::c_void;
 use core::fmt;
 use core::ptr;
@@ -1317,9 +1318,12 @@ unsafe fn libspdm_fill_measurement_manifest_block(
     use_bit_stream: bool,
     measurement_hash_algo: u32,
 ) -> usize {
-    let data = [0; LIBSPDM_MEASUREMENT_MANIFEST_SIZE as usize];
+    let mut data = [0; LIBSPDM_MEASUREMENT_MANIFEST_SIZE as usize];
     let hash_size = libspdm_rs::libspdm_get_measurement_hash_size(measurement_hash_algo) as usize;
-    let size = data.len();
+    // Fetch an already generated manifest.
+    let manifest_path = Path::new("manifest/manifest.out.cbor");
+    let size =
+        manifest::fetch_local_manifest(&mut data, manifest_path).expect("failed to read manifest");
 
     (*measurement_block).measurement_block_common_header.index =
         SPDM_MEASUREMENT_BLOCK_MEASUREMENT_INDEX_MEASUREMENT_MANIFEST as u8;
