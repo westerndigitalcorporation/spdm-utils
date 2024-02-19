@@ -40,17 +40,8 @@ impl Manifest {
             }
         };
 
-        let mut temp_buffer = Vec::new();
-        manifest.read_to_end(&mut temp_buffer)?;
-
-        assert!(temp_buffer.len() <= buffer.len());
-
-        // Copy over the manifest bytes to the actual buffer
-        for i in 0..temp_buffer.len() {
-            buffer[i] = temp_buffer[i];
-        }
-
-        Ok(temp_buffer.len())
+        let bytes_read = manifest.read(buffer).expect("failed reading manifest file");
+        Ok(bytes_read)
     }
 }
 
