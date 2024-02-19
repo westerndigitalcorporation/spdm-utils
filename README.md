@@ -51,6 +51,14 @@ You will also need a few host dependencies
 sudo dnf install cmake clang-libs clang-devel pciutils-devel openssl openssl-devel
 ```
 
+## Python
+
+spdm-utils requires the [cbor2](https://pypi.org/project/cbor2/) python module for manifest encoding and decoding. It can be installed with:
+
+```
+$ pip install cbor2
+```
+
 # Building
 
 Initialise all sub-modules

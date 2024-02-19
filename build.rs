@@ -90,4 +90,25 @@ fn main() {
             .output()
             .expect("Failed to execute command");
     }
+
+    // This script generates a `manifest.out.cbor` file that
+    // is the serialised measurement manifest, to be used
+    // by spdm-utils in response to a `get-measuremets`
+    // SPDM request.
+    if !Path::new("manifest/encode_cbor.py").is_file() {
+        panic!("cbor encode script not found!");
+    }
+
+    let rc = Command::new("python3")
+        .arg("encode_cbor.py")
+        .current_dir(env::current_dir().unwrap().join("manifest"))
+        .output()
+        .expect("Failed to execute encode_cbor");
+
+    if !rc.status.success() {
+        panic!(
+            "failed to generate serialized CBOR manifest: {:?}",
+            rc.status
+        )
+    }
 }

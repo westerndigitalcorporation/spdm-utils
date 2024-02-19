@@ -16,6 +16,7 @@ extern crate alloc;
 
 #[macro_use]
 pub mod libspdm_rs;
+pub mod manifest;
 #[macro_use]
 pub mod spdm;
 pub mod responder;
