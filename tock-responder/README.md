@@ -1,35 +1,37 @@
-# Build steps
+# Tock Responder
 
-## Build libtock-c
+This is an application that runs on the [Tock](https://github.com/tock/tock)
+kernel that implements SPDM over and MCTP I2C/SMBus Bus.
 
-```shell
-push libtock-c/examples/
-RISCV=1 ./build_all.sh
-cd ../../
-```
+The application is written in Rust and uses libspdm to implement a basic SPDM
+responder. The application sends and received the SPDM data over MCTP, but
+currently does not support other MCTP commands besides the DMTF vendor
+commands.
 
+This is a proof of concept implementation, designed to show how Tock can be
+used as a SPDM responder.
 
-## Building libspdm
+This has been tested on a nRF52840 board, but should work with any board
+running Tock that supports I2C master and slave mode.
 
-### Warnings
+## Building
 
-Currently only `Release` mode for `libspdm` is supported. Building in `Debug` mode requires additional functionality (`printf` support etc...), these are currently not implemented by the tock-responder.
+### Building libspdm
 
-### Build libspdm for no_std targets
+As we use libspdm for the backend you will first need to build libspdm.
 
-#### Building for RISC-V:
+#### Warnings
 
-```shell
-pushd ../third-party/libspdm/
+Currently only `Release` mode for `libspdm` is supported. Building in `Debug`
+mode requires additional functionality (`printf` support etc...), these are
+currently not implemented by the tock-responder Rust implemention.
 
-mkdir -p build_no_std_riscv
-cd build_no_std_riscv
-cmake -DARCH=riscv32 -DTOOLCHAIN=RISCV_NONE -DTARGET=Release -DCRYPTO=mbedtls -DDISABLE_TESTS=1 -DCMAKE_C_FLAGS="-DLIBSPDM_ENABLE_CAPABILITY_CHUNK_CAP=1 -DMBEDTLS_SKIP_TIME_CHECK" ..
-make -j8
-cd ../
-```
+#### Build libspdm for no_std targets
 
-#### Building for ARM:
+You will only need to build libspdm for the architecture you want to use.
+So if you are using an ARM board you can skip the RISC-V build.
+
+##### Building for ARM:
 
 Note, that the -DMARCH option must be specified with the respective ARM target architecture. This argument is passed directly to the compiler. See `man arm-none-eabi-gcc` for all supported options.
 
@@ -43,15 +45,30 @@ cd ../
 popd
 ```
 
-## Build the example
+##### Building for RISC-V:
 
-Then you can build SPDM for any machine, for example for OpenTitan
+```shell
+pushd ../third-party/libspdm/
+
+mkdir -p build_no_std_riscv
+cd build_no_std_riscv
+cmake -DARCH=riscv32 -DTOOLCHAIN=RISCV_NONE -DTARGET=Release -DCRYPTO=mbedtls -DDISABLE_TESTS=1 -DCMAKE_C_FLAGS="-DLIBSPDM_ENABLE_CAPABILITY_CHUNK_CAP=1 -DMBEDTLS_SKIP_TIME_CHECK" ..
+make -j8
+cd ../
+```
+
+
+### Build the example
+
+Once libspdm is built for your architecture you can build the application.
+
+For example for OpenTitan
 
 ```shell
 make opentitan_spdm_responder
 ```
 
-Or for the nRFS
+Or for the nRF52840
 
 ```shell
 make nrf52840_spdm_responder
