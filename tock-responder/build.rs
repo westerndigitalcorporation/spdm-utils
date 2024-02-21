@@ -3,7 +3,7 @@ fn main() {
 
     let target = std::env::var("TARGET").unwrap();
     let compiler_list: Vec<&str> = target.split("-").collect();
-    let arch = compiler_list.first().unwrap().clone();
+    let arch = *compiler_list.first().unwrap();
 
     println!("cargo:rustc-link-arg=-lmemlib");
     println!("cargo:rustc-link-arg=-lmalloclib");
