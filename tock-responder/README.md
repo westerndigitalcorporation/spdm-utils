@@ -24,7 +24,7 @@ As we use libspdm for the backend you will first need to build libspdm.
 
 Currently only `Release` mode for `libspdm` is supported. Building in `Debug`
 mode requires additional functionality (`printf` support etc...), these are
-currently not implemented by the tock-responder Rust implemention.
+currently not implemented by the tock-responder Rust implementation.
 
 #### Build libspdm for no_std targets
 

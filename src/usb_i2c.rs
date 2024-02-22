@@ -211,7 +211,7 @@ unsafe extern "C" fn usb_i2c_receive_message(
 
     debug!("Received: {:x?}", &spdm_msg_buf[0..message_len]);
 
-    // Ammed our address to create a valid MCTP packet
+    // Amend our address to create a valid MCTP packet
     spdm_msg_buf.copy_within(0..message_len, 1);
     spdm_msg_buf[0] = SOURCE_ID << 1;
     message_len = message_len + 1;
