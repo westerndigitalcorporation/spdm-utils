@@ -29,7 +29,7 @@ static mut CLIENT_CONNECTION: OnceCell<TcpStream> = OnceCell::new();
 /// # Summary
 ///
 /// Sends message to the QEMU by writing the
-/// `messasge_ptr` data to the TCP stream used by QEMU. This also writes the
+/// `message_ptr` data to the TCP stream used by QEMU. This also writes the
 /// additional information expected by QEMU.
 ///
 /// # Parameter
