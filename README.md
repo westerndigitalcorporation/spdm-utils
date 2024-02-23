@@ -48,7 +48,7 @@ You will also need a few host dependencies
 ## Fedora
 
 ```shell
-sudo dnf install cmake clang-libs clang-devel pciutils-devel openssl openssl-devel
+sudo dnf install cmake clang-libs clang-devel pciutils-devel openssl openssl-devel python3-devel
 ```
 
 ## Python
