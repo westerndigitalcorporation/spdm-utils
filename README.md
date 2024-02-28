@@ -51,13 +51,36 @@ You will also need a few host dependencies
 sudo dnf install cmake clang-libs clang-devel pciutils-devel openssl openssl-devel python3-devel
 ```
 
-## Python
+## Ruby
 
-spdm-utils requires the [cbor2](https://pypi.org/project/cbor2/) python module for manifest encoding and decoding. It can be installed with:
+`spdm-utils` uses the [cbor-diag](https://github.com/cabo/cbor-diag) ruby gem for
+manifest encoding and decoding. Similar to the implementation of this [CBOR parsing](https://cbor.me/)
+online tool.
 
+You will first need to have `gem` installed, this is a the package manager for ruby.
+For example, for Fedora you can install it with:
+
+```shell
+$ sudo dnf install gem
 ```
-$ pip install cbor2
+
+After which, you can install `cbor-diag`
+
+```shell
+$ gem install cbor-diag
 ```
+
+The default binary path *should* be, `$HOME/bin/`, which you may need to add to
+your `PATH`. You can test that the scripts are usable with
+
+```shell
+$ which cbor2diag.rb
+home/<user>/bin/cbor2diag.rb
+```
+
+When building `spdm-utils` it will generate a `manifest.out.cbor` which contains
+the serialised cbor manifest, and also a `manifest.pretty` which is the *pretty* format
+of the manifest (user friendly).
 
 # Building
 

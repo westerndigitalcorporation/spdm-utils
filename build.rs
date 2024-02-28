@@ -3,10 +3,13 @@
 // Copyright (C) 2022, Western Digital Corporation or its affiliates.
 
 extern crate bindgen;
-
+extern crate which;
 use std::env;
+use std::fs::File;
+use std::io::Write;
 use std::path::{Path, PathBuf};
-use std::process::Command;
+use std::process::{Command, Stdio};
+use which::which;
 
 fn main() {
     println!("cargo:rerun-if-changed=wrapper.h");
@@ -105,20 +108,53 @@ fn main() {
     // is the serialised measurement manifest, to be used
     // by spdm-utils in response to a `get-measuremets`
     // SPDM request.
-    if !Path::new("manifest/encode_cbor.py").is_file() {
-        panic!("cbor encode script not found!");
-    }
+    let script = "diag2cbor.rb";
+    match which(script) {
+        Ok(_) => {
+            let cmd = format!("{} manifest/manifest.in.cbor", script);
+            let rc = Command::new("sh")
+                .arg("-c")
+                .arg(&cmd)
+                .stdout(Stdio::piped())
+                .output()
+                .expect("Failed to execute command");
 
-    let rc = Command::new("python3")
-        .arg("encode_cbor.py")
-        .current_dir(env::current_dir().unwrap().join("manifest"))
-        .output()
-        .expect("Failed to execute encode_cbor");
+            if !rc.status.success() {
+                panic!("Failed serialising manifest, {:?}", rc);
+            }
 
-    if !rc.status.success() {
-        panic!(
-            "failed to generate serialized CBOR manifest: {:?}",
-            rc.status
-        )
+            let serialised_cbor = rc.stdout;
+            let mut file = File::create("manifest/manifest.out.cbor")
+                .expect("failed to create manifest.out.cbor");
+            file.write_all(&serialised_cbor)
+                .expect("failed to write save serialised data to `manifest.out.cbor`");
+
+            // Save the pretty format also for debug purposes, this can also catch
+            // formatting errors in the `manifest.in.cbor`.
+            let script = "cbor2pretty.rb";
+            match which(script) {
+                Ok(_) => {
+                    let cmd = format!("{} manifest/manifest.out.cbor", script);
+                    let rc = Command::new("sh")
+                        .arg("-c")
+                        .arg(&cmd)
+                        .stdout(Stdio::piped())
+                        .output()
+                        .expect("Failed to execute command");
+
+                    if !rc.status.success() {
+                        panic!("Failed in converting serialised form to pretty, {:?}", rc);
+                    }
+
+                    let pretty_format = rc.stdout;
+                    let mut file = File::create("manifest/manifest.pretty")
+                        .expect("failed to create manifest.pretty");
+                    file.write_all(&pretty_format)
+                        .expect("failed to write to `manifest.pretty`");
+                }
+                Err(e) => panic!("Ruby script {script} not found : error {}", e),
+            }
+        }
+        Err(e) => panic!("Ruby script {script} not found : error {}", e),
     }
 }
