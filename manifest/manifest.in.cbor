@@ -1,0 +1,6 @@
+570(
+    {0: [571({0: {0: [[{0: {0: 111(h'3170332E362E312E342E312E352E32310037'),
+    1: "Western Digital Test"}},[{1: {12: [1, 2]}, 2: [554("base64_key_X")]}]]]}})],
+    1: [{0: 32("https://refs.example.com/path/to/reference.corim")},
+    {0: 32("https://rim-revoke.example.com/path/to/revocation.xcorim")}]}
+    )
