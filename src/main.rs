@@ -25,6 +25,7 @@ mod qemu_server;
 mod request;
 mod socket_client;
 mod socket_server;
+mod tcg_concise_evidence_binding;
 mod test_suite;
 mod usb_i2c;
 
@@ -189,7 +190,12 @@ enum Commands {
 #[derive(Subcommand, PartialEq)]
 pub enum RequestCode {
     GetDigests {},
-    GetCertificate {},
+    GetCertificate {
+        /// Setting this flag enables extra checks based on the
+        /// "TCG DICE Concise Evidence Binding for SPDM" spec
+        #[clap(long, default_value_t = false)]
+        tcg_dice_evidence_binding_checks: bool,
+    },
     Challenge {
         /// Supported Challenge request types
         ///

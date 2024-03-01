@@ -4,6 +4,7 @@
 
 //! Contains all of the handlers for creating SPDM requests.
 
+use crate::tcg_concise_evidence_binding::check_tcg_dice_evidence_binding;
 use crate::*;
 use core::ffi::c_void;
 use libspdm::libspdm_rs::libspdm_data_parameter_t;
@@ -298,7 +299,9 @@ pub fn prepare_request(
 
                 info!("Device digest: {total_digest_buffer:x?}");
             }
-            RequestCode::GetCertificate {} => {
+            RequestCode::GetCertificate {
+                tcg_dice_evidence_binding_checks,
+            } => {
                 if cert_slot_id >= 8 {
                     error!(
                         "Requested slot-id({}) exceeds supported slots (0-7)",
@@ -340,6 +343,10 @@ pub fn prepare_request(
 
                 let mut writer = BufWriter::new(file);
                 writer.write_all(&cert_chain[0..cert_chain_size]).unwrap();
+
+                if tcg_dice_evidence_binding_checks {
+                    check_tcg_dice_evidence_binding(cert_slot_id).unwrap();
+                }
             }
             RequestCode::Challenge { challenge_request } => {
                 let mut measurement_hash: [u8; LIBSPDM_MAX_HASH_SIZE as usize] =

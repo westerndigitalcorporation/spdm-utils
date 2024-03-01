@@ -7,8 +7,11 @@ certs/slot*/alias.*
 certs/slot*/end_*
 certs/slot*/bundle*
 certs/slot*/immutable.sha
+
 manifest.cbor
 manifest/manifest.out.cbor
 manifest/responder_manifest.cbor
 manifest/*.pretty
 
+retrieved_slot_id*
+pem_file
