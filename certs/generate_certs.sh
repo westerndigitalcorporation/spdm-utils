@@ -13,11 +13,11 @@ openssl req -nodes -x509 -extensions v3_ca -days 3650 -newkey ec:param.pem -keyo
 
 # Generate Intermediate CA
 openssl req -nodes -newkey ec:param.pem -keyout inter.key -out inter.req -sha384 -batch -subj "/CN=Test Intermediate CA"
-openssl x509 -req -in inter.req -out inter.cert -CA ca.cert -CAkey ca.key -sha384 -days 3650 -set_serial 1 -extensions v3_inter -extfile ../openssl.cnf
+openssl x509 -req -in inter.req -out inter.cert -CA ca.cert -CAkey ca.key -sha384 -days 3650 -set_serial 1 -extensions device_ca -extfile ../openssl.cnf
 
 # Generate Device CA
 openssl req -nodes -newkey ec:param.pem -keyout device.key -out device.req -sha384 -batch -subj "/CN=Test Device CA"
-openssl x509 -req -in device.req -out device.cert -CA inter.cert -CAkey inter.key -sha384 -days 3650 -set_serial 2 -extensions v3_inter -extfile ../openssl.cnf
+openssl x509 -req -in device.req -out device.cert -CA inter.cert -CAkey inter.key -sha384 -days 3650 -set_serial 2 -extensions device_ca -extfile ../openssl.cnf
 
 # Generate der files
 openssl asn1parse -in ca.cert -out ca.cert.der
