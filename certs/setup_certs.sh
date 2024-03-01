@@ -15,7 +15,7 @@ pushd slot0
 openssl req -nodes -newkey ec:param.pem \
 	-keyout alias.key -out alias.req -sha384 -batch \
 	-subj "/CN=Test Bootloader CA"
-openssl x509 -req -in alias.req -out alias.cert -CA device.der -sha384 -days 3650 -set_serial 3 -extensions v3_inter -extfile ../openssl-alias.cnf
+openssl x509 -req -in alias.req -out alias.cert -CA device.der -sha384 -days 3650 -set_serial 3 -extensions alias_ca -extfile ../openssl.cnf
 
 # Generate AliasCert (Alias key pair in RIoT)
 openssl req -nodes -newkey ec:param.pem \
@@ -25,8 +25,8 @@ openssl req -nodes -newkey ec:param.pem \
 	-keyout end_responder.key -out end_responder.req -sha384 -batch \
 	-subj "/CN=Test Bootloader AliasCert"
 
-openssl x509 -req -in end_requester.req -out end_requester.cert -CA alias.cert -CAkey alias.key -sha384 -days 3650 -set_serial 4 -extensions v3_end -extfile ../openssl-alias.cnf
-openssl x509 -req -in end_responder.req -out end_responder.cert -CA alias.cert -CAkey alias.key -sha384 -days 3650 -set_serial 5 -extensions v3_end -extfile ../openssl-alias.cnf
+openssl x509 -req -in end_requester.req -out end_requester.cert -CA alias.cert -CAkey alias.key -sha384 -days 3650 -set_serial 4 -extensions leaf -extfile ../openssl.cnf
+openssl x509 -req -in end_responder.req -out end_responder.cert -CA alias.cert -CAkey alias.key -sha384 -days 3650 -set_serial 5 -extensions leaf -extfile ../openssl.cnf
 
 # Generate der files
 openssl asn1parse -in alias.cert -out alias.cert.der
