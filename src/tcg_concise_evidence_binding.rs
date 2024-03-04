@@ -19,16 +19,24 @@ const ID_SPDM_CERT_OIDS: Oid = oid!(1.3.6 .1 .4 .1 .412 .274 .6);
 const ID_DMTF_HARDWARE_IDENTITY: Oid = oid!(1.3.6 .1 .4 .1 .412 .274 .2);
 const ID_DMTF_MUTABLE_CERTIFICATE: Oid = oid!(1.3.6 .1 .4 .1 .412 .274 .5);
 
-const TCG_DICE_KP_IDENTITYINIT: Oid = oid!(2.23.133 .5 .4 .100 .6);
 const TCG_DICE_KP_ECA: Oid = oid!(2.23.133 .5 .4 .100 .12);
+
+const TCG_DICE_KP_IDENTITYINIT: Oid = oid!(2.23.133 .5 .4 .100 .6);
 const TCG_DICE_KP_ATTESTINIT: Oid = oid!(2.23.133 .5 .4 .100 .8);
 const TCG_DICE_KP_ASSERTINIT: Oid = oid!(2.23.133 .5 .4 .100 .10);
+
+const TCG_DICE_KP_IDENTITYLOC: Oid = oid!(2.23.133 .5 .4 .100 .7);
+const TCG_DICE_KP_ATTESTLOC: Oid = oid!(2.23.133 .5 .4 .100 .9);
+const TCG_DICE_KP_ASSERTLOC: Oid = oid!(2.23.133 .5 .4 .100 .11);
+
+const ID_DMTF_EKU_RESPONDER_AUTH: Oid = oid!(1.3.6 .1 .4 .1 .412 .274 .3);
+const ID_DMTF_EKU_REQUESTER_AUTH: Oid = oid!(1.3.6 .1 .4 .1 .412 .274 .4);
 
 #[derive(Debug)]
 enum SPDMCertificateType {
     DeviceCertCA,
     AlisasCertCA,
-    LeadCert,
+    LeafCert,
 }
 
 // TODO: Handle multiple entries
@@ -87,6 +95,10 @@ fn check_for_basic_contraints_ca(x509: &X509Certificate, value: bool) -> Result<
 /// have already happened. This is just checking for specific OIDs, as specified
 /// in chapter 5.3.
 ///
+/// TODO: We currently don't check that the certificate is only used for what
+/// is specified, for example requester/responder or attest/assert. That
+/// currently still needs to be manually checked.
+///
 /// # Parameter
 ///
 /// * `cert_slot_id`: The certificate slot to check and that GetCertificate
@@ -141,7 +153,7 @@ pub fn check_tcg_dice_evidence_binding(cert_slot_id: u8) -> Result<(), ()> {
         let x509 = pem.parse_x509().expect("X.509: decoding DER failed");
 
         if pem_iterator.peek().is_none() {
-            cert_type = SPDMCertificateType::LeadCert;
+            cert_type = SPDMCertificateType::LeafCert;
         }
 
         match cert_type {
@@ -268,9 +280,126 @@ pub fn check_tcg_dice_evidence_binding(cert_slot_id: u8) -> Result<(), ()> {
                         return Err(());
                     }
                 }
+
+                // As the next certificate is an Alias Intermediate
+                // Certificate, then this certificate is used to issue
+                // Intermediate CA certificates.
+                // There fore TCG requires these
+                info!("    Used to sign ECA");
+                check_for_extensions(&x509, "tcg-dice-kp-eca", &TCG_DICE_KP_ECA)?;
+                check_for_basic_contraints_ca(&x509, true)?;
+
+                // Check for certificates that we should contain
+                check_for_extensions(&x509, "tcg-dice-kp-identityLoc", &TCG_DICE_KP_IDENTITYLOC)?;
+
+                if let Ok(_attest_init) =
+                    check_for_extensions(&x509, "tcg-dice-kp-attestLoc", &TCG_DICE_KP_ATTESTLOC)
+                {
+                    // This chain is used to sign evidence
+                    info!("    Used to sign Evidence");
+                    evidence_signing = true;
+                } else {
+                    if !evidence_signing {
+                        return Err(());
+                    }
+                }
+
+                if let Ok(_attest_init) =
+                    check_for_extensions(&x509, "tcg-dice-kp-assertLoc", &TCG_DICE_KP_ASSERTLOC)
+                {
+                    // This chain is used to sign attestation
+                    info!("    Used to sign Attestation");
+                    assert_signing = true;
+                } else {
+                    if !assert_signing {
+                        return Err(());
+                    }
+                }
             }
-            SPDMCertificateType::LeadCert => {
+            SPDMCertificateType::LeafCert => {
                 info!("'{}' is the Leaf Cert", x509.subject());
+
+                match x509.extended_key_usage() {
+                    Ok(Some(extension)) => {
+                        let other_key_usage = &extension.value.other;
+
+                        if other_key_usage
+                            .iter()
+                            .find(|eku| **eku == ID_DMTF_EKU_RESPONDER_AUTH)
+                            .is_some()
+                        {
+                            info!("    Used as a responder");
+                        } else {
+                            error!("Leaf certificate is not approved to sign responses");
+                            return Err(());
+                        }
+
+                        if other_key_usage
+                            .iter()
+                            .find(|eku| **eku == ID_DMTF_EKU_REQUESTER_AUTH)
+                            .is_some()
+                        {
+                            info!("    Used as a requester");
+                        }
+                    }
+                    Ok(None) => {
+                        info!(
+                            "'{}' Certificate doesn't contain Extended Key Usage",
+                            x509.subject()
+                        );
+                    }
+                    Err(_e) => {
+                        error!("Duplicate Extended Key Usage");
+                        return Err(());
+                    }
+                }
+
+                match x509.get_extension_unique(&ID_SPDM_CERT_OIDS) {
+                    Ok(Some(extension)) => {
+                        // This contains id-spdm-cert-oids
+                        let seq = spdm_cert_oids_parser(extension.value).unwrap();
+
+                        assert!(seq.1 == ID_DMTF_MUTABLE_CERTIFICATE);
+                        // TODO: Support multiple entries in id-spdm-cert-oids
+                        assert!(seq.1 != ID_DMTF_HARDWARE_IDENTITY);
+                    }
+                    Ok(None) => {
+                        info!(
+                            "'{}' Certificate doesn't contain id-spdm-cert-oids",
+                            x509.subject()
+                        );
+                    }
+                    Err(_e) => {
+                        error!("Duplicate Hardware identity OID");
+                        return Err(());
+                    }
+                }
+
+                check_for_extensions(&x509, "tcg-dice-kp-identityLoc", &TCG_DICE_KP_IDENTITYLOC)?;
+
+                if let Ok(_attest_init) =
+                    check_for_extensions(&x509, "tcg-dice-kp-attestLoc", &TCG_DICE_KP_ATTESTLOC)
+                {
+                    // This chain is used to sign evidence
+                    info!("    Used to sign Evidence");
+                    evidence_signing = true;
+                } else {
+                    if !evidence_signing {
+                        return Err(());
+                    }
+                }
+
+                if let Ok(_attest_init) =
+                    check_for_extensions(&x509, "tcg-dice-kp-assertLoc", &TCG_DICE_KP_ASSERTLOC)
+                {
+                    // This chain is used to sign attestation
+                    info!("    Used to sign Attestation");
+                    assert_signing = true;
+                } else {
+                    if !assert_signing {
+                        return Err(());
+                    }
+                }
             }
         }
     }
