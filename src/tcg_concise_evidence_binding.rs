@@ -193,7 +193,6 @@ pub fn check_tcg_dice_evidence_binding(cert_slot_id: u8) -> Result<(), ()> {
                                             // As the next certificate is an Alias Intermediate
                                             // Certificate, then this certificate is used to issue
                                             // Intermediate CA certificates.
-                                            // There fore TCG requires these
                                             info!("    Used to sign ECA");
                                             check_for_extensions(
                                                 &x509,
@@ -281,7 +280,7 @@ pub fn check_tcg_dice_evidence_binding(cert_slot_id: u8) -> Result<(), ()> {
                 // As the next certificate is an Alias Intermediate
                 // Certificate, then this certificate is used to issue
                 // Intermediate CA certificates.
-                // There fore TCG requires these
+                // Therefore TCG requires these
                 info!("    Used to sign ECA");
                 check_for_extensions(&x509, "tcg-dice-kp-eca", &TCG_DICE_KP_ECA)?;
                 check_for_basic_contraints_ca(&x509, true)?;
