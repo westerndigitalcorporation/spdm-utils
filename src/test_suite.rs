@@ -10,7 +10,11 @@
 //! If libspdm/SPDM-Responder-Validator behaves in a manor we don't expect
 //! this will be very bad, so we are trusting libspdm here.
 
+use crate::cli_helpers;
 use crate::doe_pci_cfg::*;
+use crate::request;
+use crate::spdm;
+use crate::RequestCode;
 #[cfg(libspdm_tests)]
 use crate::*;
 use core::ffi::c_void;
@@ -19,6 +23,100 @@ use core::ffi::c_void;
 pub enum TestBackend {
     DoeBackend,
     SocketBackend,
+}
+
+/// # Summary
+///
+/// Send SPDM requests to the endpoint and automate the request process, such that
+/// any assertions within the requests can be validated. This function does not
+/// do any additional testing outside of the what the requests do.
+///
+/// # Parameter
+///
+/// * `cntx`: The SPDM context
+///
+/// # Returns
+///
+/// Success, or any errors returned by the request.
+pub fn do_requests_checks(cntx: *mut c_void) -> Result<(), u32> {
+    // Setup Basic Requester, this is the default config we use for spdm-utils.
+    request::setup_capabilities(
+        cntx,
+        0,
+        cli_helpers::parse_asym_algos(Some("ECDSA_ECC_NIST_P384".to_string())).unwrap(),
+        cli_helpers::parse_hash_algos(Some("SHA_384".to_string())).unwrap(),
+        cli_helpers::parse_dhe_named_groups(Some("SECP_384_R1,SECP_521_R1".to_string())).unwrap(),
+        cli_helpers::parse_aead_cipher_suite(Some("AES_256_GCM".to_string())).unwrap(),
+    )
+    .unwrap();
+    unsafe {
+        spdm::initialise_connection(cntx, 0).unwrap();
+    }
+    let mut session_info = unsafe { spdm::start_session(cntx, 0, false).unwrap() };
+    // Print out the negotiated algorithms
+    unsafe {
+        spdm::get_negotiated_algos(cntx, 0).unwrap();
+    }
+
+    // Do request, any assertions are to be made in the response and not in this function
+    // for example, enabling the `tcg_dice_evidence_binding_checks`, does this check
+    // as part of the request/response process.
+    info!("Start RequestCode::GetDigests");
+    request::prepare_request(cntx, RequestCode::GetDigests {}, 0, None, &mut session_info)?;
+    info!(" RequestCode::GetDigests ... [OK]");
+    info!("Start RequestCode::GetCertificate");
+    request::prepare_request(
+        cntx,
+        RequestCode::GetCertificate {
+            tcg_dice_evidence_binding_checks: true,
+        },
+        0,
+        None,
+        &mut session_info,
+    )?;
+    info!(" RequestCode::GetCertificate ... [OK]");
+    info!("Start RequestCode::Challenge");
+    request::prepare_request(
+        cntx,
+        RequestCode::Challenge {
+            challenge_request: Some("ALL_MEASUREMENTS_HASH".to_string()),
+        },
+        0,
+        None,
+        &mut session_info,
+    )?;
+    info!(" RequestCode::Challenge ... [OK]");
+    info!("Start RequestCode::GetMeasurements");
+    request::prepare_request(
+        cntx,
+        RequestCode::GetMeasurements {},
+        0,
+        None,
+        &mut session_info,
+    )?;
+    info!(" RequestCode::GetMeasurements ... [OK]");
+    info!("Start RequestCode::GetCapabilities");
+    request::prepare_request(
+        cntx,
+        RequestCode::GetCapabilities {},
+        0,
+        None,
+        &mut session_info,
+    )?;
+    info!(" RequestCode::GetCapabilities ... [OK]");
+    info!("Start RequestCode::NegotiateAlgorithms");
+    request::prepare_request(
+        cntx,
+        RequestCode::NegotiateAlgorithms {},
+        0,
+        None,
+        &mut session_info,
+    )?;
+    info!(" RequestCode::NegotiateAlgorithms ... [OK]");
+    info!("Start RequestCode::GetCsr");
+    request::prepare_request(cntx, RequestCode::GetCsr {}, 0, None, &mut session_info)?;
+    info!(" RequestCode::GetCsr ... [OK]");
+    Ok(())
 }
 
 /// # Summary
@@ -42,11 +140,18 @@ pub unsafe fn start_tests(cntx: *mut c_void, backend: TestBackend) -> ! {
             test_discovery_basic().unwrap();
             test_discovery_all().unwrap();
             test_discovery_error().unwrap();
+            if let Err(libpsm_err) = do_requests_checks(cntx) {
+                panic!("    request failed with libspdm err: {:x}", libpsm_err);
+            }
         }
         TestBackend::SocketBackend => {
             responder_validator_tests(cntx).unwrap();
+            if let Err(libpsm_err) = do_requests_checks(cntx) {
+                panic!("    request failed with libspdm err: {:x}", libpsm_err);
+            }
         }
     }
+    info!("Testing Complete ...");
     std::process::exit(0);
 }
 
