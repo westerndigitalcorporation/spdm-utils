@@ -156,7 +156,7 @@ pub fn check_tcg_dice_evidence_binding(cert_slot_id: u8) -> Result<(), ()> {
 
                         if seq.1 == ID_DMTF_HARDWARE_IDENTITY {
                             // This contains id-DMTF-hardware-identity
-                            debug!("'{}' contains id-DMTF-hardware-identity", x509.subject());
+                            info!("'{}' contains id-DMTF-hardware-identity", x509.subject());
 
                             // Assert that mutable isn't set
                             // TODO: Support multiple entries in id-spdm-cert-oids
@@ -250,7 +250,7 @@ pub fn check_tcg_dice_evidence_binding(cert_slot_id: u8) -> Result<(), ()> {
 
                         if seq.1 == ID_DMTF_MUTABLE_CERTIFICATE {
                             // This contains id-DMTF-mutable-certificate
-                            debug!("'{}' contains id-DMTF-mutable-certificate", x509.subject());
+                            info!("'{}' contains id-DMTF-mutable-certificate", x509.subject());
                         }
 
                         assert!(seq.1 == ID_DMTF_MUTABLE_CERTIFICATE);
@@ -270,7 +270,7 @@ pub fn check_tcg_dice_evidence_binding(cert_slot_id: u8) -> Result<(), ()> {
                 }
             }
             SPDMCertificateType::LeadCert => {
-                debug!("'{}' is the Leaf Cert", x509.subject());
+                info!("'{}' is the Leaf Cert", x509.subject());
             }
         }
     }
