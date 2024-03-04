@@ -207,10 +207,7 @@ pub fn check_tcg_dice_evidence_binding(cert_slot_id: u8) -> Result<(), ()> {
                                 }
                             }
                         } else {
-                            // This is the first Alias Intermediate Certificate
-                            cert_type = SPDMCertificateType::AlisasCertCA;
-
-                            debug!("{:?}", x509);
+                            unreachable!();
                         }
                     }
                     Ok(None) => {
