@@ -31,6 +31,9 @@ pub enum TestBackend {
 /// any assertions within the requests can be validated. This function does not
 /// do any additional testing outside of the what the requests do.
 ///
+/// This will only pass when run against a device that meets the
+/// "TCG DICE Concise Evidence Binding for SPDM" specification.
+///
 /// # Parameter
 ///
 /// * `cntx`: The SPDM context
@@ -38,7 +41,7 @@ pub enum TestBackend {
 /// # Returns
 ///
 /// Success, or any errors returned by the request.
-pub fn do_requests_checks(cntx: *mut c_void) -> Result<(), u32> {
+pub fn do_tcg_dice_evidence_binding_request_checks(cntx: *mut c_void) -> Result<(), u32> {
     // Setup Basic Requester, this is the default config we use for spdm-utils.
     request::setup_capabilities(
         cntx,
@@ -116,6 +119,7 @@ pub fn do_requests_checks(cntx: *mut c_void) -> Result<(), u32> {
     info!("Start RequestCode::GetCsr");
     request::prepare_request(cntx, RequestCode::GetCsr {}, 0, None, &mut session_info)?;
     info!(" RequestCode::GetCsr ... [OK]");
+
     Ok(())
 }
 
@@ -140,13 +144,13 @@ pub unsafe fn start_tests(cntx: *mut c_void, backend: TestBackend) -> ! {
             test_discovery_basic().unwrap();
             test_discovery_all().unwrap();
             test_discovery_error().unwrap();
-            if let Err(libpsm_err) = do_requests_checks(cntx) {
+            if let Err(libpsm_err) = do_tcg_dice_evidence_binding_request_checks(cntx) {
                 panic!("    request failed with libspdm err: {:x}", libpsm_err);
             }
         }
         TestBackend::SocketBackend => {
             responder_validator_tests(cntx).unwrap();
-            if let Err(libpsm_err) = do_requests_checks(cntx) {
+            if let Err(libpsm_err) = do_tcg_dice_evidence_binding_request_checks(cntx) {
                 panic!("    request failed with libspdm err: {:x}", libpsm_err);
             }
         }
@@ -672,9 +676,9 @@ pub unsafe fn responder_validator_tests(context: *mut c_void) -> Result<(), ()> 
             context,
             &m_spdm_responder_validator_config as *const common_test_suite_config_t,
         );
-    }
 
-    info!("\n---- Responder-Validator Tests Complete. See `log` to check the results of libspdm tests ----\n");
+        info!("\n---- Responder-Validator Tests Complete. See `log` to check the results of libspdm tests ----\n");
+    }
 
     Ok(())
 }
