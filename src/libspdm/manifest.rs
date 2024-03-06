@@ -147,6 +147,9 @@ pub fn decode_cbor_manifest(buffer: &[u8], use_pretty: bool) -> Result<Vec<u8>, 
 
             return Ok(decoded_cbor);
         }
-        Err(e) => panic!("Ruby script {script} not found : error {}", e),
+        Err(e) => {
+            error!("Ruby script {script} not found : error {}", e);
+            return Err(());
+        }
     }
 }

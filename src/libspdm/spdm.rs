@@ -649,41 +649,53 @@ pub unsafe fn get_measurement(context: *mut c_void, slot_id: u8) -> Result<(), u
             let measurement_manifest = &measurement_record
                 [LIBSPDM_MANIFEST_RAW_BITSTREAM_OFFSET..measurement_record_length as usize];
             // Save the manifest in CBOR diagnostic format
-            let decoded_bytes =
-                manifest::decode_cbor_manifest(&measurement_manifest, false).unwrap();
-            let path = Path::new("manifest/responder_manifest.cbor");
-            manifest::save_manifest_to_file(&decoded_bytes, path).unwrap();
-            info!(
-                "---Decoded measurement manifest {} received---",
-                "diagnostic".blue()
-            );
-            info!(
-                "\n{}",
-                String::from_utf8_lossy(&decoded_bytes).blue().bold()
-            );
-            info!(
-                "---Decoded measurement manifest {} end---",
-                "diagnostic".blue()
-            );
+            match manifest::decode_cbor_manifest(&measurement_manifest, false) {
+                Ok(decoded_bytes) => {
+                    let path = Path::new("manifest/responder_manifest.cbor");
+                    manifest::save_manifest_to_file(&decoded_bytes, path).unwrap();
+                    info!(
+                        "---Decoded measurement manifest {} received---",
+                        "diagnostic".blue()
+                    );
+                    info!(
+                        "\n{}",
+                        String::from_utf8_lossy(&decoded_bytes).blue().bold()
+                    );
+                    info!(
+                        "---Decoded measurement manifest {} end---",
+                        "diagnostic".blue()
+                    );
+                }
+                Err(_) => warn!("Failed to decode manifest into diagnostic format"),
+            }
 
             // Save the manifest in pretty format
-            let decoded_bytes =
-                manifest::decode_cbor_manifest(&measurement_manifest, true).unwrap();
-            let path = Path::new("manifest/responder_manifest.pretty");
-            manifest::save_manifest_to_file(&decoded_bytes, path).unwrap();
+            match manifest::decode_cbor_manifest(&measurement_manifest, true) {
+                Ok(decoded_bytes) => {
+                    let path = Path::new("manifest/responder_manifest.pretty");
+                    manifest::save_manifest_to_file(&decoded_bytes, path).unwrap();
 
-            info!(
-                "---Decoded measurement manifest {} received---",
-                "pretty".green()
-            );
-            info!(
-                "\n{}",
-                String::from_utf8_lossy(&decoded_bytes).green().bold()
-            );
-            info!(
-                "---Decoded measurement manifest {} end---",
-                "pretty".green()
-            );
+                    info!(
+                        "---Decoded measurement manifest {} received---",
+                        "pretty".green()
+                    );
+                    info!(
+                        "\n{}",
+                        String::from_utf8_lossy(&decoded_bytes).green().bold()
+                    );
+                    info!(
+                        "---Decoded measurement manifest {} end---",
+                        "pretty".green()
+                    );
+                }
+                Err(_) => warn!("Failed to decode manifest into pretty format"),
+            }
+
+            // Print the measurement manifest in raw-bitstream form(as received), as fail-safe
+            // incase we failed to decode.
+            debug!("---Measurement manifest {} start---", "raw-bitstream".red());
+            debug!("\n{:x?}", measurement_manifest);
+            debug!("---Measurement manifest {} end---", "raw-bitstream".red());
         }
     }
 
