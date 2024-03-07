@@ -736,6 +736,77 @@ pub unsafe fn get_measurements(context: *mut c_void, slot_id: u8) -> Result<(), 
 
 /// # Summary
 ///
+/// Get a single measurement from a responder
+///
+/// # Parameter
+///
+/// * `context`: The SPDM context
+/// * `slot_id`: Session slot-id
+/// * `measurement_index`: The measurement index we want to retrieve
+/// * `measurement_record`: A buffer to store the data in
+///
+/// # Returns
+///
+/// Ok((dmtf_spec_measure_type, measurement_record_length)) on success
+/// Err(ret), where ret is a libspdm return status indicating an error.
+pub unsafe fn get_measurement(
+    context: *mut c_void,
+    slot_id: u8,
+    measurement_index: u32,
+    measurement_record: &mut [u8; LIBSPDM_MAX_MEASUREMENT_RECORD_SIZE as usize],
+) -> Result<(u8, u32), u32> {
+    let mut number_of_blocks: u8 = 0;
+    let mut measurement_record_length: u32 = measurement_record.len() as u32;
+    let measurement_record_ptr: *mut c_void = measurement_record as *mut _ as *mut c_void;
+
+    let request_attribute =
+        if measurement_index == SPDM_MEASUREMENT_BLOCK_MEASUREMENT_INDEX_MEASUREMENT_MANIFEST {
+            // Request the raw bitstream, so we can decode it for readability.
+            libspdm_rs::SPDM_GET_MEASUREMENTS_REQUEST_ATTRIBUTES_RAW_BIT_STREAM_REQUESTED as u8
+        } else {
+            libspdm_rs::SPDM_GET_MEASUREMENTS_REQUEST_ATTRIBUTES_GENERATE_SIGNATURE as u8
+        };
+
+    let ret = libspdm_get_measurement(
+        context,
+        ptr::null_mut(),
+        request_attribute,
+        measurement_index as u8,
+        slot_id,
+        ptr::null_mut(),
+        &mut number_of_blocks,
+        &mut measurement_record_length,
+        measurement_record_ptr,
+    );
+
+    if LibspdmReturnStatus::libspdm_status_is_error(ret) {
+        return Err(ret);
+    }
+
+    let measurement_block =
+        measurement_record_ptr as *mut libspdm_rs::spdm_measurement_block_dmtf_t;
+
+    if (*measurement_block).measurement_block_common_header.index != measurement_index as u8 {
+        return Err(0);
+    }
+
+    if (*measurement_block)
+        .measurement_block_common_header
+        .measurement_specification
+        != libspdm_rs::SPDM_MEASUREMENT_SPECIFICATION_DMTF as u8
+    {
+        return Err(0);
+    }
+
+    let dmtf_spec_measure_type = (*measurement_block)
+        .measurement_block_dmtf_header
+        .dmtf_spec_measurement_value_type;
+
+    Ok((dmtf_spec_measure_type, measurement_record_length))
+}
+
+/// # Summary
+///
 /// 5: Manage/start an SPDM session.
 ///
 /// # Parameter
