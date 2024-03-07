@@ -39,6 +39,19 @@ enum SPDMCertificateType {
     LeafCert,
 }
 
+#[derive(Debug)]
+/// A list of approved uses for the certificate based on OIDs
+/// set in the chain. See section 5.3 in the
+/// "TCG DICE Concise Evidence Binding for SPDM" specification for full
+/// details.
+pub struct CertificateUsage {
+    sign_evidence: bool,
+    sign_attestation: bool,
+    sign_identity_challenge: bool,
+    sign_responses: bool,
+    sign_requests: bool,
+}
+
 // TODO: Handle multiple entries
 fn spdm_cert_oids_parser(i: &[u8]) -> ParseResult<Oid> {
     Sequence::from_der_and_then(i, |i| {
@@ -106,12 +119,13 @@ fn check_for_basic_contraints_ca(x509: &X509Certificate, value: bool) -> Result<
 ///
 /// # Returns
 ///
-/// Ok() on success
+/// Ok(CertificateUsage) on success, where CertificateUsage contains details
+/// on where the certificate should be used.
 ///
 /// # Panics
 ///
 /// Panics on any errors related to failed file I/Os
-pub fn check_tcg_dice_evidence_binding(cert_slot_id: u8) -> Result<(), ()> {
+pub fn check_tcg_dice_evidence_binding(cert_slot_id: u8) -> Result<CertificateUsage, ()> {
     // The Rust APIs in x509-parser, x509-certificate and openssl are unable
     // to process the X509 chain we recieve. While the openssl applications
     // can easily handle it.
@@ -145,8 +159,13 @@ pub fn check_tcg_dice_evidence_binding(cert_slot_id: u8) -> Result<(), ()> {
     let mut pem_iterator = Pem::iter_from_reader(reader).peekable();
     let mut cert_type = SPDMCertificateType::DeviceCertCA;
 
-    let mut evidence_signing = false;
-    let mut assert_signing = false;
+    let mut usage = CertificateUsage {
+        sign_evidence: false,
+        sign_attestation: false,
+        sign_identity_challenge: false,
+        sign_responses: false,
+        sign_requests: false,
+    };
 
     while let Some(pem) = pem_iterator.next() {
         let pem = pem.unwrap();
@@ -224,26 +243,38 @@ pub fn check_tcg_dice_evidence_binding(cert_slot_id: u8) -> Result<(), ()> {
                 // Check for extensions that we should contain
                 check_for_extensions(&x509, "tcg-dice-kp-identityInit", &TCG_DICE_KP_IDENTITYINIT)?;
 
-                if let Ok(_attest_init) =
+                if let Ok(_extension) =
                     check_for_extensions(&x509, "tcg-dice-kp-attestInit", &TCG_DICE_KP_ATTESTINIT)
                 {
                     // This chain is used to sign evidence
                     info!("    Used to sign Evidence");
-                    evidence_signing = true;
+                    usage.sign_evidence = true;
                 } else {
-                    if !evidence_signing {
+                    if usage.sign_evidence {
                         return Err(());
                     }
                 }
 
-                if let Ok(_attest_init) =
+                if let Ok(_extension) =
+                    check_for_extensions(&x509, "tcg-dice-kp-attestInit", &TCG_DICE_KP_ATTESTINIT)
+                {
+                    // This chain is used to sign evidence
+                    info!("    Used to sign Evidence");
+                    usage.sign_evidence = true;
+                } else {
+                    if usage.sign_evidence {
+                        return Err(());
+                    }
+                }
+
+                if let Ok(_extension) =
                     check_for_extensions(&x509, "tcg-dice-kp-assertInit", &TCG_DICE_KP_ASSERTINIT)
                 {
                     // This chain is used to sign attestation
                     info!("    Used to sign Attestation");
-                    assert_signing = true;
+                    usage.sign_attestation = true;
                 } else {
-                    if !assert_signing {
+                    if usage.sign_attestation {
                         return Err(());
                     }
                 }
@@ -286,28 +317,39 @@ pub fn check_tcg_dice_evidence_binding(cert_slot_id: u8) -> Result<(), ()> {
                 check_for_basic_contraints_ca(&x509, true)?;
 
                 // Check for certificates that we should contain
-                check_for_extensions(&x509, "tcg-dice-kp-identityLoc", &TCG_DICE_KP_IDENTITYLOC)?;
+                if let Ok(_extension) =
+                    check_for_extensions(&x509, "tcg-dice-kp-identityLoc", &TCG_DICE_KP_IDENTITYLOC)
+                {
+                    // This chain is used to sign a device identity challenge
+                    info!("    Used to sign Device Identity Challenge");
+                    usage.sign_identity_challenge = true;
+                }
 
-                if let Ok(_attest_init) =
+                if let Ok(_extension) =
                     check_for_extensions(&x509, "tcg-dice-kp-attestLoc", &TCG_DICE_KP_ATTESTLOC)
                 {
                     // This chain is used to sign evidence
                     info!("    Used to sign Evidence");
-                    evidence_signing = true;
+                    // This should already be set
+                    if !usage.sign_evidence {
+                        return Err(());
+                    }
                 } else {
-                    if !evidence_signing {
+                    if usage.sign_evidence {
                         return Err(());
                     }
                 }
 
-                if let Ok(_attest_init) =
+                if let Ok(_extension) =
                     check_for_extensions(&x509, "tcg-dice-kp-assertLoc", &TCG_DICE_KP_ASSERTLOC)
                 {
                     // This chain is used to sign attestation
                     info!("    Used to sign Attestation");
-                    assert_signing = true;
+                    if !usage.sign_attestation {
+                        return Err(());
+                    }
                 } else {
-                    if !assert_signing {
+                    if usage.sign_attestation {
                         return Err(());
                     }
                 }
@@ -325,9 +367,7 @@ pub fn check_tcg_dice_evidence_binding(cert_slot_id: u8) -> Result<(), ()> {
                             .is_some()
                         {
                             info!("    Used as a responder");
-                        } else {
-                            error!("Leaf certificate is not approved to sign responses");
-                            return Err(());
+                            usage.sign_responses = true;
                         }
 
                         if other_key_usage
@@ -336,6 +376,7 @@ pub fn check_tcg_dice_evidence_binding(cert_slot_id: u8) -> Result<(), ()> {
                             .is_some()
                         {
                             info!("    Used as a requester");
+                            usage.sign_requests = true;
                         }
                     }
                     Ok(None) => {
@@ -371,28 +412,46 @@ pub fn check_tcg_dice_evidence_binding(cert_slot_id: u8) -> Result<(), ()> {
                     }
                 }
 
-                check_for_extensions(&x509, "tcg-dice-kp-identityLoc", &TCG_DICE_KP_IDENTITYLOC)?;
-
-                if let Ok(_attest_init) =
-                    check_for_extensions(&x509, "tcg-dice-kp-attestLoc", &TCG_DICE_KP_ATTESTLOC)
+                if let Ok(_extension) =
+                    check_for_extensions(&x509, "tcg-dice-kp-identityLoc", &TCG_DICE_KP_IDENTITYLOC)
                 {
-                    // This chain is used to sign evidence
-                    info!("    Used to sign Evidence");
-                    evidence_signing = true;
+                    // This chain is used to sign a device identity challenge
+                    info!("    Used to sign Device Identity Challenge");
+                    // This should already be set
+                    if !usage.sign_identity_challenge {
+                        return Err(());
+                    }
                 } else {
-                    if !evidence_signing {
+                    if usage.sign_identity_challenge {
                         return Err(());
                     }
                 }
 
-                if let Ok(_attest_init) =
+                if let Ok(_extension) =
+                    check_for_extensions(&x509, "tcg-dice-kp-attestLoc", &TCG_DICE_KP_ATTESTLOC)
+                {
+                    // This chain is used to sign evidence
+                    info!("    Used to sign Evidence");
+                    // This should already be set
+                    if !usage.sign_evidence {
+                        return Err(());
+                    }
+                } else {
+                    if usage.sign_evidence {
+                        return Err(());
+                    }
+                }
+
+                if let Ok(_extension) =
                     check_for_extensions(&x509, "tcg-dice-kp-assertLoc", &TCG_DICE_KP_ASSERTLOC)
                 {
                     // This chain is used to sign attestation
                     info!("    Used to sign Attestation");
-                    assert_signing = true;
+                    if !usage.sign_attestation {
+                        return Err(());
+                    }
                 } else {
-                    if !assert_signing {
+                    if usage.sign_attestation {
                         return Err(());
                     }
                 }
@@ -400,5 +459,5 @@ pub fn check_tcg_dice_evidence_binding(cert_slot_id: u8) -> Result<(), ()> {
         }
     }
 
-    Ok(())
+    Ok(usage)
 }
