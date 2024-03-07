@@ -42,10 +42,12 @@ pub enum TestBackend {
 ///
 /// Success, or any errors returned by the request.
 pub fn do_tcg_dice_evidence_binding_request_checks(cntx: *mut c_void) -> Result<(), u32> {
+    let slot_id = 0;
+
     // Setup Basic Requester, this is the default config we use for spdm-utils.
     request::setup_capabilities(
         cntx,
-        0,
+        slot_id,
         cli_helpers::parse_asym_algos(Some("ECDSA_ECC_NIST_P384".to_string())).unwrap(),
         cli_helpers::parse_hash_algos(Some("SHA_384".to_string())).unwrap(),
         cli_helpers::parse_dhe_named_groups(Some("SECP_384_R1,SECP_521_R1".to_string())).unwrap(),
@@ -53,71 +55,89 @@ pub fn do_tcg_dice_evidence_binding_request_checks(cntx: *mut c_void) -> Result<
     )
     .unwrap();
     unsafe {
-        spdm::initialise_connection(cntx, 0).unwrap();
+        spdm::initialise_connection(cntx, slot_id).unwrap();
     }
-    let mut session_info = unsafe { spdm::start_session(cntx, 0, false).unwrap() };
+    let mut session_info = unsafe { spdm::start_session(cntx, slot_id, false).unwrap() };
     // Print out the negotiated algorithms
     unsafe {
-        spdm::get_negotiated_algos(cntx, 0).unwrap();
+        spdm::get_negotiated_algos(cntx, slot_id).unwrap();
     }
 
     // Do request, any assertions are to be made in the response and not in this function
     // for example, enabling the `tcg_dice_evidence_binding_checks`, does this check
     // as part of the request/response process.
-    info!("Start RequestCode::GetDigests");
-    request::prepare_request(cntx, RequestCode::GetDigests {}, 0, None, &mut session_info)?;
+    info!("[{slot_id}] Start RequestCode::GetDigests");
+    request::prepare_request(
+        cntx,
+        RequestCode::GetDigests {},
+        slot_id,
+        None,
+        &mut session_info,
+    )?;
     info!(" RequestCode::GetDigests ... [OK]");
-    info!("Start RequestCode::GetCertificate");
+
+    info!("[{slot_id}] Start RequestCode::GetCertificate");
     request::prepare_request(
         cntx,
         RequestCode::GetCertificate {
             tcg_dice_evidence_binding_checks: true,
         },
-        0,
+        slot_id,
         None,
         &mut session_info,
     )?;
     info!(" RequestCode::GetCertificate ... [OK]");
-    info!("Start RequestCode::Challenge");
+
+    info!("[{slot_id}] Start RequestCode::Challenge");
     request::prepare_request(
         cntx,
         RequestCode::Challenge {
             challenge_request: Some("ALL_MEASUREMENTS_HASH".to_string()),
         },
-        0,
+        slot_id,
         None,
         &mut session_info,
     )?;
     info!(" RequestCode::Challenge ... [OK]");
-    info!("Start RequestCode::GetMeasurements");
+
+    info!("[{slot_id}] Start RequestCode::GetMeasurements");
     request::prepare_request(
         cntx,
         RequestCode::GetMeasurements {},
-        0,
+        slot_id,
         None,
         &mut session_info,
     )?;
     info!(" RequestCode::GetMeasurements ... [OK]");
-    info!("Start RequestCode::GetCapabilities");
+
+    info!("[{slot_id}] Start RequestCode::GetCapabilities");
     request::prepare_request(
         cntx,
         RequestCode::GetCapabilities {},
-        0,
+        slot_id,
         None,
         &mut session_info,
     )?;
     info!(" RequestCode::GetCapabilities ... [OK]");
-    info!("Start RequestCode::NegotiateAlgorithms");
+
+    info!("[{slot_id}] Start RequestCode::NegotiateAlgorithms");
     request::prepare_request(
         cntx,
         RequestCode::NegotiateAlgorithms {},
-        0,
+        slot_id,
         None,
         &mut session_info,
     )?;
     info!(" RequestCode::NegotiateAlgorithms ... [OK]");
-    info!("Start RequestCode::GetCsr");
-    request::prepare_request(cntx, RequestCode::GetCsr {}, 0, None, &mut session_info)?;
+
+    info!("[{slot_id}] Start RequestCode::GetCsr");
+    request::prepare_request(
+        cntx,
+        RequestCode::GetCsr {},
+        slot_id,
+        None,
+        &mut session_info,
+    )?;
     info!(" RequestCode::GetCsr ... [OK]");
 
     Ok(())
