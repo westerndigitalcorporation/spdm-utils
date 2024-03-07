@@ -345,7 +345,10 @@ pub fn prepare_request(
                 writer.write_all(&cert_chain[0..cert_chain_size]).unwrap();
 
                 if tcg_dice_evidence_binding_checks {
-                    check_tcg_dice_evidence_binding(cert_slot_id).unwrap();
+                    match check_tcg_dice_evidence_binding(cert_slot_id) {
+                        Ok(_usage) => {}
+                        Err(_e) => return Err(0),
+                    }
                 }
             }
             RequestCode::Challenge { challenge_request } => {
