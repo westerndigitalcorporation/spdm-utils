@@ -408,7 +408,7 @@ pub fn prepare_request(
                 info!("Responder {}", spdm_version);
             }
             RequestCode::GetMeasurements {} => {
-                spdm::get_measurement(cntx_ptr, session_info.slot_id)?;
+                spdm::get_measurements(cntx_ptr, session_info.slot_id)?;
             }
             RequestCode::GetCapabilities {} => {
                 get_responder_capabilities(cntx_ptr);

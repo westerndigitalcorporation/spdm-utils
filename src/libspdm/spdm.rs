@@ -556,7 +556,7 @@ pub unsafe fn initialise_connection(context: *mut c_void, slot_id: u8) -> Result
 
 /// # Summary
 ///
-/// 4: Get the measurement from the Responder
+/// 4: Get all of the measurements from the Responder
 ///
 /// # Parameter
 ///
@@ -567,7 +567,7 @@ pub unsafe fn initialise_connection(context: *mut c_void, slot_id: u8) -> Result
 ///
 /// Ok(()) on success
 /// Err(ret), where ret is a libspdm return status indicating an error.
-pub unsafe fn get_measurement(context: *mut c_void, slot_id: u8) -> Result<(), u32> {
+pub unsafe fn get_measurements(context: *mut c_void, slot_id: u8) -> Result<(), u32> {
     let mut request_attribute: u8 =
         libspdm_rs::SPDM_GET_MEASUREMENTS_REQUEST_ATTRIBUTES_GENERATE_SIGNATURE as u8;
     let mut num_measures: u8 = 0;
