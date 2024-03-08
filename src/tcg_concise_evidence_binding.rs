@@ -55,7 +55,7 @@ pub struct CertificateUsage {
 // TODO: Handle multiple entries
 fn spdm_cert_oids_parser(i: &[u8]) -> ParseResult<Oid> {
     Sequence::from_der_and_then(i, |i| {
-        return Ok((i, Oid::new(std::borrow::Cow::Borrowed(&i[2..]))));
+        return Ok((i, Oid::new(std::borrow::Cow::Borrowed(&i[4..]))));
     })
 }
 
@@ -225,7 +225,8 @@ pub fn check_tcg_dice_evidence_binding(cert_slot_id: u8) -> Result<CertificateUs
                                 }
                             }
                         } else {
-                            unreachable!();
+                            error!("Extension {:?} is invalid", seq.1);
+                            return Err(());
                         }
                     }
                     Ok(None) => {
