@@ -14,10 +14,16 @@ use crate::cli_helpers;
 use crate::doe_pci_cfg::*;
 use crate::request;
 use crate::spdm;
+use crate::spdm::get_measurement;
+use crate::tcg_concise_evidence_binding::check_tcg_dice_evidence_binding;
 use crate::RequestCode;
 #[cfg(libspdm_tests)]
 use crate::*;
 use core::ffi::c_void;
+use libspdm::libspdm_rs::{
+    LIBSPDM_MAX_MEASUREMENT_RECORD_SIZE, LIBSPDM_SEVERITY_ERROR, LIBSPDM_SOURCE_CORE,
+};
+use libspdm::libspdm_status_construct;
 
 /// Defines the type of backend to be used in testing
 pub enum TestBackend {
@@ -63,9 +69,16 @@ pub fn do_tcg_dice_evidence_binding_request_checks(cntx: *mut c_void) -> Result<
         spdm::get_negotiated_algos(cntx, slot_id).unwrap();
     }
 
-    // Do request, any assertions are to be made in the response and not in this function
-    // for example, enabling the `tcg_dice_evidence_binding_checks`, does this check
-    // as part of the request/response process.
+    info!("[{slot_id}] Start RequestCode::GetCapabilities");
+    request::prepare_request(
+        cntx,
+        RequestCode::GetCapabilities {},
+        slot_id,
+        None,
+        &mut session_info,
+    )?;
+    info!(" RequestCode::GetCapabilities ... [OK]");
+
     info!("[{slot_id}] Start RequestCode::GetDigests");
     request::prepare_request(
         cntx,
@@ -86,6 +99,7 @@ pub fn do_tcg_dice_evidence_binding_request_checks(cntx: *mut c_void) -> Result<
         None,
         &mut session_info,
     )?;
+    let cert_usage = check_tcg_dice_evidence_binding(0).unwrap();
     info!(" RequestCode::GetCertificate ... [OK]");
 
     info!("[{slot_id}] Start RequestCode::Challenge");
@@ -100,45 +114,92 @@ pub fn do_tcg_dice_evidence_binding_request_checks(cntx: *mut c_void) -> Result<
     )?;
     info!(" RequestCode::Challenge ... [OK]");
 
-    info!("[{slot_id}] Start RequestCode::GetMeasurements");
-    request::prepare_request(
-        cntx,
-        RequestCode::GetMeasurements {},
-        slot_id,
-        None,
-        &mut session_info,
-    )?;
-    info!(" RequestCode::GetMeasurements ... [OK]");
+    // Setup a PSK session
+    if cert_usage.sign_responses {
+        session_info = unsafe { spdm::start_session(cntx, slot_id, true).unwrap() };
+    } else {
+        error!("[{slot_id}] Unable to sign Responses");
+    }
 
-    info!("[{slot_id}] Start RequestCode::GetCapabilities");
-    request::prepare_request(
-        cntx,
-        RequestCode::GetCapabilities {},
-        slot_id,
-        None,
-        &mut session_info,
-    )?;
-    info!(" RequestCode::GetCapabilities ... [OK]");
+    // The DICE specifications describe Evidence as measurements that are to
+    // be matched to Reference Values. Everything else seems to be called
+    // attestation information.
+    if cert_usage.sign_evidence || cert_usage.sign_attestation {
+        info!("[{slot_id}] Start RequestCode::GetMeasurements");
 
-    info!("[{slot_id}] Start RequestCode::NegotiateAlgorithms");
-    request::prepare_request(
-        cntx,
-        RequestCode::NegotiateAlgorithms {},
-        slot_id,
-        None,
-        &mut session_info,
-    )?;
-    info!(" RequestCode::NegotiateAlgorithms ... [OK]");
+        for measurement_index in 1..0xFF {
+            let mut measurement_record: [u8; LIBSPDM_MAX_MEASUREMENT_RECORD_SIZE as usize] =
+                [0; LIBSPDM_MAX_MEASUREMENT_RECORD_SIZE as usize];
 
-    info!("[{slot_id}] Start RequestCode::GetCsr");
+            let ret = unsafe {
+                get_measurement(cntx, slot_id, measurement_index, &mut measurement_record)
+            };
+
+            match ret {
+                Ok((dmtf_spec_measure_type, _measurement_record_length)) => {
+                    // This is a bit of a guess. The spec isn't clear about
+                    // which is which. We are classifying measurements that don't have
+                    // reference values as attestation and data that does have
+                    // reference values as evidence.
+                    // There doesn't seem to be an easy way to know if there are/aren't
+                    // reference values, so we just guess based on what the measurement
+                    // type is.
+                    // This *could* lead to false positives/negatives, but at least it
+                    // is something.
+                    match dmtf_spec_measure_type as u32 & libspdm::libspdm_rs::SPDM_MEASUREMENT_BLOCK_MEASUREMENT_TYPE_MASK {
+                        libspdm::libspdm_rs::SPDM_MEASUREMENT_BLOCK_MEASUREMENT_TYPE_HARDWARE_CONFIGURATION |
+                        libspdm::libspdm_rs::SPDM_MEASUREMENT_BLOCK_MEASUREMENT_TYPE_FIRMWARE_CONFIGURATION |
+                        libspdm::libspdm_rs::SPDM_MEASUREMENT_BLOCK_MEASUREMENT_TYPE_DEVICE_MODE |
+                        libspdm::libspdm_rs::SPDM_MEASUREMENT_BLOCK_MEASUREMENT_TYPE_INFORMATIONAL => {
+                            if !cert_usage.sign_attestation {
+                                return Err(0);
+                            }
+                        },
+                        libspdm::libspdm_rs::SPDM_MEASUREMENT_BLOCK_MEASUREMENT_TYPE_IMMUTABLE_ROM |
+                        libspdm::libspdm_rs::SPDM_MEASUREMENT_BLOCK_MEASUREMENT_TYPE_MUTABLE_FIRMWARE |
+                        libspdm::libspdm_rs::SPDM_MEASUREMENT_BLOCK_MEASUREMENT_TYPE_MEASUREMENT_MANIFEST |
+                        libspdm::libspdm_rs::SPDM_MEASUREMENT_BLOCK_MEASUREMENT_TYPE_VERSION |
+                        libspdm::libspdm_rs::SPDM_MEASUREMENT_BLOCK_MEASUREMENT_TYPE_SECURE_VERSION_NUMBER |
+                        libspdm::libspdm_rs::SPDM_MEASUREMENT_BLOCK_MEASUREMENT_TYPE_HASH_EXTEND_MEASUREMENT |
+                        libspdm::libspdm_rs::SPDM_MEASUREMENT_BLOCK_MEASUREMENT_TYPE_STRUCTURED_MEASUREMENT_MANIFEST
+                         => {
+                            if !cert_usage.sign_evidence {
+                                return Err(0);
+                            }
+                        },
+                        _ => unreachable!()
+                    }
+                }
+                Err(e) => {
+                    if e == libspdm_status_construct!(
+                        LIBSPDM_SEVERITY_ERROR,
+                        LIBSPDM_SOURCE_CORE,
+                        0x000a
+                    ) {
+                        // Wrong index, just continue
+                    } else {
+                        return Err(e);
+                    }
+                }
+            }
+        }
+
+        info!(" RequestCode::GetMeasurements ... [OK]");
+    } else {
+        error!("[{slot_id}] Unable to sign Evidence");
+    }
+
+    info!("[{slot_id}] Start RequestCode::Challenge");
     request::prepare_request(
         cntx,
-        RequestCode::GetCsr {},
+        RequestCode::Challenge {
+            challenge_request: Some("ALL_MEASUREMENTS_HASH".to_string()),
+        },
         slot_id,
         None,
         &mut session_info,
     )?;
-    info!(" RequestCode::GetCsr ... [OK]");
+    info!(" RequestCode::Challenge ... [OK]");
 
     Ok(())
 }
