@@ -330,7 +330,7 @@ macro_rules! libspdm_status_source {
 }
 
 /// Generate the libspdm error
-#[allow(unused_macros)]
+#[macro_export]
 macro_rules! libspdm_status_construct {
     ($severity:ident, $source:ident, $code:expr) => {
         ($severity << 28) | ($source << 16) | ($code)

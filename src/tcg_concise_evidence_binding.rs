@@ -45,11 +45,11 @@ enum SPDMCertificateType {
 /// "TCG DICE Concise Evidence Binding for SPDM" specification for full
 /// details.
 pub struct CertificateUsage {
-    sign_evidence: bool,
-    sign_attestation: bool,
-    sign_identity_challenge: bool,
-    sign_responses: bool,
-    sign_requests: bool,
+    pub sign_evidence: bool,
+    pub sign_attestation: bool,
+    pub sign_identity_challenge: bool,
+    pub sign_responses: bool,
+    pub sign_requests: bool,
 }
 
 // TODO: Handle multiple entries
