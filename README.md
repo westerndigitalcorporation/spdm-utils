@@ -318,7 +318,7 @@ $ ./target/debug/spdm_utils --qemu-server response
 ```
 
 Note: You can provide `--qemu-port <QEMU_PORT>` to specify a port for the server
-and also `--qemu-transport <QEMU_TRANSPORT>` to specify the transport layer
+and also `--spdm-transport-protocol <TRANSPORT>` to specify the transport layer
 (currently only DOE is supported).
 
 This will start SPDM-Utils responder server on port 2323 (default). QEMU can now be

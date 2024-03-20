@@ -57,10 +57,6 @@ unsafe extern "C" fn sclient_send_message(
     let message = message_ptr as *const u8;
     let msg_buf = unsafe { from_raw_parts(message, message_size) };
 
-    // CMA required 32-bit alignment, ensure that we meet that
-    // Note we can also pad with 0's if required
-    assert!(message_size % 4 == 0);
-
     if timeout == 0 {
         stream
             .set_write_timeout(None)
