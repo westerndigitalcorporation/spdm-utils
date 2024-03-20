@@ -64,6 +64,11 @@ struct Args {
     #[arg(long, default_value_t = 115200)]
     usb_i2c_baud: u32,
 
+    /// The transport layer used for communication, by default it will
+    /// be dependent on the transport layer used.
+    #[arg(long)]
+    spdm_transport_protocol: Option<spdm::TransportLayer>,
+
     /// Use the Socket Client backend
     #[arg(long)]
     socket_client: bool,
@@ -76,12 +81,6 @@ struct Args {
     /// option is not specified.
     #[arg(long, default_value_t = 2323)]
     qemu_port: u16,
-
-    /// Transport layer used by QEMU. The following are currently supported
-    ///
-    /// QEMU_DOE
-    #[arg(long, default_value = "TRANS_DOE")]
-    qemu_transport: Option<String>,
 }
 
 #[derive(Subcommand, PartialEq)]
@@ -306,34 +305,49 @@ fn main() -> Result<(), ()> {
     } else if cli.socket_client {
         socket_client::register_device(cntx_ptr).unwrap();
     } else if cli.usb_i2c {
+        if let Some(proto) = cli.spdm_transport_protocol {
+            if proto != spdm::TransportLayer::Mctp {
+                error!("Only MCTP supported over USB I2C");
+                return Err(());
+            }
+        }
+
         usb_i2c::register_device(cntx_ptr, cli.usb_i2c_dev, cli.usb_i2c_baud).unwrap();
     } else if cli.qemu_server {
         if let Commands::Request { .. } = cli.command {
             error!("QEMU Server does not support running an SPDM requester");
             return Err(());
         }
-        let qemu_transport = cli_helpers::parse_qemu_transport_layer(cli.qemu_transport).unwrap();
-        qemu_server::register_device(cntx_ptr, cli.qemu_port, qemu_transport).unwrap();
+        if let Some(proto) = cli.spdm_transport_protocol {
+            qemu_server::register_device(cntx_ptr, cli.qemu_port, proto).unwrap();
+        } else {
+            qemu_server::register_device(cntx_ptr, cli.qemu_port, spdm::TransportLayer::Doe)
+                .unwrap();
+        }
     } else {
         error!("No supported backend specified");
         return Err(());
     }
 
     unsafe {
-        if cli.usb_i2c {
-            spdm::setup_transport_layer(
-                cntx_ptr,
-                spdm::TransportLayer::Mctp,
-                spdm::LIBSPDM_MAX_SPDM_MSG_SIZE,
-            )
-            .unwrap();
+        if let Some(proto) = cli.spdm_transport_protocol {
+            spdm::setup_transport_layer(cntx_ptr, proto, spdm::LIBSPDM_MAX_SPDM_MSG_SIZE).unwrap();
         } else {
-            spdm::setup_transport_layer(
-                cntx_ptr,
-                spdm::TransportLayer::Doe,
-                spdm::LIBSPDM_MAX_SPDM_MSG_SIZE,
-            )
-            .unwrap();
+            if cli.usb_i2c {
+                spdm::setup_transport_layer(
+                    cntx_ptr,
+                    spdm::TransportLayer::Mctp,
+                    spdm::LIBSPDM_MAX_SPDM_MSG_SIZE,
+                )
+                .unwrap();
+            } else {
+                spdm::setup_transport_layer(
+                    cntx_ptr,
+                    spdm::TransportLayer::Doe,
+                    spdm::LIBSPDM_MAX_SPDM_MSG_SIZE,
+                )
+                .unwrap();
+            }
         }
     }
 

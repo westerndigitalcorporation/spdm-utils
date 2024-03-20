@@ -6,24 +6,6 @@
 
 use crate::*;
 
-pub fn parse_qemu_transport_layer(
-    transport_layers: Option<String>,
-) -> Result<spdm::TransportLayer, ()> {
-    if let Some(t) = transport_layers {
-        match t.as_str() {
-            "TRANS_DOE" => Ok(spdm::TransportLayer::Doe),
-            "TRANS_MCTP" => Ok(spdm::TransportLayer::Mctp),
-            _ => {
-                error!("Unsupported QEMU transport layer");
-                Err(())
-            }
-        }
-    } else {
-        error!("Unsupported QEMU transport layer type not set");
-        Err(())
-    }
-}
-
 /// # Summary
 ///
 /// Parses the CLI argument for the SPDM version used by a responder.

@@ -12,6 +12,7 @@
 // [bindgen](https://rust-lang.github.io/rust-bindgen).
 
 use crate::libspdm_rs;
+use clap::ValueEnum;
 // TODO: Remove this
 use crate::libspdm_rs::*;
 use crate::manifest;
@@ -218,7 +219,7 @@ impl fmt::Display for SpdmAlgoKeyScheduleHmacHash {
     }
 }
 
-#[derive(Debug)]
+#[derive(ValueEnum, Debug, Clone, PartialEq, Copy)]
 pub enum TransportLayer {
     /// PCIe Data Object Exchange
     Doe,
