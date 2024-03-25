@@ -321,6 +321,13 @@ pub fn prepare_request(
                     &mut cert_chain_size,
                     cert_chain_ptr,
                 );
+
+                // sizeof(spdm_cert_chain_t) + libspdm_get_hash_size(base_hash_algo)
+                // TODO: Get the base_hash_algo dynamically from the SPDM context
+                let cert_offset =
+                    libspdm_get_hash_size(SPDM_ALGORITHMS_BASE_HASH_ALGO_TPM_ALG_SHA_384) as usize
+                        + 4;
+
                 if LibspdmReturnStatus::libspdm_status_is_error(ret) {
                     return Err(ret);
                 }
@@ -342,7 +349,9 @@ pub fn prepare_request(
                 };
 
                 let mut writer = BufWriter::new(file);
-                writer.write_all(&cert_chain[0..cert_chain_size]).unwrap();
+                writer
+                    .write_all(&cert_chain[cert_offset..cert_chain_size])
+                    .unwrap();
                 writer.flush().unwrap();
 
                 if tcg_dice_evidence_binding_checks {
