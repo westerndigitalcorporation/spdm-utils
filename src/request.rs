@@ -343,6 +343,7 @@ pub fn prepare_request(
 
                 let mut writer = BufWriter::new(file);
                 writer.write_all(&cert_chain[0..cert_chain_size]).unwrap();
+                writer.flush().unwrap();
 
                 if tcg_dice_evidence_binding_checks {
                     match check_tcg_dice_evidence_binding(cert_slot_id) {
