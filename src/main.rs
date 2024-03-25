@@ -205,6 +205,9 @@ pub enum RequestCode {
         challenge_request: Option<String>,
     },
     GetVersion {},
+    GetMeasurement {
+        index: u8,
+    },
     GetMeasurements {},
     GetCapabilities {},
     NegotiateAlgorithms {},

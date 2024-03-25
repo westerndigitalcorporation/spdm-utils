@@ -407,6 +407,37 @@ pub fn prepare_request(
                 }
                 info!("Responder {}", spdm_version);
             }
+            RequestCode::GetMeasurement { index } => {
+                let mut measurement_record: [u8; LIBSPDM_MAX_MEASUREMENT_RECORD_SIZE as usize] =
+                    [0; LIBSPDM_MAX_MEASUREMENT_RECORD_SIZE as usize];
+                info!("Fetching measurement Index: 0x{:X}", index);
+
+                if index as u32 == libspdm::libspdm_rs::SPDM_GET_MEASUREMENTS_REQUEST_MEASUREMENT_OPERATION_TOTAL_NUMBER_OF_MEASUREMENTS {
+                    let num_meas_block = spdm::get_num_meas_blocks(
+                        cntx_ptr,
+                        session_info.slot_id,
+                        &mut measurement_record,
+                    )
+                    .unwrap();
+                    info!(
+                        "Device has {} measurement block(s) available",
+                        num_meas_block
+                    );
+                } else if index as u32 == libspdm::libspdm_rs::SPDM_GET_MEASUREMENTS_REQUEST_MEASUREMENT_OPERATION_ALL_MEASUREMENTS {
+                    error!("Use `get-measurements` to fetch all measurement blocks");
+                    return Err(1);
+                } else {
+                    let (_, measurement_record_length) = spdm::get_measurement(
+                        cntx_ptr,
+                        session_info.slot_id,
+                        index as u32,
+                        &mut measurement_record,
+                    )?;
+
+                    info!("Measurement index: 0x{:X}", index);
+                    info!("Measurement: {:x?}", &measurement_record[..measurement_record_length as usize]);
+                }
+            }
             RequestCode::GetMeasurements {} => {
                 spdm::get_measurements(cntx_ptr, session_info.slot_id)?;
             }
