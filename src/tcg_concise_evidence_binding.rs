@@ -32,8 +32,9 @@ const TCG_DICE_KP_ASSERTLOC: Oid = oid!(2.23.133 .5 .4 .100 .11);
 const ID_DMTF_EKU_RESPONDER_AUTH: Oid = oid!(1.3.6 .1 .4 .1 .412 .274 .3);
 const ID_DMTF_EKU_REQUESTER_AUTH: Oid = oid!(1.3.6 .1 .4 .1 .412 .274 .4);
 
-#[derive(Debug)]
+#[derive(Debug, PartialEq)]
 enum SPDMCertificateType {
+    NonDeviceCAChain,
     DeviceCertCA,
     AlisasCertCA,
     LeafCert,
@@ -157,7 +158,7 @@ pub fn check_tcg_dice_evidence_binding(cert_slot_id: u8) -> Result<CertificateUs
 
     let reader = BufReader::new(file);
     let mut pem_iterator = Pem::iter_from_reader(reader).peekable();
-    let mut cert_type = SPDMCertificateType::DeviceCertCA;
+    let mut cert_type = SPDMCertificateType::NonDeviceCAChain;
 
     let mut usage = CertificateUsage {
         sign_evidence: false,
@@ -179,10 +180,12 @@ pub fn check_tcg_dice_evidence_binding(cert_slot_id: u8) -> Result<CertificateUs
             // First we want to find the Device Certificate CA
             // It *should* be the last certificate with the 'Hardware identity OID'.
             // The certificates should all be immutable
-            SPDMCertificateType::DeviceCertCA => {
+            SPDMCertificateType::NonDeviceCAChain | SPDMCertificateType::DeviceCertCA => {
                 match x509.get_extension_unique(&ID_SPDM_CERT_OIDS) {
                     Ok(Some(extension)) => {
                         // This contains id-spdm-cert-oids
+                        cert_type = SPDMCertificateType::DeviceCertCA;
+
                         let seq = spdm_cert_oids_parser(extension.value).unwrap();
 
                         if seq.1 == ID_DMTF_HARDWARE_IDENTITY {
@@ -230,7 +233,14 @@ pub fn check_tcg_dice_evidence_binding(cert_slot_id: u8) -> Result<CertificateUs
                         }
                     }
                     Ok(None) => {
-                        info!(
+                        if cert_type == SPDMCertificateType::NonDeviceCAChain {
+                            // We are still processing the Root CA or Intermediate CA
+                            // We just ignore these as they aren't governed by the TCG
+                            // spec.
+                            continue;
+                        }
+
+                        error!(
                             "'{}' Certificate doesn't contain id-spdm-cert-oids",
                             x509.subject()
                         );
