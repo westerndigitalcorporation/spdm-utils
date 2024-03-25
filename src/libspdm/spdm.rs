@@ -557,6 +557,78 @@ pub unsafe fn initialise_connection(context: *mut c_void, slot_id: u8) -> Result
 
 /// # Summary
 ///
+/// Decodes, saves and logs a CBOR encoded @measurement_manifest.
+///
+/// # Parameter
+///
+/// * `measurement_manifest`: A buffer containing the CBOR encoded measurement
+///    manifest
+///
+/// # Returns
+///
+/// Ok(()), on success
+/// Err(), on failures to decode/save to file
+pub fn process_cbor_measurement_manifest(measurement_manifest: &[u8]) -> Result<(), ()> {
+    // Save the manifest in CBOR diagnostic format
+    match manifest::decode_cbor_manifest(&measurement_manifest, false) {
+        Ok(decoded_bytes) => {
+            let path = Path::new("manifest/responder_manifest.cbor");
+            manifest::save_manifest_to_file(&decoded_bytes, path).unwrap();
+            info!(
+                "---Decoded measurement manifest {} received---",
+                "diagnostic".blue()
+            );
+            info!(
+                "\n{}",
+                String::from_utf8_lossy(&decoded_bytes).blue().bold()
+            );
+            info!(
+                "---Decoded measurement manifest {} end---",
+                "diagnostic".blue()
+            );
+        }
+        Err(e) => {
+            warn!("Failed to decode manifest into diagnostic format");
+            return Err(e);
+        }
+    }
+
+    // Save the manifest in pretty format
+    match manifest::decode_cbor_manifest(&measurement_manifest, true) {
+        Ok(decoded_bytes) => {
+            let path = Path::new("manifest/responder_manifest.pretty");
+            manifest::save_manifest_to_file(&decoded_bytes, path).unwrap();
+
+            info!(
+                "---Decoded measurement manifest {} received---",
+                "pretty".green()
+            );
+            info!(
+                "\n{}",
+                String::from_utf8_lossy(&decoded_bytes).green().bold()
+            );
+            info!(
+                "---Decoded measurement manifest {} end---",
+                "pretty".green()
+            );
+        }
+        Err(e) => {
+            warn!("Failed to decode manifest into pretty format");
+            return Err(e);
+        }
+    }
+
+    // Print the measurement manifest in raw-bitstream form(as received), as fail-safe
+    // incase we failed to decode.
+    debug!("---Measurement manifest {} start---", "raw-bitstream".red());
+    debug!("\n{:x?}", measurement_manifest);
+    debug!("---Measurement manifest {} end---", "raw-bitstream".red());
+
+    Ok(())
+}
+
+/// # Summary
+///
 /// 4: Get all of the measurements from the Responder
 ///
 /// # Parameter
@@ -649,54 +721,9 @@ pub unsafe fn get_measurements(context: *mut c_void, slot_id: u8) -> Result<(), 
 
             let measurement_manifest = &measurement_record
                 [LIBSPDM_MANIFEST_RAW_BITSTREAM_OFFSET..measurement_record_length as usize];
-            // Save the manifest in CBOR diagnostic format
-            match manifest::decode_cbor_manifest(&measurement_manifest, false) {
-                Ok(decoded_bytes) => {
-                    let path = Path::new("manifest/responder_manifest.cbor");
-                    manifest::save_manifest_to_file(&decoded_bytes, path).unwrap();
-                    info!(
-                        "---Decoded measurement manifest {} received---",
-                        "diagnostic".blue()
-                    );
-                    info!(
-                        "\n{}",
-                        String::from_utf8_lossy(&decoded_bytes).blue().bold()
-                    );
-                    info!(
-                        "---Decoded measurement manifest {} end---",
-                        "diagnostic".blue()
-                    );
-                }
-                Err(_) => warn!("Failed to decode manifest into diagnostic format"),
+            if process_cbor_measurement_manifest(measurement_manifest).is_err() {
+                error!("Failed to process measurement manifest");
             }
-
-            // Save the manifest in pretty format
-            match manifest::decode_cbor_manifest(&measurement_manifest, true) {
-                Ok(decoded_bytes) => {
-                    let path = Path::new("manifest/responder_manifest.pretty");
-                    manifest::save_manifest_to_file(&decoded_bytes, path).unwrap();
-
-                    info!(
-                        "---Decoded measurement manifest {} received---",
-                        "pretty".green()
-                    );
-                    info!(
-                        "\n{}",
-                        String::from_utf8_lossy(&decoded_bytes).green().bold()
-                    );
-                    info!(
-                        "---Decoded measurement manifest {} end---",
-                        "pretty".green()
-                    );
-                }
-                Err(_) => warn!("Failed to decode manifest into pretty format"),
-            }
-
-            // Print the measurement manifest in raw-bitstream form(as received), as fail-safe
-            // incase we failed to decode.
-            debug!("---Measurement manifest {} start---", "raw-bitstream".red());
-            debug!("\n{:x?}", measurement_manifest);
-            debug!("---Measurement manifest {} end---", "raw-bitstream".red());
         }
     }
 
@@ -733,6 +760,51 @@ pub unsafe fn get_measurements(context: *mut c_void, slot_id: u8) -> Result<(), 
     }
 
     Ok(())
+}
+
+/// # Summary
+///
+/// Get the number of measurement blocks supported
+///
+/// # Parameter
+///
+/// * `context`: The SPDM context
+/// * `slot_id`: Session slot-id
+/// * `measurement_record`: A buffer to store the data in
+///
+/// # Returns
+///
+/// Ok(num_of_blocks) on success
+/// Err(e), where e is a libspdm return status indicating an error.
+pub unsafe fn get_num_meas_blocks(
+    context: *mut c_void,
+    slot_id: u8,
+    measurement_record: &mut [u8; LIBSPDM_MAX_MEASUREMENT_RECORD_SIZE as usize],
+) -> Result<u8, u32> {
+    let mut number_of_blocks: u8 = 0;
+    let mut measurement_record_length: u32 = measurement_record.len() as u32;
+    let measurement_record_ptr: *mut c_void = measurement_record as *mut _ as *mut c_void;
+
+    let request_attribute =
+        libspdm_rs::SPDM_GET_MEASUREMENTS_REQUEST_ATTRIBUTES_GENERATE_SIGNATURE as u8;
+
+    let ret = libspdm_get_measurement(
+        context,
+        ptr::null_mut(),
+        request_attribute,
+        SPDM_GET_MEASUREMENTS_REQUEST_MEASUREMENT_OPERATION_TOTAL_NUMBER_OF_MEASUREMENTS as u8,
+        slot_id,
+        ptr::null_mut(),
+        &mut number_of_blocks,
+        &mut measurement_record_length,
+        measurement_record_ptr,
+    );
+
+    if LibspdmReturnStatus::libspdm_status_is_error(ret) {
+        return Err(ret);
+    }
+
+    Ok(number_of_blocks)
 }
 
 /// # Summary
@@ -782,6 +854,18 @@ pub unsafe fn get_measurement(
 
     if LibspdmReturnStatus::libspdm_status_is_error(ret) {
         return Err(ret);
+    }
+
+    // Measurement Manifest
+    if measurement_index == SPDM_MEASUREMENT_BLOCK_MEASUREMENT_INDEX_MEASUREMENT_MANIFEST {
+        // Let's attempt to decode this (assuming CBOR encoding),
+        // a decoding failure likely implies that this was not CBOR encoded/serialised properly.
+
+        let measurement_manifest = &measurement_record
+            [LIBSPDM_MANIFEST_RAW_BITSTREAM_OFFSET..measurement_record_length as usize];
+        if process_cbor_measurement_manifest(measurement_manifest).is_err() {
+            error!("Failed to process measurement manifest");
+        }
     }
 
     let measurement_block =
