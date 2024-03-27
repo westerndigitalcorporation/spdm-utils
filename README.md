@@ -2,15 +2,20 @@
     <h1>SPDM-Utils</h1>
 </div>
 
-SPDM-Utils is a Linux application designed to support, test and
-develop SPDM requesters and responders.
+SPDM-Utils is an open source Linux application designed to support, test and
+develop SPDM requesters and responders. SPDM-Utils is written in Rust
+and uses [libspdm](https://github.com/DMTF/libspdm) as the backend.
 
-SPDM-Utils uses [libspdm](https://github.com/DMTF/libspdm) as the backend to
-perform SPDM communication. SPDM-Utils currently supports the PCIe
-Data Object Exchange (DOE) Capability.
+It can be used as a requester CLI to interface with SPDM devices.
+It includes support for the PCIe Data Object Exchange (DOE) Capability
+and MCTP transport layers.
 
-SPDM-Utils is in charge of passing data from the DOE mailbox implemented in
-hardware to [libspdm](https://github.com/DMTF/libspdm).
+SPDM-Utils can also be used as a responder. It can be an embedded MCTP responder
+running on Tock. It can also be used as a responder running on Linux, and exposed
+to QEMU or other applications via sockets.
+
+SPDM-Utils can use Unix sockets as well. So you can test it all locally as a
+requester and responder.
 
 # Copyright
 
