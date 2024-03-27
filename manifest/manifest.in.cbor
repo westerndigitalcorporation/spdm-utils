@@ -14,8 +14,22 @@
       [
         / measurement-map / {
           / mval / 1: {
+            / name / 11: "ROM",
             / spdm-indirect / 12: {
-              / index / 0: [1, 2]
+              / index / 0: [1]
+            }
+          },
+          / authorised-by / 2: [
+            / tagged-pkix-base64-key-type / 554("base64_key_X")
+          ]
+        }
+      ],
+      [
+        / measurement-map / {
+          / mval / 1: {
+            / name / 11: "Firmware",
+            / spdm-indirect / 12: {
+              / index / 0: [2]
             }
           },
           / authorised-by / 2: [
