@@ -13,6 +13,9 @@ use which::which;
 
 fn main() {
     println!("cargo:rerun-if-changed=wrapper.h");
+    println!("cargo:rerun-if-changed=manifest/manifest.in.cbor");
+    println!("cargo:rerun-if-changed=certs/device.der");
+    println!("cargo:rerun-if-changed=certs/immutable.der");
 
     // cargo:rustc-link-lib doesn't seem to support start-group/end-group
     // so we manually pass the arguments
