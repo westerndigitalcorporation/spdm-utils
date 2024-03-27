@@ -1,6 +1,41 @@
-570(
-    {0: [571({0: {0: [[{0: {0: 111(h'3170332E362E312E342E312E352E32310037'),
-    1: "Western Digital Test"}},[{1: {12: [1, 2]}, 2: [554("base64_key_X")]}]]]}})],
-    1: [{0: 32("https://refs.example.com/path/to/reference.corim")},
-    {0: 32("https://rim-revoke.example.com/path/to/revocation.xcorim")}]}
-    )
+/ spdm-toc / 570( {
+  / tagged-evidence / 0: [
+  571( {
+    / ce.ev-triples / 0: {
+      / ce.membership-triples / 0: [
+      [
+      / environment-map / {
+        / class / 0: {
+          / class-id / 0:
+            / tagged-oid-type / 111(h'3170332E362E312E342E312E352E32310037'), / 1.3.6.1.4.1.5127 /
+            / vendor / 1: "Western Digital Test"
+        }
+      },
+      [
+        / measurement-map / {
+          / mval / 1: {
+            / spdm-indirect / 12: {
+              / index / 0: [1, 2]
+            }
+          },
+          / authorised-by / 2: [
+            / tagged-pkix-base64-key-type / 554("base64_key_X")
+          ]
+        }
+      ]
+      ]
+      ]
+    }
+  } )
+  ],
+  / rim-locators / 1: [
+    / corim-locator-map / {
+      / ** link to reference manifest ** /
+      0: 32("https://refs.example.com/path/to/reference.corim")
+    },
+    / corim-locator-map / {
+      / ** link to manifest revocation list ** /
+      0: 32("https://rim-revoke.example.com/path/to/revocation.xcorim")
+    }
+  ]
+} )
