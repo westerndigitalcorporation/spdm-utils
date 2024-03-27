@@ -36,6 +36,19 @@
             / tagged-pkix-base64-key-type / 554("base64_key_X")
           ]
         }
+      ],
+      [
+        / measurement-map / {
+          / mval / 1: {
+            / svn / 1: / tagged-svn / 552(7),
+            / spdm-indirect / 12: {
+              / index / 0: [16]
+            }
+          },
+          / authorised-by / 2: [
+            / tagged-pkix-base64-key-type / 554("base64_key_X")
+          ]
+        }
       ]
       ]
       ]
