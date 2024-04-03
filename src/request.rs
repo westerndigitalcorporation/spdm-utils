@@ -9,7 +9,8 @@ use crate::*;
 use core::ffi::c_void;
 use libspdm::libspdm_rs::libspdm_data_parameter_t;
 use libspdm::spdm::{
-    get_base_hash_algo, get_local_certchain, LibspdmReturnStatus, SpdmSessionInfo,
+    get_base_asym_algo, get_base_hash_algo, get_local_certchain, LibspdmReturnStatus,
+    SpdmSessionInfo,
 };
 use libspdm::{libspdm_status_code, libspdm_status_source};
 use std::fs::OpenOptions;
@@ -570,7 +571,7 @@ pub fn prepare_request(
                     );
                     return Err(1);
                 }
-                let asym_algo = SPDM_ALGORITHMS_BASE_ASYM_ALGO_TPM_ALG_ECDSA_ECC_NIST_P384;
+                let asym_algo = get_base_asym_algo(cntx_ptr, cert_slot_id).unwrap().0;
                 let hash_algo = get_base_hash_algo(cntx_ptr, cert_slot_id).unwrap().0;
                 let file_path =
                     cert_path.expect("Certificate path was not specified for SetCertificate");
