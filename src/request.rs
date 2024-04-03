@@ -8,7 +8,9 @@ use crate::tcg_concise_evidence_binding::check_tcg_dice_evidence_binding;
 use crate::*;
 use core::ffi::c_void;
 use libspdm::libspdm_rs::libspdm_data_parameter_t;
-use libspdm::spdm::{get_local_certchain, LibspdmReturnStatus, SpdmSessionInfo};
+use libspdm::spdm::{
+    get_base_hash_algo, get_local_certchain, LibspdmReturnStatus, SpdmSessionInfo,
+};
 use libspdm::{libspdm_status_code, libspdm_status_source};
 use std::fs::OpenOptions;
 use std::io::{BufRead, BufReader, BufWriter, Write};
@@ -323,10 +325,8 @@ pub fn prepare_request(
                 );
 
                 // sizeof(spdm_cert_chain_t) + libspdm_get_hash_size(base_hash_algo)
-                // TODO: Get the base_hash_algo dynamically from the SPDM context
-                let cert_offset =
-                    libspdm_get_hash_size(SPDM_ALGORITHMS_BASE_HASH_ALGO_TPM_ALG_SHA_384) as usize
-                        + 4;
+                let hash_algo = get_base_hash_algo(cntx_ptr, cert_slot_id).unwrap().0;
+                let cert_offset = libspdm_get_hash_size(hash_algo) as usize + 4;
 
                 if LibspdmReturnStatus::libspdm_status_is_error(ret) {
                     return Err(ret);
@@ -571,7 +571,7 @@ pub fn prepare_request(
                     return Err(1);
                 }
                 let asym_algo = SPDM_ALGORITHMS_BASE_ASYM_ALGO_TPM_ALG_ECDSA_ECC_NIST_P384;
-                let hash_algo = SPDM_ALGORITHMS_BASE_HASH_ALGO_TPM_ALG_SHA_384;
+                let hash_algo = get_base_hash_algo(cntx_ptr, cert_slot_id).unwrap().0;
                 let file_path =
                     cert_path.expect("Certificate path was not specified for SetCertificate");
                 let path = Path::new(&file_path);
