@@ -2377,6 +2377,42 @@ pub unsafe fn get_local_certchain(
 
 /// # Summary
 ///
+/// Gets the base asym algorithm
+///
+/// # Parameter
+///
+/// * `cntx_ptr`: The SPDM context
+/// * `slot_id`: Session slot id
+///
+/// # Returns
+///
+/// Returns Ok(SpdmAlgoBaseHash) on success or a libspdm error code on error
+pub unsafe fn get_base_asym_algo(
+    cntx_ptr: *mut c_void,
+    slot_id: u8,
+) -> Result<SpdmAlgoBaseAsym, u32> {
+    let parameter = libspdm_rs::libspdm_data_parameter_t::new_connection(slot_id);
+    let mut spdm_algo_asym_hash = SpdmAlgoBaseAsym(0);
+    let hash_dptr = &mut spdm_algo_asym_hash.0 as *mut _ as *mut c_void;
+    let mut data_size: usize = core::mem::size_of::<u32>();
+
+    let ret = libspdm_rs::libspdm_get_data(
+        cntx_ptr,
+        libspdm_rs::libspdm_data_type_t_LIBSPDM_DATA_BASE_HASH_ALGO,
+        &parameter as *const libspdm_rs::libspdm_data_parameter_t,
+        hash_dptr,
+        &mut data_size,
+    );
+
+    if LibspdmReturnStatus::libspdm_status_is_error(ret) {
+        return Err(ret);
+    }
+
+    Ok(spdm_algo_asym_hash)
+}
+
+/// # Summary
+///
 /// Gets the base hash algorithm
 ///
 /// # Parameter
