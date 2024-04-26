@@ -2,8 +2,7 @@
   / tagged-evidence / 0: [
   571( {
     / ce.ev-triples / 0: {
-      / ce.membership-triples / 0: [
-      [
+      / ce.evidence-triples / 0: [
       / environment-map / {
         / class / 0: {
           / class-id / 0:
@@ -12,44 +11,39 @@
         }
       },
       [
-        / measurement-map / {
-          / mval / 1: {
-            / name / 11: "ROM",
-            / spdm-indirect / 12: {
-              / index / 0: [1]
-            }
-          },
-          / authorised-by / 2: [
-            / tagged-pkix-base64-key-type / 554("base64_key_X")
-          ]
-        }
-      ],
-      [
-        / measurement-map / {
-          / mval / 1: {
-            / name / 11: "Firmware",
-            / spdm-indirect / 12: {
-              / index / 0: [2]
-            }
-          },
-          / authorised-by / 2: [
-            / tagged-pkix-base64-key-type / 554("base64_key_X")
-          ]
-        }
-      ],
-      [
-        / measurement-map / {
-          / mval / 1: {
-            / svn / 1: / tagged-svn / 552(7),
-            / spdm-indirect / 12: {
-              / index / 0: [16]
-            }
-          },
-          / authorised-by / 2: [
-            / tagged-pkix-base64-key-type / 554("base64_key_X")
-          ]
-        }
-      ]
+      / measurement-map / {
+        / mval / 1: {
+          / name / 11: "ROM",
+          / spdm-indirect / 12: {
+            / index / 0: [1]
+          }
+        },
+        / authorised-by / 2: [
+          / tagged-pkix-base64-key-type / 554("base64_key_X")
+        ]
+      },
+      / measurement-map / {
+        / mval / 1: {
+          / name / 11: "Firmware",
+          / spdm-indirect / 12: {
+            / index / 0: [2]
+          }
+        },
+        / authorised-by / 2: [
+          / tagged-pkix-base64-key-type / 554("base64_key_X")
+        ]
+      },
+      / measurement-map / {
+        / mval / 1: {
+          / svn / 1: / tagged-svn / 552(7),
+          / spdm-indirect / 12: {
+            / index / 0: [16]
+          }
+        },
+        / authorised-by / 2: [
+          / tagged-pkix-base64-key-type / 554("base64_key_X")
+        ]
+      }
       ]
       ]
     }
