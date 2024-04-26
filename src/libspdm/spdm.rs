@@ -17,6 +17,7 @@ use crate::libspdm_rs::*;
 use core::ffi::c_void;
 use core::fmt;
 use core::ptr;
+use core::slice::from_raw_parts;
 use usize;
 
 #[cfg(feature = "no_std")]
@@ -1125,7 +1126,7 @@ pub unsafe extern "C" fn libspdm_write_certificate_to_nvm(
         };
 
         let mut writer = BufWriter::new(file);
-        let slice = core::slice::from_raw_parts(cert_chain as *const u8, cert_chain_size);
+        let slice = from_raw_parts(cert_chain as *const u8, cert_chain_size);
 
         writer.write_all(slice).unwrap();
 
@@ -1983,7 +1984,7 @@ pub unsafe extern "C" fn libspdm_psk_handshake_secret_hkdf_expand(
         return false;
     }
 
-    let psk_hint = core::slice::from_raw_parts(psk_hint, psk_hint_size);
+    let psk_hint = from_raw_parts(psk_hint, psk_hint_size);
 
     debug!("[PSK_HINT]: {:?} || SIZE {}", psk_hint, psk_hint_size);
 
@@ -2073,7 +2074,7 @@ pub unsafe extern "C" fn libspdm_psk_master_secret_hkdf_expand(
         return false;
     }
 
-    let psk_hint = core::slice::from_raw_parts(psk_hint, psk_hint_size);
+    let psk_hint = from_raw_parts(psk_hint, psk_hint_size);
 
     debug!("[PSK_HINT]: {:?}", psk_hint);
 
@@ -2188,7 +2189,7 @@ pub unsafe extern "C" fn libspdm_measurement_opaque_data(
 ) -> bool {
     let opaque_len = OPAQUE_SIZE.min(*opaque_data_size);
     let opaque_buf = opaque_data as *mut u8;
-    let opaque = unsafe { core::slice::from_raw_parts_mut(opaque_buf, opaque_len) };
+    let opaque = unsafe { from_raw_parts_mut(opaque_buf, opaque_len) };
 
     *opaque_data_size = opaque_len;
 
@@ -2210,7 +2211,7 @@ pub unsafe extern "C" fn libspdm_challenge_opaque_data(
 ) -> bool {
     let opaque_len = OPAQUE_SIZE.min(*opaque_data_size);
     let opaque_buf = opaque_data as *mut u8;
-    let opaque = unsafe { core::slice::from_raw_parts_mut(opaque_buf, opaque_len) };
+    let opaque = unsafe { from_raw_parts_mut(opaque_buf, opaque_len) };
 
     *opaque_data_size = opaque_len;
 
@@ -2232,7 +2233,7 @@ pub unsafe extern "C" fn libspdm_encap_challenge_opaque_data(
 ) -> bool {
     let opaque_len = OPAQUE_SIZE.min(*opaque_data_size);
     let opaque_buf = opaque_data as *mut u8;
-    let opaque = unsafe { core::slice::from_raw_parts_mut(opaque_buf, opaque_len) };
+    let opaque = unsafe { from_raw_parts_mut(opaque_buf, opaque_len) };
 
     *opaque_data_size = opaque_len;
 
