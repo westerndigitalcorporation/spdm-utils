@@ -14,11 +14,8 @@
 use crate::libspdm_rs;
 // TODO: Remove this
 use crate::libspdm_rs::*;
-use core::ffi::c_void;
-use core::fmt;
-use core::ptr;
 use core::slice::{from_raw_parts, from_raw_parts_mut};
-use usize;
+use core::{ffi::c_void, fmt, ptr};
 
 #[cfg(feature = "no_std")]
 use {
@@ -35,6 +32,7 @@ use {
     crate::manifest,
     clap::ValueEnum,
     colored::Colorize,
+    minicbor::CborLen,
     std::alloc::{alloc, dealloc, Layout},
     std::ffi::{c_uchar, c_uint, CString},
     std::fs::OpenOptions,
@@ -577,14 +575,56 @@ pub unsafe fn initialise_connection(context: *mut c_void, slot_id: u8) -> Result
 /// Ok(()), on success
 /// Err(), on failures to decode/save to file
 #[cfg(not(feature = "no_std"))]
-pub fn process_cbor_measurement_manifest(measurement_manifest: &[u8]) -> Result<(), ()> {
+pub fn process_cbor_measurement_manifest(
+    context: *mut c_void,
+    slot_id: u8,
+    measurement_manifest: &[u8],
+) -> Result<(), ()> {
+    print_measurement_manifest(measurement_manifest, false)?;
+
+    let spdm_toc =
+        manifest::generate_direct_manifest(context, slot_id, &measurement_manifest).unwrap();
+
+    let mut direct_manifest = [0u8; 1024];
+    let original_len = measurement_manifest.len();
+    assert!(original_len < 1024);
+    minicbor::Encoder::new(direct_manifest.as_mut())
+        .encode(&spdm_toc)
+        .unwrap();
+    let length = spdm_toc.cbor_len(&mut ());
+
+    print_measurement_manifest(&direct_manifest[0..length], true)?;
+
+    Ok(())
+}
+
+#[cfg(not(feature = "no_std"))]
+fn print_measurement_manifest(measurement_manifest: &[u8], direct: bool) -> Result<(), ()> {
+    let prefix = if direct { "Direct " } else { "" };
+
+    // Print the measurement manifest in raw-bitstream form(as received), as fail-safe
+    // incase we failed to decode.
+    debug!(
+        "---{prefix}Measurement manifest {} start---",
+        "raw-bitstream".red()
+    );
+    debug!("\n{:x?}", measurement_manifest);
+    debug!(
+        "---{prefix}Measurement manifest {} end---",
+        "raw-bitstream".red()
+    );
+
     // Save the manifest in CBOR diagnostic format
     match manifest::decode_cbor_manifest(&measurement_manifest, false) {
         Ok(decoded_bytes) => {
-            let path = Path::new("manifest/responder_manifest.cbor");
+            let path = if direct {
+                Path::new("manifest/responder_manifest.cbor")
+            } else {
+                Path::new("manifest/direct_responder_manifest.cbor")
+            };
             manifest::save_manifest_to_file(&decoded_bytes, path).unwrap();
             info!(
-                "---Decoded measurement manifest {} received---",
+                "---{prefix}Decoded measurement manifest {} received---",
                 "diagnostic".blue()
             );
             info!(
@@ -592,7 +632,7 @@ pub fn process_cbor_measurement_manifest(measurement_manifest: &[u8]) -> Result<
                 String::from_utf8_lossy(&decoded_bytes).blue().bold()
             );
             info!(
-                "---Decoded measurement manifest {} end---",
+                "---{prefix}Decoded measurement manifest {} end---",
                 "diagnostic".blue()
             );
         }
@@ -605,11 +645,15 @@ pub fn process_cbor_measurement_manifest(measurement_manifest: &[u8]) -> Result<
     // Save the manifest in pretty format
     match manifest::decode_cbor_manifest(&measurement_manifest, true) {
         Ok(decoded_bytes) => {
-            let path = Path::new("manifest/responder_manifest.pretty");
+            let path = if direct {
+                Path::new("manifest/responder_manifest.pretty")
+            } else {
+                Path::new("manifest/direct_responder_manifest.pretty")
+            };
             manifest::save_manifest_to_file(&decoded_bytes, path).unwrap();
 
             info!(
-                "---Decoded measurement manifest {} received---",
+                "---{prefix}Decoded measurement manifest {} received---",
                 "pretty".green()
             );
             info!(
@@ -617,7 +661,7 @@ pub fn process_cbor_measurement_manifest(measurement_manifest: &[u8]) -> Result<
                 String::from_utf8_lossy(&decoded_bytes).green().bold()
             );
             info!(
-                "---Decoded measurement manifest {} end---",
+                "---{prefix}Decoded measurement manifest {} end---",
                 "pretty".green()
             );
         }
@@ -626,12 +670,6 @@ pub fn process_cbor_measurement_manifest(measurement_manifest: &[u8]) -> Result<
             return Err(e);
         }
     }
-
-    // Print the measurement manifest in raw-bitstream form(as received), as fail-safe
-    // incase we failed to decode.
-    debug!("---Measurement manifest {} start---", "raw-bitstream".red());
-    debug!("\n{:x?}", measurement_manifest);
-    debug!("---Measurement manifest {} end---", "raw-bitstream".red());
 
     Ok(())
 }
@@ -731,7 +769,7 @@ pub unsafe fn get_measurements(context: *mut c_void, slot_id: u8) -> Result<(), 
 
             let measurement_manifest = &measurement_record
                 [LIBSPDM_MANIFEST_RAW_BITSTREAM_OFFSET..measurement_record_length as usize];
-            if process_cbor_measurement_manifest(measurement_manifest).is_err() {
+            if process_cbor_measurement_manifest(context, slot_id, measurement_manifest).is_err() {
                 error!("Failed to process measurement manifest");
             }
         }
@@ -874,7 +912,7 @@ pub unsafe fn get_measurement(
 
         let measurement_manifest = &measurement_record
             [LIBSPDM_MANIFEST_RAW_BITSTREAM_OFFSET..measurement_record_length as usize];
-        if process_cbor_measurement_manifest(measurement_manifest).is_err() {
+        if process_cbor_measurement_manifest(context, slot_id, measurement_manifest).is_err() {
             error!("Failed to process measurement manifest");
         }
     }
