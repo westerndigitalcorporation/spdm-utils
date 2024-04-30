@@ -16,6 +16,7 @@ extern crate alloc;
 
 #[macro_use]
 pub mod libspdm_rs;
+#[cfg(not(feature = "no_std"))]
 pub mod manifest;
 #[macro_use]
 pub mod spdm;

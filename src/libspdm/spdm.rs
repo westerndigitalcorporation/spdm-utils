@@ -12,39 +12,35 @@
 // [bindgen](https://rust-lang.github.io/rust-bindgen).
 
 use crate::libspdm_rs;
-use clap::ValueEnum;
 // TODO: Remove this
 use crate::libspdm_rs::*;
-use crate::manifest;
-use colored::Colorize;
 use core::ffi::c_void;
 use core::fmt;
 use core::ptr;
 use usize;
 
 #[cfg(feature = "no_std")]
-use crate::alloc::string::ToString;
-#[cfg(feature = "no_std")]
-use alloc::alloc::{alloc, dealloc};
-#[cfg(feature = "no_std")]
-use alloc::ffi::CString;
-#[cfg(feature = "no_std")]
-use alloc::string::String;
-#[cfg(feature = "no_std")]
-use core::alloc::Layout;
-#[cfg(feature = "no_std")]
-use core::ffi::{c_uchar, c_uint};
+use {
+    crate::alloc::string::ToString,
+    alloc::alloc::{alloc, dealloc},
+    alloc::ffi::CString,
+    alloc::string::String,
+    core::alloc::Layout,
+    core::ffi::{c_uchar, c_uint},
+};
 
 #[cfg(not(feature = "no_std"))]
-use std::alloc::{alloc, dealloc, Layout};
-#[cfg(not(feature = "no_std"))]
-use std::ffi::{c_uchar, c_uint, CString};
-#[cfg(not(feature = "no_std"))]
-use std::fs::OpenOptions;
-#[cfg(not(feature = "no_std"))]
-use std::io::{BufRead, BufReader, BufWriter, Write};
-#[cfg(not(feature = "no_std"))]
-use std::path::Path;
+use {
+    crate::manifest,
+    clap::ValueEnum,
+    colored::Colorize,
+    std::alloc::{alloc, dealloc, Layout},
+    std::ffi::{c_uchar, c_uint, CString},
+    std::fs::OpenOptions,
+    std::io::{BufRead, BufReader, BufWriter, Write},
+    std::path::Path,
+};
+
 pub struct LibspdmReturnStatus;
 pub struct SpdmVersionNumber(pub u16);
 pub struct SpdmAlgoBaseAsym(pub u32);
@@ -219,7 +215,17 @@ impl fmt::Display for SpdmAlgoKeyScheduleHmacHash {
     }
 }
 
+#[cfg(not(feature = "no_std"))]
 #[derive(ValueEnum, Debug, Clone, PartialEq, Copy)]
+pub enum TransportLayer {
+    /// PCIe Data Object Exchange
+    Doe,
+    /// DMTF Management Component Transport Protocol
+    Mctp,
+}
+
+#[cfg(feature = "no_std")]
+#[derive(Debug, Clone, PartialEq, Copy)]
 pub enum TransportLayer {
     /// PCIe Data Object Exchange
     Doe,
@@ -282,6 +288,7 @@ const LIBSPDM_MEASUREMENT_BLOCK_NUMBER: u8 =
     LIBSPDM_MEASUREMENT_BLOCK_HASH_NUMBER as u8 + 1 + 1 + 1;
 
 const LIBSPDM_MEASUREMENT_RAW_DATA_SIZE: u32 = 72;
+#[allow(unused)]
 const LIBSPDM_MEASUREMENT_MANIFEST_SIZE: u32 = (5 * 1024) - 1;
 const LIBSPDM_MEASUREMENT_INDEX_SVN: u32 = 0x10;
 
@@ -568,6 +575,7 @@ pub unsafe fn initialise_connection(context: *mut c_void, slot_id: u8) -> Result
 ///
 /// Ok(()), on success
 /// Err(), on failures to decode/save to file
+#[cfg(not(feature = "no_std"))]
 pub fn process_cbor_measurement_manifest(measurement_manifest: &[u8]) -> Result<(), ()> {
     // Save the manifest in CBOR diagnostic format
     match manifest::decode_cbor_manifest(&measurement_manifest, false) {
@@ -640,6 +648,7 @@ pub fn process_cbor_measurement_manifest(measurement_manifest: &[u8]) -> Result<
 ///
 /// Ok(()) on success
 /// Err(ret), where ret is a libspdm return status indicating an error.
+#[cfg(not(feature = "no_std"))]
 pub unsafe fn get_measurements(context: *mut c_void, slot_id: u8) -> Result<(), u32> {
     let mut request_attribute: u8 =
         libspdm_rs::SPDM_GET_MEASUREMENTS_REQUEST_ATTRIBUTES_GENERATE_SIGNATURE as u8;
@@ -822,6 +831,7 @@ pub unsafe fn get_num_meas_blocks(
 ///
 /// Ok((dmtf_spec_measure_type, measurement_record_length)) on success
 /// Err(ret), where ret is a libspdm return status indicating an error.
+#[cfg(not(feature = "no_std"))]
 pub unsafe fn get_measurement(
     context: *mut c_void,
     slot_id: u8,
@@ -1545,12 +1555,24 @@ unsafe fn libspdm_fill_measurement_manifest_block(
     use_bit_stream: bool,
     measurement_hash_algo: u32,
 ) -> usize {
-    let mut data = [0; LIBSPDM_MEASUREMENT_MANIFEST_SIZE as usize];
+    let data;
     let hash_size = libspdm_rs::libspdm_get_measurement_hash_size(measurement_hash_algo) as usize;
     // Fetch an already generated manifest.
-    let manifest_path = Path::new("manifest/manifest.out.cbor");
-    let size =
-        manifest::fetch_local_manifest(&mut data, manifest_path).expect("failed to read manifest");
+    let size;
+    #[cfg(feature = "no_std")]
+    {
+        data = include_bytes!("../../manifest/manifest.out.cbor");
+        size = data.len();
+    }
+    #[cfg(not(feature = "no_std"))]
+    let mut buffer = [0; LIBSPDM_MEASUREMENT_MANIFEST_SIZE as usize];
+    #[cfg(not(feature = "no_std"))]
+    {
+        let manifest_path = Path::new("manifest/manifest.out.cbor");
+        size = manifest::fetch_local_manifest(&mut buffer, manifest_path)
+            .expect("failed to read manifest");
+        data = buffer;
+    }
 
     (*measurement_block).measurement_block_common_header.index =
         SPDM_MEASUREMENT_BLOCK_MEASUREMENT_INDEX_MEASUREMENT_MANIFEST as u8;
