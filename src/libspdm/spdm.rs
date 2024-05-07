@@ -17,7 +17,7 @@ use crate::libspdm_rs::*;
 use core::ffi::c_void;
 use core::fmt;
 use core::ptr;
-use core::slice::from_raw_parts;
+use core::slice::{from_raw_parts, from_raw_parts_mut};
 use usize;
 
 #[cfg(feature = "no_std")]
