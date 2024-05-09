@@ -11,7 +11,7 @@ readme = "README.md"
 default = ["std"]
 
 no_std = []
-std = ["clap", "memmap2", "once_cell", "sha2", "env_logger", "serialport", "lazy_static", "colored", "which", "asn1-rs", "x509-parser", "minicbor", "minicbor-derive"]
+std = ["clap", "memmap2", "once_cell", "sha2", "env_logger", "serialport", "lazy_static", "colored", "which", "asn1-rs", "x509-parser", "minicbor", "minicbor-derive", "async-std", "futures"]
 
 [lib]
 name = "libspdm"
@@ -41,5 +41,7 @@ asn1-rs = { version = "0.6", optional = true }
 x509-parser = { version = "0.15", optional = true }
 minicbor = { git = "https://gitlab.com/twittner/minicbor.git", features = ["half", "alloc", "std"], optional = true }
 minicbor-derive = { git = "https://gitlab.com/twittner/minicbor.git", features = ["alloc", "std"], optional = true }
+async-std = { version = "1.12", features = ["attributes"], optional = true }
+futures = { version = "0.3", optional = true }
 
 libmctp = { git = "https://github.com/westerndigitalcorporation/libmctp.git" }

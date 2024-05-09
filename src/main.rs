@@ -8,14 +8,20 @@
 //! (which is generated from here) or the README
 //!
 
+use async_std::task;
 use clap::{Parser, Subcommand};
+use futures::future::join_all;
 use libspdm::libspdm_rs::*;
+use sha2::{Digest, Sha256, Sha384, Sha512};
+use std::fs::File;
 use std::fs::OpenOptions;
+use std::io::copy;
 use std::path::Path;
 #[macro_use]
 extern crate log;
 use env_logger::Env;
 use libspdm::{responder, responder::CertModel, spdm};
+use once_cell::sync::Lazy;
 
 pub static SOCKET_PATH: &str = "SPDM-Utils-loopback-socket";
 
@@ -189,6 +195,18 @@ enum Commands {
         ///     - alias: AliasCert Model (the default)
         #[arg(long, default_value = "alias")]
         certificate_model: String,
+
+        /// By default the responder will use hardcoded values for the image
+        /// measurements (index 1 and 2). Setting this to true will instead
+        /// generate hashes dynamically for these measurements.
+        ///
+        /// The default option is a simpler model, that is useful for testing.
+        /// Setting this to true is more realistic of a real device. SPDM-Utils
+        /// will generate hashes at startup and use those for the image
+        /// mesaurements. In this case raw bitstreams aren't supported as we
+        /// are modelling a responder that is protecting it's firmware blobs
+        #[clap(long, default_value_t = false)]
+        dynamic_image_measurements: bool,
     },
     Tests,
 }
@@ -277,7 +295,8 @@ fn init_logger() {
 ///
 /// If we are running tests:
 /// Setup test cases for SPDM-Responder-Validator and run them.
-fn main() -> Result<(), ()> {
+#[async_std::main]
+async fn main() -> Result<(), ()> {
     init_logger();
     let cli = Args::parse();
 
@@ -398,8 +417,18 @@ fn main() -> Result<(), ()> {
         Commands::Response {
             spdm_ver,
             certificate_model,
+            dynamic_image_measurements,
         } => {
             let mut num_provisioned_slots = 0;
+
+            let tasks = if dynamic_image_measurements {
+                Some([
+                    task::spawn(generate_kernel_hash()),
+                    task::spawn(generate_app_hash()),
+                ])
+            } else {
+                None
+            };
 
             let model = if certificate_model == "alias" {
                 CertModel::Alias
@@ -468,6 +497,17 @@ fn main() -> Result<(), ()> {
                 },
             )?;
 
+            // We need to make sure the hashes are generated before starting the
+            // response loop
+            if let Some(t) = tasks {
+                let results = join_all(t).await;
+
+                if results.iter().find(|&res| res.is_err()).is_some() {
+                    error!("Error generating image measurements");
+                    return Err(());
+                }
+            }
+
             responder::response_loop(cntx_ptr);
         }
         Commands::Tests {} => {
@@ -485,5 +525,141 @@ fn main() -> Result<(), ()> {
             }
         }
     }
+    Ok(())
+}
+
+/// Generate a hash of the "kernel"
+/// We try to generate a hash of "/boot/Image", if that doesn't
+/// work we fall back to "/etc/hostname". Hashes are generated on startup
+/// and not re-calculated.
+async fn generate_kernel_hash() -> Result<(), std::io::Error> {
+    let supported_hashes = [
+        SPDM_ALGORITHMS_MEASUREMENT_HASH_ALGO_TPM_ALG_SHA_256,
+        SPDM_ALGORITHMS_MEASUREMENT_HASH_ALGO_TPM_ALG_SHA_384,
+        SPDM_ALGORITHMS_MEASUREMENT_HASH_ALGO_TPM_ALG_SHA_512,
+    ];
+
+    let kernel_path = if Path::new("/boot/Image").exists() {
+        Path::new("/boot/Image")
+    } else {
+        Path::new("/etc/hostname")
+    };
+    let mut file = File::open(kernel_path)?;
+
+    let mut dyn_image_measure = match spdm::DYN_IMAGE_MEASURE.write() {
+        Ok(val) => val,
+        Err(_) => {
+            return Err(std::io::Error::new(
+                std::io::ErrorKind::Other,
+                "RwLock error",
+            ))
+        }
+    };
+
+    for (i, measurement_hash_algo) in supported_hashes.iter().enumerate() {
+        match *measurement_hash_algo {
+            SPDM_ALGORITHMS_MEASUREMENT_HASH_ALGO_TPM_ALG_SHA_256 => {
+                let mut hasher = Sha256::new();
+
+                copy(&mut file, &mut hasher)?;
+                let hash_bytes = hasher.finalize();
+                let slice_len = hash_bytes.as_slice().len();
+
+                Lazy::force_mut(&mut dyn_image_measure).kernel_hashes[i][0..slice_len]
+                    .copy_from_slice(hash_bytes.as_slice());
+            }
+            SPDM_ALGORITHMS_MEASUREMENT_HASH_ALGO_TPM_ALG_SHA_384 => {
+                let mut hasher = Sha384::new();
+
+                copy(&mut file, &mut hasher)?;
+                let hash_bytes = hasher.finalize();
+                let slice_len = hash_bytes.as_slice().len();
+
+                Lazy::force_mut(&mut dyn_image_measure).kernel_hashes[i][0..slice_len]
+                    .copy_from_slice(hash_bytes.as_slice());
+            }
+            SPDM_ALGORITHMS_MEASUREMENT_HASH_ALGO_TPM_ALG_SHA_512 => {
+                let mut hasher = Sha512::new();
+
+                copy(&mut file, &mut hasher)?;
+                let hash_bytes = hasher.finalize();
+                let slice_len = hash_bytes.as_slice().len();
+
+                Lazy::force_mut(&mut dyn_image_measure).kernel_hashes[i][0..slice_len]
+                    .copy_from_slice(hash_bytes.as_slice());
+            }
+            _ => continue,
+        };
+    }
+
+    Lazy::force_mut(&mut dyn_image_measure).kernel_hashes_populated = true;
+
+    Ok(())
+}
+
+/// Generate a hash of the app
+/// Hashes are generated on startup and not re-calculated.
+async fn generate_app_hash() -> Result<(), std::io::Error> {
+    let supported_hashes = [
+        SPDM_ALGORITHMS_MEASUREMENT_HASH_ALGO_TPM_ALG_SHA_256,
+        SPDM_ALGORITHMS_MEASUREMENT_HASH_ALGO_TPM_ALG_SHA_384,
+        SPDM_ALGORITHMS_MEASUREMENT_HASH_ALGO_TPM_ALG_SHA_512,
+    ];
+
+    // Get the current running file.
+    // NOTE: This is NOT secure or guaranteed, the file could be changed
+    // behind our back, see https://doc.rust-lang.org/std/env/fn.current_exe.html
+    // For a PoC this is fine though
+    let current_exe_path = std::env::current_exe()?;
+    let mut file = File::open(current_exe_path)?;
+
+    let mut dyn_image_measure = match spdm::DYN_IMAGE_MEASURE.write() {
+        Ok(val) => val,
+        Err(_) => {
+            return Err(std::io::Error::new(
+                std::io::ErrorKind::Other,
+                "RwLock error",
+            ))
+        }
+    };
+
+    for (i, measurement_hash_algo) in supported_hashes.iter().enumerate() {
+        match *measurement_hash_algo {
+            SPDM_ALGORITHMS_MEASUREMENT_HASH_ALGO_TPM_ALG_SHA_256 => {
+                let mut hasher = Sha256::new();
+
+                copy(&mut file, &mut hasher)?;
+                let hash_bytes = hasher.finalize();
+                let slice_len = hash_bytes.as_slice().len();
+
+                Lazy::force_mut(&mut dyn_image_measure).app_hashes[i][0..slice_len]
+                    .copy_from_slice(hash_bytes.as_slice());
+            }
+            SPDM_ALGORITHMS_MEASUREMENT_HASH_ALGO_TPM_ALG_SHA_384 => {
+                let mut hasher = Sha384::new();
+
+                copy(&mut file, &mut hasher)?;
+                let hash_bytes = hasher.finalize();
+                let slice_len = hash_bytes.as_slice().len();
+
+                Lazy::force_mut(&mut dyn_image_measure).app_hashes[i][0..slice_len]
+                    .copy_from_slice(hash_bytes.as_slice());
+            }
+            SPDM_ALGORITHMS_MEASUREMENT_HASH_ALGO_TPM_ALG_SHA_512 => {
+                let mut hasher = Sha512::new();
+
+                copy(&mut file, &mut hasher)?;
+                let hash_bytes = hasher.finalize();
+                let slice_len = hash_bytes.as_slice().len();
+
+                Lazy::force_mut(&mut dyn_image_measure).app_hashes[i][0..slice_len]
+                    .copy_from_slice(hash_bytes.as_slice());
+            }
+            _ => continue,
+        };
+    }
+
+    Lazy::force_mut(&mut dyn_image_measure).app_hashes_populated = true;
+
     Ok(())
 }

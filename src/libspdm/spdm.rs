@@ -51,12 +51,49 @@ use {
     clap::ValueEnum,
     colored::Colorize,
     minicbor::CborLen,
+    once_cell::sync::Lazy,
     std::alloc::{alloc, dealloc, Layout},
     std::ffi::{c_uchar, c_uint, CString},
     std::fs::OpenOptions,
     std::io::{BufRead, BufReader, BufWriter, Write},
     std::path::Path,
+    std::sync::RwLock,
 };
+
+#[cfg(not(feature = "no_std"))]
+/// The measurement values dynamically generated.
+pub struct DynamicImageMeasurements {
+    /// This is a list of hashes of the kernel
+    /// This is set by the generate_kernel_hash() function which is run async
+    /// at start up and then access via the
+    /// libspdm_fill_measurement_image_hash_block() function
+    pub kernel_hashes: [[u8; 64]; 3],
+    /// Have the kernel hashes been populated
+    pub kernel_hashes_populated: bool,
+    /// This is a list of hashes of the running application
+    /// This is set by the generate_app_hash() function which is run async
+    /// at start up and then access via the
+    /// libspdm_fill_measurement_image_hash_block() function
+    pub app_hashes: [[u8; 64]; 3],
+    /// Have the app hashes been populated
+    pub app_hashes_populated: bool,
+}
+
+#[cfg(not(feature = "no_std"))]
+impl Default for DynamicImageMeasurements {
+    fn default() -> Self {
+        DynamicImageMeasurements {
+            kernel_hashes: [[0; 64]; 3],
+            kernel_hashes_populated: false,
+            app_hashes: [[0; 64]; 3],
+            app_hashes_populated: false,
+        }
+    }
+}
+
+#[cfg(not(feature = "no_std"))]
+pub static DYN_IMAGE_MEASURE: RwLock<Lazy<DynamicImageMeasurements>> =
+    RwLock::new(Lazy::new(|| DynamicImageMeasurements::default()));
 
 pub struct LibspdmReturnStatus;
 pub struct SpdmVersionNumber(pub u16);
@@ -1608,6 +1645,65 @@ libspdm_match_fn_prototypes!(
 
 /// # Summary
 ///
+/// Fill the image hash measurement block. This will use either the dynamic
+/// or the static function, depending on what has previously been setup.
+///
+/// # Parameter
+///
+/// * `use_bit_stream`: Use raw bit-stream, no hash algorithm specified
+/// * `measurement_hash_algo`: Indicates the measurement hash algorithm
+/// * `measurements_index`: Index of the measurement
+/// * `measurement_block`: The measurement block structure to operate on
+///
+/// # Returns
+///
+/// The measurement block size
+fn libspdm_fill_measurement_image_hash_block(
+    use_bit_stream: bool,
+    measurement_hash_algo: u32,
+    measurements_index: u8,
+    measurement_block: *mut libspdm_rs::spdm_measurement_block_dmtf_t,
+) -> usize {
+    #[cfg(not(feature = "no_std"))]
+    {
+        let dyn_image_measure = &DYN_IMAGE_MEASURE.read().unwrap();
+
+        // Check if the values for dyn_image_measure have been initalised.
+        // If they have let's use them, otherwise they won't be created
+        if Lazy::get(dyn_image_measure).is_some() {
+            unsafe {
+                fill_dynamic_measurement_image_hash_block(
+                    use_bit_stream,
+                    measurement_hash_algo,
+                    measurements_index,
+                    measurement_block,
+                )
+            }
+        } else {
+            unsafe {
+                fill_static_measurement_image_hash_block(
+                    use_bit_stream,
+                    measurement_hash_algo,
+                    measurements_index,
+                    measurement_block,
+                )
+            }
+        }
+    }
+
+    #[cfg(feature = "no_std")]
+    unsafe {
+        fill_static_measurement_image_hash_block(
+            use_bit_stream,
+            measurement_hash_algo,
+            measurements_index,
+            measurement_block,
+        )
+    }
+}
+
+/// # Summary
+///
 /// Fill the image hash measurement block.
 ///
 /// # Parameter
@@ -1620,7 +1716,7 @@ libspdm_match_fn_prototypes!(
 /// # Returns
 ///
 /// The measurement block size
-unsafe fn libspdm_fill_measurement_image_hash_block(
+unsafe fn fill_static_measurement_image_hash_block(
     use_bit_stream: bool,
     measurement_hash_algo: u32,
     measurements_index: u8,
@@ -1674,6 +1770,103 @@ unsafe fn libspdm_fill_measurement_image_hash_block(
         (measurement_block.add(1) as *mut u8).copy_from(data.as_ptr(), data.len());
 
         core::mem::size_of::<libspdm_rs::spdm_measurement_block_dmtf_t>() + data.len()
+    }
+}
+
+/// # Summary
+///
+/// Use the already calculate `DYN_IMAGE_MEASURE` to fill the image
+/// hash measurement block.
+///
+/// # Parameter
+///
+/// * `use_bit_stream`: Use raw bit-stream, no hash algorithm specified
+/// * `measurement_hash_algo`: Indicates the measurement hash algorithm
+/// * `measurements_index`: Index of the measurement
+/// * `measurement_block`: The measurement block structure to operate on
+///
+/// # Returns
+///
+/// The measurement block size
+#[cfg(not(feature = "no_std"))]
+unsafe fn fill_dynamic_measurement_image_hash_block(
+    _use_bit_stream: bool,
+    measurement_hash_algo: u32,
+    measurements_index: u8,
+    measurement_block: *mut libspdm_rs::spdm_measurement_block_dmtf_t,
+) -> usize {
+    let hash_size = libspdm_rs::libspdm_get_measurement_hash_size(measurement_hash_algo) as usize;
+
+    (*measurement_block).measurement_block_common_header.index = measurements_index;
+
+    (*measurement_block)
+        .measurement_block_common_header
+        .measurement_specification = libspdm_rs::SPDM_MEASUREMENT_SPECIFICATION_DMTF as u8;
+
+    (*measurement_block)
+        .measurement_block_dmtf_header
+        .dmtf_spec_measurement_value_type = measurements_index - 1;
+
+    (*measurement_block)
+        .measurement_block_dmtf_header
+        .dmtf_spec_measurement_value_size = hash_size as u16;
+
+    (*measurement_block)
+        .measurement_block_common_header
+        .measurement_size =
+        (core::mem::size_of::<spdm_measurement_block_dmtf_header_t>() + hash_size) as u16;
+
+    match measurements_index {
+        1 => {
+            let hash_offset: usize = (measurement_hash_algo.trailing_zeros()
+                - SPDM_ALGORITHMS_MEASUREMENT_HASH_ALGO_RAW_BIT_STREAM_ONLY)
+                as usize;
+            let dyn_image_measure = &DYN_IMAGE_MEASURE.read().unwrap();
+
+            if !Lazy::force(dyn_image_measure).kernel_hashes_populated {
+                error!("Responder hashes not generated");
+                return 0;
+            }
+
+            let hash_bytes = match Lazy::force(dyn_image_measure)
+                .kernel_hashes
+                .get(hash_offset)
+            {
+                Some(val) => val,
+                None => {
+                    error!("Unsupported responder hash");
+                    return 0;
+                }
+            };
+
+            (measurement_block.add(1) as *mut u8).copy_from(hash_bytes.as_ptr(), hash_size);
+
+            core::mem::size_of::<spdm_measurement_block_dmtf_t>() + hash_size
+        }
+        2 => {
+            let hash_offset = (measurement_hash_algo.trailing_zeros()
+                - SPDM_ALGORITHMS_MEASUREMENT_HASH_ALGO_RAW_BIT_STREAM_ONLY)
+                as usize;
+            let dyn_image_measure = &DYN_IMAGE_MEASURE.read().unwrap();
+
+            if !Lazy::force(dyn_image_measure).app_hashes_populated {
+                error!("Responder hashes not generated");
+                return 0;
+            }
+
+            let hash_bytes = match Lazy::force(dyn_image_measure).app_hashes.get(hash_offset) {
+                Some(val) => val,
+                None => {
+                    error!("Unsupported responder hash");
+                    return 0;
+                }
+            };
+
+            (measurement_block.add(1) as *mut u8).copy_from(hash_bytes.as_ptr(), hash_size);
+
+            core::mem::size_of::<libspdm_rs::spdm_measurement_block_dmtf_t>() + hash_size
+        }
+        _ => unreachable!(),
     }
 }
 
@@ -1998,9 +2191,28 @@ pub unsafe extern "C" fn libspdm_measurement_collection(
                     * (core::mem::size_of::<libspdm_rs::spdm_measurement_block_dmtf_t>() as u32
                         + hash_size)
             } else {
-                LIBSPDM_MEASUREMENT_BLOCK_HASH_NUMBER
-                    * (core::mem::size_of::<libspdm_rs::spdm_measurement_block_dmtf_t>() as u32
-                        + LIBSPDM_MEASUREMENT_RAW_DATA_SIZE)
+                #[cfg(not(feature = "no_std"))]
+                {
+                    let dyn_image_measure = &DYN_IMAGE_MEASURE.read().unwrap();
+
+                    if Lazy::get(dyn_image_measure).is_some() {
+                        LIBSPDM_MEASUREMENT_BLOCK_HASH_NUMBER
+                            * (core::mem::size_of::<libspdm_rs::spdm_measurement_block_dmtf_t>()
+                                as u32
+                                + hash_size)
+                    } else {
+                        LIBSPDM_MEASUREMENT_BLOCK_HASH_NUMBER
+                            * (core::mem::size_of::<libspdm_rs::spdm_measurement_block_dmtf_t>()
+                                as u32
+                                + LIBSPDM_MEASUREMENT_RAW_DATA_SIZE)
+                    }
+                }
+                #[cfg(feature = "no_std")]
+                {
+                    LIBSPDM_MEASUREMENT_BLOCK_HASH_NUMBER
+                        * (core::mem::size_of::<libspdm_rs::spdm_measurement_block_dmtf_t>() as u32
+                            + LIBSPDM_MEASUREMENT_RAW_DATA_SIZE)
+                }
             };
             /* Next one - SVN is always raw bitstream data.*/
             total_size_needed += core::mem::size_of::<libspdm_rs::spdm_measurement_block_dmtf_t>()
