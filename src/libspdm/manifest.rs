@@ -184,7 +184,7 @@ pub struct CeEvTriples<'a> {
 #[cbor(map)]
 pub struct CeMembershipTriples<'a> {
     #[b(0)]
-    ce_membership_triples: (EnvironmentMap<'a>, Vec<MeasurementMap<'a>>),
+    ce_membership_triples: [(EnvironmentMap<'a>, Vec<MeasurementMap<'a>>); 1],
 }
 
 #[derive(Debug, Encode, Decode, CborLen)]
@@ -292,7 +292,7 @@ pub fn generate_direct_manifest(
         .unwrap()
         .value_mut()
         .ce_ev_triples;
-    let measurement_maps = &mut ce_ev_triples.ce_membership_triples.1;
+    let measurement_maps = &mut ce_ev_triples.ce_membership_triples[0].1;
 
     for measurement_map in measurement_maps {
         if let Some(measurement_index) = measurement_map.mval.spdm_indirect {
