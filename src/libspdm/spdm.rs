@@ -1882,7 +1882,7 @@ pub unsafe extern "C" fn libspdm_measurement_collection(
         _ => {
             let measurement_block =
                 measurement_ptr as *mut libspdm_rs::spdm_measurement_block_dmtf_t;
-            let measurement_block_size = match u32::from(measurements_index) {
+            let total_size_needed = match u32::from(measurements_index) {
                 1..=LIBSPDM_MEASUREMENT_BLOCK_HASH_NUMBER => {
                     libspdm_fill_measurement_image_hash_block(
                         use_bit_stream,
@@ -1914,45 +1914,13 @@ pub unsafe extern "C" fn libspdm_measurement_collection(
                 }
             } as u32;
 
-            if measurement_block_size == 0 {
+            if total_size_needed == 0 {
                 return libspdm_status_construct!(
                     LIBSPDM_SEVERITY_ERROR,
                     LIBSPDM_SOURCE_MEAS_COLLECT,
                     0x0001
                 );
             }
-
-            let total_size_needed = match u32::from(measurements_index) {
-                1..=LIBSPDM_MEASUREMENT_BLOCK_HASH_NUMBER => {
-                    if !use_bit_stream {
-                        core::mem::size_of::<libspdm_rs::spdm_measurement_block_dmtf_t>() as u32
-                            + hash_size
-                    } else {
-                        core::mem::size_of::<libspdm_rs::spdm_measurement_block_dmtf_t>() as u32
-                            + LIBSPDM_MEASUREMENT_RAW_DATA_SIZE
-                    }
-                }
-                LIBSPDM_MEASUREMENT_INDEX_SVN => {
-                    core::mem::size_of::<libspdm_rs::spdm_measurement_block_dmtf_t>() as u32
-                        + core::mem::size_of::<libspdm_rs::spdm_measurements_secure_version_number_t>(
-                        ) as u32
-                }
-                SPDM_MEASUREMENT_BLOCK_MEASUREMENT_INDEX_MEASUREMENT_MANIFEST => {
-                    measurement_block_size
-                }
-                SPDM_MEASUREMENT_BLOCK_MEASUREMENT_INDEX_DEVICE_MODE => {
-                    core::mem::size_of::<libspdm_rs::spdm_measurement_block_dmtf_t>() as u32
-                        + core::mem::size_of::<libspdm_rs::spdm_measurements_device_mode_t>() as u32
-                }
-                _ => {
-                    *measurements_count = 0;
-                    return libspdm_status_construct!(
-                        LIBSPDM_SEVERITY_ERROR,
-                        LIBSPDM_SOURCE_MEAS_COLLECT,
-                        0x0000
-                    );
-                }
-            };
 
             if total_size_needed > (*measurements_size).try_into().unwrap() {
                 return libspdm_status_construct!(
