@@ -210,6 +210,67 @@ pub fn do_tcg_dice_evidence_binding_request_checks(cntx: *mut c_void) -> Result<
     Ok(())
 }
 
+/// Request all measurement from the requester as both the measurement hash
+/// and raw-bitstream value of the measurement.
+pub fn request_all_measurements(cntx: *mut c_void) -> Result<(), u32> {
+    info!("---Probing all measurements as both hash and raw-bitstreams---");
+    let mut measurement_record: [u8; LIBSPDM_MAX_MEASUREMENT_RECORD_SIZE as usize] =
+        [0; LIBSPDM_MAX_MEASUREMENT_RECORD_SIZE as usize];
+    let slot_id = 0;
+    for measurement_index in 0..=0xFE {
+        for request_iter in 0..2 {
+            let (raw_bitstream, format) = if request_iter == 0 {
+                (true, "raw-bitstream")
+            } else {
+                (false, "hash")
+            };
+            unsafe {
+                let ret = get_measurement(
+                    cntx,
+                    slot_id,
+                    raw_bitstream,
+                    measurement_index,
+                    &mut measurement_record,
+                );
+
+                if ret.is_err() {
+                    warn!(
+                        "No measurement at index 0x{:x?} as {format}",
+                        measurement_index
+                    );
+                } else {
+                    let (_, measurement_record_length) = ret.unwrap();
+                    // measurement_record shall point to the measurement block,
+                    // which contains the DMTF measurement specification format
+                    let dmtf_spec_measurement_value_type_index = core::mem::size_of::<
+                        libspdm::libspdm_rs::spdm_measurement_block_common_header_t,
+                    >();
+                    assert!(dmtf_spec_measurement_value_type_index == 4);
+                    let measurement_value_type =
+                        measurement_record[dmtf_spec_measurement_value_type_index] as u32;
+                    // Reference SPDM Spec 1.3: 489 Table 50 — GET_MEASUREMENTS request attributes
+                    if raw_bitstream && (measurement_value_type & libspdm::libspdm_rs::SPDM_MEASUREMENT_BLOCK_MEASUREMENT_TYPE_RAW_BIT_STREAM == 0) {
+                        // Bit [7] not set -> Responder returned a hash
+                        warn!("Requested {format} for index {measurement_index}, responder returned hash only!");
+                    } else if !raw_bitstream && (measurement_value_type & libspdm::libspdm_rs::SPDM_MEASUREMENT_BLOCK_MEASUREMENT_TYPE_RAW_BIT_STREAM == 1) {
+                        // Bit [7] set -> Responder returned a Raw-bitstream
+                        warn!("Requested {format} for index {measurement_index}, responder returned raw-bitstream!");
+                    }
+
+                    info!("Measurement found at index 0x{:X?}", measurement_index);
+                    info!(
+                        "Measurement as {format}: {:x?}",
+                        &measurement_record[..measurement_record_length as usize]
+                    );
+                }
+            }
+        }
+    }
+
+    info!(" Probing Measurements ... [OK]");
+    Ok(())
+}
+
 /// # Summary
 ///
 /// Entry point for the test suite. Run the tests required to tests a
@@ -234,11 +295,17 @@ pub unsafe fn start_tests(cntx: *mut c_void, backend: TestBackend) -> ! {
             if let Err(libpsm_err) = do_tcg_dice_evidence_binding_request_checks(cntx) {
                 panic!("    request failed with libspdm err: {:x}", libpsm_err);
             }
+            if let Err(e) = request_all_measurements(cntx) {
+                panic!("    failed to request all measurements err:  {:x}", e);
+            }
         }
         TestBackend::SocketBackend => {
             responder_validator_tests(cntx).unwrap();
             if let Err(libpsm_err) = do_tcg_dice_evidence_binding_request_checks(cntx) {
                 panic!("    request failed with libspdm err: {:x}", libpsm_err);
+            }
+            if let Err(e) = request_all_measurements(cntx) {
+                panic!("    failed to request all measurements err:  {:x}", e);
             }
         }
     }
