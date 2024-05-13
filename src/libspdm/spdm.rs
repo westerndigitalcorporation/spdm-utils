@@ -874,20 +874,27 @@ pub unsafe fn get_num_meas_blocks(
 pub unsafe fn get_measurement(
     context: *mut c_void,
     slot_id: u8,
+    raw_bitstream: bool,
     measurement_index: u32,
     measurement_record: &mut [u8; LIBSPDM_MAX_MEASUREMENT_RECORD_SIZE as usize],
 ) -> Result<(u8, u32), u32> {
     let mut number_of_blocks: u8 = 0;
     let mut measurement_record_length: u32 = measurement_record.len() as u32;
     let measurement_record_ptr: *mut c_void = measurement_record as *mut _ as *mut c_void;
+    let mut decode_measurement_manifest = true;
 
-    let request_attribute =
-        if measurement_index == SPDM_MEASUREMENT_BLOCK_MEASUREMENT_INDEX_MEASUREMENT_MANIFEST {
-            // Request the raw bitstream, so we can decode it for readability.
-            libspdm_rs::SPDM_GET_MEASUREMENTS_REQUEST_ATTRIBUTES_RAW_BIT_STREAM_REQUESTED as u8
-        } else {
-            libspdm_rs::SPDM_GET_MEASUREMENTS_REQUEST_ATTRIBUTES_GENERATE_SIGNATURE as u8
-        };
+    if measurement_index as u32 == SPDM_MEASUREMENT_BLOCK_MEASUREMENT_INDEX_MEASUREMENT_MANIFEST
+        && !raw_bitstream
+    {
+        warn!("The measurement manifest will not be decoded unless fetched as raw-bitstream!");
+        decode_measurement_manifest = false;
+    }
+
+    let request_attribute = if raw_bitstream {
+        libspdm_rs::SPDM_GET_MEASUREMENTS_REQUEST_ATTRIBUTES_RAW_BIT_STREAM_REQUESTED as u8
+    } else {
+        libspdm_rs::SPDM_GET_MEASUREMENTS_REQUEST_ATTRIBUTES_GENERATE_SIGNATURE as u8
+    };
 
     let ret = libspdm_get_measurement(
         context,
@@ -906,7 +913,9 @@ pub unsafe fn get_measurement(
     }
 
     // Measurement Manifest
-    if measurement_index == SPDM_MEASUREMENT_BLOCK_MEASUREMENT_INDEX_MEASUREMENT_MANIFEST {
+    if measurement_index == SPDM_MEASUREMENT_BLOCK_MEASUREMENT_INDEX_MEASUREMENT_MANIFEST
+        && decode_measurement_manifest
+    {
         // Let's attempt to decode this (assuming CBOR encoding),
         // a decoding failure likely implies that this was not CBOR encoded/serialised properly.
 

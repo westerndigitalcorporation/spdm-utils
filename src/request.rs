@@ -418,7 +418,10 @@ pub fn prepare_request(
                 }
                 info!("Responder {}", spdm_version);
             }
-            RequestCode::GetMeasurement { index } => {
+            RequestCode::GetMeasurement {
+                index,
+                raw_bitstream,
+            } => {
                 let mut measurement_record: [u8; LIBSPDM_MAX_MEASUREMENT_RECORD_SIZE as usize] =
                     [0; LIBSPDM_MAX_MEASUREMENT_RECORD_SIZE as usize];
                 info!("Fetching measurement Index: 0x{:X}", index);
@@ -441,6 +444,7 @@ pub fn prepare_request(
                     let (_, measurement_record_length) = spdm::get_measurement(
                         cntx_ptr,
                         session_info.slot_id,
+                        raw_bitstream,
                         index as u32,
                         &mut measurement_record,
                     )?;

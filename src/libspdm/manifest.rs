@@ -301,6 +301,7 @@ pub fn generate_direct_manifest(
                 get_measurement(
                     context,
                     slot_id,
+                    true,
                     measurement_index.index[0] as u32,
                     &mut measurement_record,
                 )
