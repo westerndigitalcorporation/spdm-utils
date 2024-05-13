@@ -207,6 +207,8 @@ pub enum RequestCode {
     GetVersion {},
     GetMeasurement {
         index: u8,
+        #[clap(long, default_value_t = false)]
+        raw_bitstream: bool,
     },
     GetMeasurements {},
     GetCapabilities {},

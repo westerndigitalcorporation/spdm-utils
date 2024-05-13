@@ -132,7 +132,13 @@ pub fn do_tcg_dice_evidence_binding_request_checks(cntx: *mut c_void) -> Result<
                 [0; LIBSPDM_MAX_MEASUREMENT_RECORD_SIZE as usize];
 
             let ret = unsafe {
-                get_measurement(cntx, slot_id, measurement_index, &mut measurement_record)
+                get_measurement(
+                    cntx,
+                    slot_id,
+                    true,
+                    measurement_index,
+                    &mut measurement_record,
+                )
             };
 
             match ret {
