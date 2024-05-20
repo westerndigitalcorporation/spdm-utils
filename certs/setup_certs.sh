@@ -53,11 +53,16 @@ do
 		# "Test Device CA" but for other slots it might be the signed CSR
 		# from set certificate.
 
-		while openssl x509; do :; done < immutable.der | tail -14 > custom_device.cert
-		openssl x509 -req -in ../slot0/alias.req -out alias.cert -CA custom_device.cert -CAkey ../slot0/device.key -sha384 -days 3650 -set_serial 3 -extensions v3_inter -extfile ../openssl-alias.cnf
+		while openssl x509; do echo "%"; done < immutable.der | awk '
+    /-----BEGIN CERTIFICATE-----/ { f=1; rec="" }
+    f { rec = rec $0 ORS }
+    /-----END CERTIFICATE-----/ { f=0 }
+    END { if (f=="0") printf "%s", rec }
+' > custom_device.cert
+		openssl x509 -req -in ../slot0/alias.req -out alias.cert -CA custom_device.cert -CAkey ../slot0/device.key -sha384 -days 3650 -set_serial 3 -extensions alias_ca -extfile ../openssl.cnf
 
-		openssl x509 -req -in ../slot0/end_requester.req -out end_requester.cert -CA alias.cert -CAkey ../slot0/alias.key -sha384 -days 3650 -set_serial 4 -extensions v3_end -extfile ../openssl-alias.cnf
-		openssl x509 -req -in ../slot0/end_responder.req -out end_responder.cert -CA alias.cert -CAkey ../slot0/alias.key -sha384 -days 3650 -set_serial 5 -extensions v3_end -extfile ../openssl-alias.cnf
+		openssl x509 -req -in ../slot0/end_requester.req -out end_requester.cert -CA alias.cert -CAkey ../slot0/alias.key -sha384 -days 3650 -set_serial 4 -extensions leaf -extfile ../openssl.cnf
+		openssl x509 -req -in ../slot0/end_responder.req -out end_responder.cert -CA alias.cert -CAkey ../slot0/alias.key -sha384 -days 3650 -set_serial 5 -extensions leaf -extfile ../openssl.cnf
 
 		# Generate der files
 		openssl asn1parse -in alias.cert -out alias.cert.der
