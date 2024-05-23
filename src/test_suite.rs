@@ -24,6 +24,9 @@ use libspdm::libspdm_rs::{
     LIBSPDM_MAX_MEASUREMENT_RECORD_SIZE, LIBSPDM_SEVERITY_ERROR, LIBSPDM_SOURCE_CORE,
 };
 use libspdm::libspdm_status_construct;
+use std::fs::File;
+use std::io::Write;
+use std::process::Command;
 
 /// Defines the type of backend to be used in testing
 pub enum TestBackend {
@@ -273,6 +276,139 @@ pub fn request_all_measurements(cntx: *mut c_void) -> Result<(), u32> {
 
 /// # Summary
 ///
+/// Request a CSR from the responder, sign it, then set the signed certificate
+/// in `slot_id` of the specified responder established by the `cntx`
+///
+/// # Parameter
+///
+/// * `cntx`: The SPDM context
+/// * `cert_slot_id`: Slot ID in which to set certificate [1, 7] are valid.
+///
+/// # Returns
+///
+/// Ok() Iff there were no error in setting the certificate, `reset-required`
+///      error return case is treated as success.
+/// Panics on any other error in attempt to set-certificate.
+pub fn test_set_certificate(cntx: *mut c_void, cert_slot_id: u8) -> Result<(), ()> {
+    if cert_slot_id >= 8 || cert_slot_id == 0 {
+        error!("Invalid cert-slot-id {cert_slot_id} specified for set-certificate");
+        return Err(());
+    }
+    let session_slot_id = 0;
+
+    let mut session_info = unsafe { spdm::start_session(cntx, session_slot_id, false).unwrap() };
+
+    // Do GetCsr
+    if let Err(rc) = request::prepare_request(
+        cntx,
+        RequestCode::GetCsr {},
+        0,    // Unused
+        None, // Unused
+        &mut session_info,
+    ) {
+        error!("Get CSR failed with libspdm error: 0x{:x}", rc);
+        return Err(());
+    }
+
+    let csr_response_path = std::path::Path::new("./csr_response.der");
+    if !csr_response_path.exists() {
+        error!("CSR Response does not exist!");
+        return Err(());
+    }
+
+    // Process the CSR, See `README: Getting a Certificate Signing Request` for
+    // more details on this process.
+
+    // 1. Convert the CSR Response to PEM
+    assert!(Command::new("openssl")
+        .arg("req")
+        .arg("-inform")
+        .arg("der")
+        .arg("-in")
+        .arg("./csr_response.der")
+        .arg("-out")
+        .arg("csr_response.req")
+        .output()
+        .expect("Failed to convert the CSR Response to PEM")
+        .status
+        .success());
+
+    // 2. Sign the CSR
+    assert!(Command::new("openssl")
+        .arg("x509")
+        .arg("-req")
+        .arg("-in")
+        .arg("csr_response.req")
+        .arg("-out")
+        .arg("csr_response.cert")
+        .arg("-CA")
+        .arg("./certs/slot0/inter.der")
+        .arg("-sha384")
+        .arg("-days")
+        .arg("3650")
+        .arg("-set_serial")
+        .arg("2")
+        .arg("-extensions")
+        .arg("device_ca")
+        .arg("-extfile")
+        .arg("./certs/openssl.cnf")
+        .output()
+        .expect("Failed to Sign the CSR")
+        .status
+        .success());
+
+    // 3. Convert the Certificate back to DER format
+    assert!(Command::new("openssl")
+        .arg("asn1parse")
+        .arg("-in")
+        .arg("csr_response.cert")
+        .arg("-out")
+        .arg("csr_response.cert.der")
+        .output()
+        .expect("Failed to execute openssl command")
+        .status
+        .success());
+
+    // 4. Combine all the immutable certificates
+    let immutables_certs = [
+        "./certs/slot0/ca.cert.der",
+        "./certs/slot0/inter.cert.der",
+        "./csr_response.cert.der",
+    ];
+
+    let output_cert_chain = "set-cert.der";
+    let mut output_file =
+        File::create(output_cert_chain).expect("Failed to create immutable cert-chain file");
+
+    for file in &immutables_certs {
+        let content = std::fs::read(file).expect("failed to read {file}");
+        output_file
+            .write_all(&content)
+            .expect("failed to write {file} to {output_file}");
+    }
+
+    // Do SetCertificate
+    let cert_path = "./set-cert.der".to_string();
+    if let Err(rc) = request::prepare_request(
+        cntx,
+        RequestCode::SetCertificate {},
+        cert_slot_id,
+        Some(cert_path),
+        &mut session_info,
+    ) {
+        // This cannot be the `reset-required` error case, as it is checked by
+        // 'prepare_request()` and treated as success.
+        error!("Failed to set certificate with libspdm error: 0x{:x}", rc);
+        assert!(false);
+    }
+
+    info!("Device Certificate successfully set for slot {cert_slot_id}");
+    info!("Set Certificate ... [OK]");
+    Ok(())
+}
+
+/// # Summary
+///
 /// Entry point for the test suite. Run the tests required to tests a
 /// specified `TestBackend`
 ///
@@ -298,6 +434,7 @@ pub unsafe fn start_tests(cntx: *mut c_void, backend: TestBackend) -> ! {
             if let Err(e) = request_all_measurements(cntx) {
                 panic!("    failed to request all measurements err:  {:x}", e);
             }
+            assert!(test_set_certificate(cntx, 1).is_ok());
         }
         TestBackend::SocketBackend => {
             responder_validator_tests(cntx).unwrap();
@@ -307,6 +444,7 @@ pub unsafe fn start_tests(cntx: *mut c_void, backend: TestBackend) -> ! {
             if let Err(e) = request_all_measurements(cntx) {
                 panic!("    failed to request all measurements err:  {:x}", e);
             }
+            assert!(test_set_certificate(cntx, 1).is_ok());
         }
     }
     info!("Testing Complete ...");
