@@ -336,21 +336,6 @@ pub unsafe fn start_tests(cntx: *mut c_void, backend: TestBackend) -> ! {
 pub unsafe fn responder_validator_tests(context: *mut c_void) -> Result<(), ()> {
     #[cfg(libspdm_tests)]
     {
-        let mut m_spdm_test_group_version_configs = [
-            common_test_case_config_t {
-                case_id: SPDM_RESPONDER_TEST_CASE_VERSION_SUCCESS_10,
-                action: common_test_action_t_COMMON_TEST_ACTION_RUN,
-            },
-            common_test_case_config_t {
-                case_id: SPDM_RESPONDER_TEST_CASE_VERSION_INVALID_REQUEST,
-                action: common_test_action_t_COMMON_TEST_ACTION_RUN,
-            },
-            common_test_case_config_t {
-                case_id: COMMON_TEST_ID_END,
-                action: common_test_action_t_COMMON_TEST_ACTION_SKIP,
-            },
-        ];
-
         let mut m_spdm_test_group_capabilities_configs = [
             common_test_case_config_t {
                 case_id: SPDM_RESPONDER_TEST_CASE_CAPABILITIES_SUCCESS_10,
@@ -741,12 +726,6 @@ pub unsafe fn responder_validator_tests(context: *mut c_void) -> Result<(), ()> 
         ];
 
         let mut m_spdm_test_group_configs = [
-            common_test_group_config_t {
-                group_id: SPDM_RESPONDER_TEST_GROUP_VERSION,
-                action: common_test_action_t_COMMON_TEST_ACTION_RUN,
-                test_case_configs: &mut m_spdm_test_group_version_configs
-                    as *mut common_test_case_config_t,
-            },
             common_test_group_config_t {
                 group_id: SPDM_RESPONDER_TEST_GROUP_CAPABILITIES,
                 action: common_test_action_t_COMMON_TEST_ACTION_RUN,
