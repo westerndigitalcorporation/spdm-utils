@@ -264,7 +264,7 @@ openssl req -inform der -in ./csr_response.der -out csr_response.req
 You can now sign the CSR
 
 ```shell
-openssl x509 -req -in csr_response.req -out csr_response.cert -CA ./certs/slot0/inter.der -sha384 -days 3650 -set_serial 3 -extensions alias_ca -extfile ./certs/openssl.cnf
+openssl x509 -req -in csr_response.req -out csr_response.cert -CA ./certs/slot0/inter.der -sha384 -days 3650 -set_serial 2 -extensions device_ca -extfile ./certs/openssl.cnf
 ```
 
 Then convert the certificate back to DER
