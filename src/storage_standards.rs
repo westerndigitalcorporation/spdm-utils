@@ -4,6 +4,12 @@
 
 //! Contains all of the handlers for creating SPDM requests.
 
+/// SCSI SPDM Relatred ADDITIONAL SENSE CODE (ASQ)
+#[derive(Debug)]
+pub enum ScsiAsc {
+    InvalidFieldInCdb = 0x24, // ASCQ = 0x00
+}
+
 /// NVME Completion Queue Command Completion Status
 #[derive(Debug)]
 pub enum NvmeCmdStatus {
