@@ -5,6 +5,7 @@
 #include <pci/pci.h>
 #include <scsi/scsi.h>
 #include <scsi/sg.h>
+#include <libnvme.h>
 
 #include <library/spdm_common_lib.h>
 #include <library/spdm_crypt_lib.h>

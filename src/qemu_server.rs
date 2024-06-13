@@ -520,6 +520,7 @@ pub fn register_device(
                     Some(qemu_receive_message_mctp),
                 );
             }
+            TransportLayer::Scsi | TransportLayer::Nvme => todo!()
         }
 
         libspdm_register_device_buffer_func(
