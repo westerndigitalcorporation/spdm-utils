@@ -9,6 +9,10 @@
 #ifdef NVME
 #include <libnvme.h>
 #endif // NVME
+#ifdef SCSI
+#include <scsi/scsi.h>
+#include <scsi/sg.h>
+#endif //SCSI
 #endif // RUST_STD
 
 #include <library/spdm_common_lib.h>

@@ -169,10 +169,10 @@ cargo build --lib --features=no_std
 
 ## Build with specific transports enabled
 
-`spdm-utils` suppports building the binary with two transport options, `doe`
-and `nvme`. Which means you can install only the dependencies needed by those
-transports and build the binary as below. Note, we enable other transports that
-do not have external dependecies.
+`spdm-utils` suppports building the binary with three transport options, `doe`,
+`scsi` and `nvme`. Which means you can install only the dependencies needed by
+those transports and build the binary as below. Note, we enable other transports
+that do not have external dependecies.
 
 ```shell
 # To build with PCI DoE transport support
@@ -182,6 +182,9 @@ or
 
 # To build with Storage NVMe transport support
 $ cargo build --features nvme
+
+# To build with SCSI and NVMe support
+$ cargo build --features nvme,scsi
 ```
 
 ## Configuring the Logger
