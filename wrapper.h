@@ -3,6 +3,8 @@
 // Copyright (C) 2022, Western Digital Corporation or its affiliates.
 
 #include <pci/pci.h>
+#include <scsi/scsi.h>
+#include <scsi/sg.h>
 
 #include <library/spdm_common_lib.h>
 #include <library/spdm_crypt_lib.h>
@@ -13,6 +15,7 @@
 #include <library/spdm_secured_message_lib.h>
 #include <library/spdm_transport_pcidoe_lib.h>
 #include <library/spdm_transport_mctp_lib.h>
+#include <library/spdm_transport_storage_lib.h>
 #ifdef LIBSPDM_TESTS
 #include <library/spdm_responder_conformance_test_lib.h>
 #endif

@@ -15,6 +15,7 @@ use libspdm::libspdm_rs::*;
 use nix::unistd::geteuid;
 use sha2::{Digest, Sha256, Sha384, Sha512};
 use std::fs::File;
+use nix::errno::Errno;
 use std::fs::OpenOptions;
 use std::io::copy;
 use std::path::Path;
@@ -30,6 +31,7 @@ mod cli_helpers;
 mod doe_pci_cfg;
 mod qemu_server;
 mod request;
+mod scsi;
 mod socket_client;
 mod socket_server;
 mod tcg_concise_evidence_binding;
@@ -41,6 +43,14 @@ mod usb_i2c;
 struct Args {
     #[command(subcommand)]
     command: Commands,
+
+    /// Use SCSI commands for the target device
+    #[arg(short, long, requires_ifs([("true", "blk_dev_path")]))]
+    scsi: bool,
+
+    /// Path to the SCSI block device
+    #[arg(long)]
+    blk_dev_path: Option<String>,
 
     /// Use the Linux PCIe extended configuration backend
     /// This is generally run on the Linux host machine
@@ -635,6 +645,9 @@ async fn main() -> Result<(), ()> {
 
     let mut count = 0;
 
+    cli.scsi.then(|| {
+        count += 1;
+    });
     cli.doe_pci_cfg.then(|| {
         count += 1;
     });
@@ -682,6 +695,19 @@ async fn main() -> Result<(), ()> {
         }
 
         usb_i2c::register_device(cntx_ptr, cli.usb_i2c_dev, cli.usb_i2c_baud)?;
+    } else if cli.scsi {
+        warn!(
+            "Using experimental SCSI support, for dev at: {:?}",
+            cli.blk_dev_path
+        );
+        scsi::cmd_scsi_get_info(&cli.blk_dev_path.clone().unwrap()).unwrap();
+        if let Err(e) = scsi::cmd_scsi_get_sec_info(&cli.blk_dev_path.clone().unwrap()) {
+            if e == Errno::ENOTSUP {
+                error!("SPDM is not supported by this device");
+                return Err(());
+            }
+        }
+        scsi::register_device(cntx_ptr, &cli.blk_dev_path.clone().unwrap())?;
     } else if cli.qemu_server {
         if let Commands::Request { .. } = cli.command {
             error!("QEMU Server does not support running an SPDM requester");
