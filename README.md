@@ -42,7 +42,10 @@ See LICENSE-APACHE, LICENSE-MIT, and COPYRIGHT for details.
     - [Setting the certificate](#setting-the-certificate)
     - [Getting a Certificate Signing Request](#getting-a-certificate-signing-request)
     - [Signing a Certificate Signing Request](#signing-a-certificate-signing-request)
-- [QEMU SPDM Device Emulation](#qemu-spdm-device-emulation)
+- [Responder emulation with QEMU](#responder-emulation-with-qemu)
+    - [Using a QEMU emulated NVMe device with SPDM over DoE](#using-a-qemu-emulated-nvme-device-with-spdm-over-doe)
+    - [Using a QEMU emulated NVMe device with SPDM over Storage](#using-a-qemu-emulated-nvme-device-with-spdm-over-storage)
+- [tcmu-runner SPDM Device Emulation](#tcmu-runner-spdm-device-emulation)
 
 # Dependencies
 
@@ -336,8 +339,7 @@ cd certs
 ./setup_certs.sh ../target/debug/spdm_utils
 cd ../
 ```
-
-# QEMU SPDM Device Emulation
+# Responder emulation with QEMU
 
 SPDM-Utils supports binding to QEMU to implement an SPDM responder side to
 an emulated device in QEMU. SPDM support for QEMU is not upstream yet, however,
@@ -348,8 +350,11 @@ over DOE.
 For example, this may be an emulated NVMe device
 in QEMU that binds to SPDM-Utils for the SPDM responder implementation.
 
-With the current SPDM implementation in QEMU, the only transport layer supported
-is DOE. SPDM-Utils must be started before QEMU for this to work.
+## Using a QEMU emulated NVMe device with SPDM over DoE
+
+For this example, we are using DOE. This is the transport protocol that
+SPDM-Utils defaults to when not explicitly specified. SPDM-Utils must be started
+before QEMU for this to work.
 
 ```shell
 $ ./target/debug/spdm_utils --qemu-server response
@@ -372,3 +377,78 @@ should show (ensure that INFO log level is enabled in SPDM-Utils).
 ```
 
 Now QEMU is ready to use SPDM-Utils as an SPDM responder for an emulated device.
+
+## Using a QEMU emulated NVMe device with SPDM over Storage
+
+In this example, let's look at using the an emulated NVMe device on QEMU that
+uses the SPDM over Storage transport protocol. That is, SPDM messages are
+communicated to the NVMe device through the NVMe Security Send/Receive commands.
+
+As before, we need to start SPDM-Utils before QEMU, the following options are
+required.
+
+```shell
+$ ./target/debug/spdm_utils --qemu-server --spdm-transport-protocol=nvme response
+
+[2024-06-07T00:09:06Z DEBUG spdm_utils] Logger initialisation [OK]
+[2024-06-07T00:09:06Z INFO  spdm_utils] Using Nvme transport for QEMU
+[2024-06-07T00:09:06Z DEBUG spdm_utils::qemu_server] Setting up a server on [port: 2323, ip: 127.0.0.1]
+[2024-06-07T00:09:06Z INFO  spdm_utils::qemu_server] Server started, waiting for qemu on port: 2323
+```
+
+You can now start the QEMU guest and the connection to the SPDM-Utils responder
+server shall be established.
+
+# tcmu-runner SPDM Device Emulation
+
+tcmu-runner is a daemon that handles the user-space side of the LIO TCM-User
+backstore. Using `tcmu-runner` and the `target_core_user` kernel module we
+can emulate a ZBC block device that supports SPDM. We use SPDM-Utils to
+encode/decode the messages as a responder. Any tool can then be used to
+interact with the block device as a requester. In this example we use
+SPDM-Utils for this as well.
+
+### Start SPDM-Utils response server
+
+First we want to start a SPDM-Utils server to act as a SPDM responder.
+
+```shell
+$ ./target/debug/spdm_utils --spdm-transport-protocol scsi --qemu-server response
+```
+
+### Start tcmu-runner
+
+Then start `tcmu-runner`, it will connect to SPDM-Utils
+
+```shell
+$ sudo tcmu-runner --debug
+```
+
+### Create a block device
+
+We can now setup the block device
+
+```shell
+$ sudo ./scripts/scsi/create-disk-spdm.sh tcmudevel 2 HM 128 10
+```
+
+If you now run `lsscsi` you should see a `TCMU` entry
+
+```
+[2:0:1:0]    zbc     LIO-ORG  TCMU ZBC device  0002  /dev/sda
+```
+
+### Run a requester (SPDM-Utils)
+
+```shell
+$ sudo ./target/debug/spdm_utils --scsi --blk-dev-path=/dev/sda request get-version
+```
+
+### Teardown/remove the created block device.
+
+To remove the block device, the following script can be used while `tcmu-runner`
+is still active
+
+```shell
+$ sudo ./teardown-disk.sh tcmudevel
+```
