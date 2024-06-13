@@ -5,6 +5,7 @@
 #include <pci/pci.h>
 #include <scsi/scsi.h>
 #include <scsi/sg.h>
+#include <libnvme.h>
 
 #include <library/spdm_common_lib.h>
 #include <library/spdm_crypt_lib.h>
@@ -24,3 +25,4 @@
 #include <internal/libspdm_common_lib.h>
 #include <internal/libspdm_requester_lib.h>
 #include <industry_standard/pcidoe.h>
+#include <industry_standard/storage.h>
