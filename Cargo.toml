@@ -15,6 +15,7 @@ default = ["std"]
 libspdm_tests = []
 pci = []
 nvme = []
+scsi = []
 
 no_std = []
 std = [

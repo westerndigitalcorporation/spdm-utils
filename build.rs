@@ -79,6 +79,10 @@ fn main() {
         if cfg!(feature = "nvme") {
             builder = builder.clang_arg("-DNVME");
         }
+
+        if cfg!(feature = "scsi") {
+            builder = builder.clang_arg("-DSCSI");
+        }
     }
 
     if let Ok(sysroot) = env::var("STAGING_DIR") {

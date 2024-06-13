@@ -11,6 +11,7 @@
 use clap::{Parser, Subcommand};
 use futures::future::join_all;
 use libspdm::libspdm_rs::*;
+use nix::errno::Errno;
 use nix::unistd::geteuid;
 use sha2::{Digest, Sha256, Sha384, Sha512};
 use std::fs::File;
@@ -22,7 +23,6 @@ use tokio::task;
 extern crate log;
 use env_logger::Env;
 use libspdm::{responder, responder::CertModel, spdm};
-use nix::errno::Errno;
 use once_cell::sync::Lazy;
 
 pub static SOCKET_PATH: &str = "SPDM-Utils-loopback-socket";
@@ -35,6 +35,8 @@ mod io_buffers;
 mod nvme;
 mod qemu_server;
 mod request;
+#[cfg(feature = "scsi")]
+mod scsi;
 mod storage_standards;
 mod tcg_concise_evidence_binding;
 mod tcp_client;
@@ -49,19 +51,25 @@ const NVME_MSG: &str = "  - NVMe support (compile with --features nvme)\n";
 #[cfg(feature = "nvme")]
 const NVME_MSG: &str = "";
 
+#[cfg(not(feature = "scsi"))]
+const SCSI_MSG: &str = "  - SCSI support (compile with --features scsi)\n";
+#[cfg(feature = "scsi")]
+const SCSI_MSG: &str = "";
+
 #[cfg(not(feature = "pci"))]
 const PCI_MSG: &str = "  - PCI/DOE support (compile with --features pci)\n";
 #[cfg(feature = "pci")]
 const PCI_MSG: &str = "";
 
 const DISABLED_FEATURES: &str = formatcp!(
-    "{}{}{}",
-    if cfg!(all(feature = "nvme", feature = "pci")) {
+    "{}{}{}{}",
+    if cfg!(all(feature = "nvme", feature = "pci", feature = "scsi")) {
         ""
     } else {
         "DISABLED FEATURES:\n"
     },
     NVME_MSG,
+    SCSI_MSG,
     PCI_MSG
 );
 
@@ -87,8 +95,13 @@ struct Args {
     #[arg(long, default_value_t = 1)]
     nsid: u32,
 
-    /// Path to the block device
-    #[cfg(feature = "nvme")]
+    /// Use SCSI commands for the target device
+    #[cfg(feature = "scsi")]
+    #[arg(short, long, requires_ifs([("true", "blk_dev_path")]))]
+    scsi: bool,
+
+    /// Path to the block device (SCSI/NVMe)
+    #[cfg(any(feature = "nvme", feature = "scsi"))]
     #[arg(long)]
     blk_dev_path: Option<String>,
 
@@ -746,7 +759,10 @@ async fn main() -> Result<(), ()> {
     cli.nvme.then(|| {
         count += 1;
     });
-
+    #[cfg(feature = "scsi")]
+    cli.scsi.then(|| {
+        count += 1;
+    });
     #[cfg(feature = "pci")]
     cli.doe_pci_cfg.then(|| {
         count += 1;
@@ -777,6 +793,10 @@ async fn main() -> Result<(), ()> {
         }
         #[cfg(feature = "nvme")]
         if cli.nvme {
+            need_root = true;
+        }
+        #[cfg(feature = "scsi")]
+        if cli.scsi {
             need_root = true;
         }
 
@@ -810,7 +830,6 @@ async fn main() -> Result<(), ()> {
             error!("Only MCTP supported over USB I2C");
             return Err(());
         }
-
         usb_i2c::register_device(cntx_ptr, cli.usb_i2c_dev, cli.usb_i2c_baud)?;
     } else if cli.qemu_server {
         if let Commands::Request { .. } = cli.command {
@@ -864,7 +883,19 @@ async fn main() -> Result<(), ()> {
             nvme::register_device(cntx_ptr, &cli.blk_dev_path.clone().unwrap(), cli.nsid).unwrap();
         }
 
-        #[cfg(not(any(feature = "nvme", feature = "pci")))]
+        #[cfg(feature = "scsi")]
+        if cli.scsi {
+            scsi::cmd_scsi_get_info(&cli.blk_dev_path.clone().unwrap()).unwrap();
+            if let Err(e) = scsi::cmd_scsi_get_sec_info(&cli.blk_dev_path.clone().unwrap()) {
+                if e == Errno::ENOTSUP {
+                    error!("SPDM is not supported by this device");
+                }
+                return Err(());
+            }
+            scsi::register_device(cntx_ptr, &cli.blk_dev_path.clone().unwrap())?;
+        }
+
+        #[cfg(not(any(feature = "nvme", feature = "pci", feature = "scsi")))]
         {
             error!("No supported backend specified");
             return Err(());
@@ -894,16 +925,24 @@ async fn main() -> Result<(), ()> {
                 )?;
             }
 
+            #[cfg(feature = "scsi")]
+            if cli.scsi {
+                trans_set = true;
+                spdm::setup_transport_layer(
+                    cntx_ptr,
+                    spdm::TransportLayer::Storage,
+                    spdm::LIBSPDM_MAX_SPDM_MSG_SIZE,
+                )?;
+            }
+
             #[cfg(feature = "pci")]
-            {
-                if cli.doe_pci_cfg {
-                    trans_set = true;
-                    spdm::setup_transport_layer(
-                        cntx_ptr,
-                        spdm::TransportLayer::Doe,
-                        spdm::LIBSPDM_MAX_SPDM_MSG_SIZE,
-                    )?;
-                }
+            if cli.doe_pci_cfg {
+                trans_set = true;
+                spdm::setup_transport_layer(
+                    cntx_ptr,
+                    spdm::TransportLayer::Doe,
+                    spdm::LIBSPDM_MAX_SPDM_MSG_SIZE,
+                )?;
             }
 
             // If we are QEMU response server, we could be here
