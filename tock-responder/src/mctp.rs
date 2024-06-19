@@ -268,10 +268,7 @@ unsafe extern "C" fn tock_receive_message(
 
     let len = payload.len() + 1;
     // The `MCTP_PAYLOAD_OFFSET-1`` is the SPDM MCTP Message type, lets retain this
-    recv_buf.copy_within(
-        MCTP_PAYLOAD_OFFSET - 1..(message_len - 1),
-        0,
-    );
+    recv_buf.copy_within(MCTP_PAYLOAD_OFFSET - 1..(message_len - 1), 0);
 
     #[cfg(feature = "spdm_debug")]
     {
