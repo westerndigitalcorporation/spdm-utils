@@ -2270,8 +2270,8 @@ pub unsafe extern "C" fn libspdm_encap_challenge_opaque_data(
 ///           ii. Requester must not request a CsrTrackingTag [1, 7], only 0
 ///                 allowed.
 ///
-///       If an spdm-utils responder and requester is used, this should not
-///         be problematic.
+/// If an spdm-utils responder and requester is used, this should not
+/// be problematic.
 ///
 /// Saves a certificate pointed to by `cert_chain` to device non-volatile memory
 /// into the respective `slot_id`. Once saved, import the file and use it as
