@@ -13,6 +13,7 @@ jobs:
       - uses: actions/checkout@v2
         with:
           submodules: recursive
+
       - name: Install Rust toolchain
         uses: actions-rs/toolchain@v1
         with:
@@ -65,3 +66,68 @@ jobs:
       #   uses: actions-rs/cargo@v1
       #   with:
       #     command: clippy
+
+      - name: Format Tock Responder
+        run: pushd tock-responder && cargo fmt --all -- --check && popd
+
+      - name: Install ARM toolchain
+        uses: carlosperate/arm-none-eabi-gcc-action@v1
+        with:
+          release: latest
+
+      - name: Install elf2tab
+        run: cargo install elf2tab
+
+      - name: Build ARM embedded libspdm
+        run: |
+          pushd third-party/libspdm; \
+          mkdir -p build_no_std_arm; \
+          cd build_no_std_arm; \
+          cmake \
+            -DARCH=arm \
+            -DTOOLCHAIN=ARM_GNU_BARE_METAL \
+            -DTARGET=Release \
+            -DCRYPTO=mbedtls \
+            -DDISABLE_TESTS=1 \
+            -DMARCH=armv7e-m \
+            -DDISABLE_LTO=1 \
+            -DCMAKE_C_FLAGS=" \
+                  -DLIBSPDM_ENABLE_CAPABILITY_CHUNK_CAP=1 \
+                  -DMBEDTLS_SKIP_TIME_CHECK \
+                  -DLIBSPDM_ENABLE_CAPABILITY_EVENT_CAP=0 \
+                  " \
+            .. ; \
+          make -j8; \
+          popd;
+
+      - name: Build Tock Responder for nRF52840
+        run: pushd tock-responder && make nrf52840_spdm_responder && popd
+
+      # Ubuntu uses riscv64-unknown-elf-gcc, which isn't supported by
+      # the libspdm CMake TOOLCHAIN
+      # - name: Install RISC-V toolchain
+      #   run: |
+      #     sudo apt-get install -y gcc-riscv64-unknown-elf
+
+      # - name: Build RISC-V embedded libspdm
+      #   run: |
+      #     pushd third-party/libspdm; \
+      #     mkdir -p build_no_std_riscv; \
+      #     cd build_no_std_riscv; \
+      #     cmake \
+      #       -DARCH=riscv32 \
+      #       -DTOOLCHAIN=RISCV_NONE \
+      #       -DTARGET=Release \
+      #       -DCRYPTO=mbedtls \
+      #       -DDISABLE_TESTS=1 \
+      #       -DCMAKE_C_FLAGS=" \
+      #             -DLIBSPDM_ENABLE_CAPABILITY_CHUNK_CAP=1 \
+      #             -DMBEDTLS_SKIP_TIME_CHECK \
+      #             -DLIBSPDM_ENABLE_CAPABILITY_EVENT_CAP=0 \
+      #             " \
+      #       .. ; \
+      #     make -j8; \
+      #     popd;
+
+      # - name: Build Tock Responder for OpenTitan
+      #   run: pushd tock-responder && make opentitan_spdm_responder && popd
