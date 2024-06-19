@@ -1,0 +1,67 @@
+name: SPDM-Utils-ci
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  ci-check:
+    runs-on: ubuntu-latest
+
+    # Steps represent a sequence of tasks that will be executed as part of the job
+    steps:
+      - uses: actions/checkout@v2
+        with:
+          submodules: recursive
+      - name: Install Rust toolchain
+        uses: actions-rs/toolchain@v1
+        with:
+          toolchain: stable
+          profile: minimal
+          default: true
+          components: rustfmt, clippy
+
+      - name: Install dependencies
+        run: |
+          sudo apt-get install -y cmake libclang-dev libpci-dev libssl-dev python3-dev gem; \
+          sudo gem install cbor-diag;
+
+      - name: Build libspdm
+        run: |
+          pushd third-party/libspdm; \
+          mkdir build; cd build; \
+          cmake \
+            -DARCH=x64 \
+            -DTOOLCHAIN=GCC \
+            -DTARGET=Debug \
+            -DCRYPTO=openssl \
+            -DENABLE_BINARY_BUILD=1 \
+            -DCOMPILED_LIBCRYPTO_PATH=/usr/lib/ \
+            -DCOMPILED_LIBSSL_PATH=/usr/lib/ \
+            -DDISABLE_TESTS=1 \
+            -DCMAKE_C_FLAGS="-DLIBSPDM_ENABLE_CAPABILITY_EVENT_CAP=0" \
+            .. ; \
+          make -j8; \
+          popd;
+
+      - name: Format
+        uses: actions-rs/cargo@v1
+        with:
+          command: fmt
+          args: --all -- --check
+
+      - name: Build
+        uses: actions-rs/cargo@v1
+        with:
+          command: build
+
+      - name: Test
+        uses: actions-rs/cargo@v1
+        with:
+          command: test
+
+      # TODO: Fixup clippy failures and enable this
+      # - name: Clippy
+      #   uses: actions-rs/cargo@v1
+      #   with:
+      #     command: clippy
