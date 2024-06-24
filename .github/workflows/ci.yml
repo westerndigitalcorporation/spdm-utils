@@ -57,9 +57,11 @@ jobs:
           command: build
 
       - name: Test
-        uses: actions-rs/cargo@v1
-        with:
-          command: test
+        run: |
+          cargo test; \
+          ./target/debug/spdm_utils --socket-server response & \
+          sleep 1; \
+          ./target/debug/spdm_utils --socket-client tests;
 
       # TODO: Fixup clippy failures and enable this
       # - name: Clippy
