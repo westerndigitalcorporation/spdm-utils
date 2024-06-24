@@ -83,6 +83,10 @@ jobs:
           pushd third-party/libspdm; \
           mkdir -p build_no_std_arm; \
           cd build_no_std_arm; \
+          find \
+            ../os_stub/mbedtlslib/include/mbedtls/libspdm_mbedtls_config.h \
+            -type f -exec \
+            sed -i 's|#define MBEDTLS_HAVE_TIME_DATE|// #define MBEDTLS_HAVE_TIME_DATE|g' {} + ; \
           cmake \
             -DARCH=arm \
             -DTOOLCHAIN=ARM_GNU_BARE_METAL \
@@ -95,6 +99,7 @@ jobs:
                   -DLIBSPDM_ENABLE_CAPABILITY_CHUNK_CAP=1 \
                   -DMBEDTLS_SKIP_TIME_CHECK \
                   -DLIBSPDM_ENABLE_CAPABILITY_EVENT_CAP=0 \
+                  -DMBEDTLS_PLATFORM_MS_TIME_ALT \
                   " \
             .. ; \
           make -j8; \
