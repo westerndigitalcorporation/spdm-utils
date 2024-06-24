@@ -38,7 +38,12 @@ Note, that the -DMARCH option must be specified with the respective ARM target a
 ```shell
 mkdir -p build_no_std_arm
 cd build_no_std_arm
-cmake -DARCH=arm -DTOOLCHAIN=ARM_GNU_BARE_METAL -DTARGET=Release -DCRYPTO=mbedtls -DDISABLE_TESTS=1 -DMARCH=armv7e-m -DDISABLE_LTO=1 -DCMAKE_C_FLAGS="-DLIBSPDM_ENABLE_CAPABILITY_CHUNK_CAP=1 -DMBEDTLS_SKIP_TIME_CHECK" ..
+
+# Comment out `MBEDTLS_HAVE_TIME_DATE` as Tock doesn't have
+# an accurate time.
+find ../os_stub/mbedtlslib/include/mbedtls/libspdm_mbedtls_config.h -type f -exec sed -i 's|#define MBEDTLS_HAVE_TIME_DATE|// #define MBEDTLS_HAVE_TIME_DATE|g' {} +
+
+cmake -DARCH=arm -DTOOLCHAIN=ARM_GNU_BARE_METAL -DTARGET=Release -DCRYPTO=mbedtls -DDISABLE_TESTS=1 -DMARCH=armv7e-m -DDISABLE_LTO=1 -DCMAKE_C_FLAGS="-DLIBSPDM_ENABLE_CAPABILITY_CHUNK_CAP=1 -DMBEDTLS_SKIP_TIME_CHECK -DLIBSPDM_ENABLE_CAPABILITY_EVENT_CAP=0 -DMBEDTLS_PLATFORM_MS_TIME_ALT" ..
 make -j8
 cd ../
 
@@ -52,7 +57,12 @@ pushd ../third-party/libspdm/
 
 mkdir -p build_no_std_riscv
 cd build_no_std_riscv
-cmake -DARCH=riscv32 -DTOOLCHAIN=RISCV_NONE -DTARGET=Release -DCRYPTO=mbedtls -DDISABLE_TESTS=1 -DCMAKE_C_FLAGS="-DLIBSPDM_ENABLE_CAPABILITY_CHUNK_CAP=1 -DMBEDTLS_SKIP_TIME_CHECK" ..
+
+# Comment out `MBEDTLS_HAVE_TIME_DATE` as Tock doesn't have
+# an accurate time.
+find ../os_stub/mbedtlslib/include/mbedtls/libspdm_mbedtls_config.h -type f -exec sed -i 's|#define MBEDTLS_HAVE_TIME_DATE|// #define MBEDTLS_HAVE_TIME_DATE|g' {} +
+
+cmake -DARCH=riscv32 -DTOOLCHAIN=RISCV_NONE -DTARGET=Release -DCRYPTO=mbedtls -DDISABLE_TESTS=1 -DCMAKE_C_FLAGS="-DLIBSPDM_ENABLE_CAPABILITY_CHUNK_CAP=1 -DMBEDTLS_SKIP_TIME_CHECK -DLIBSPDM_ENABLE_CAPABILITY_EVENT_CAP=0 -DMBEDTLS_PLATFORM_MS_TIME_ALT" ..
 make -j8
 cd ../
 ```
