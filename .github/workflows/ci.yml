@@ -96,7 +96,6 @@ jobs:
             -DMARCH=armv7e-m \
             -DDISABLE_LTO=1 \
             -DCMAKE_C_FLAGS=" \
-                  -DLIBSPDM_ENABLE_CAPABILITY_CHUNK_CAP=1 \
                   -DMBEDTLS_SKIP_TIME_CHECK \
                   -DLIBSPDM_ENABLE_CAPABILITY_EVENT_CAP=0 \
                   -DMBEDTLS_PLATFORM_MS_TIME_ALT \
@@ -126,7 +125,6 @@ jobs:
       #       -DCRYPTO=mbedtls \
       #       -DDISABLE_TESTS=1 \
       #       -DCMAKE_C_FLAGS=" \
-      #             -DLIBSPDM_ENABLE_CAPABILITY_CHUNK_CAP=1 \
       #             -DMBEDTLS_SKIP_TIME_CHECK \
       #             -DLIBSPDM_ENABLE_CAPABILITY_EVENT_CAP=0 \
       #             " \

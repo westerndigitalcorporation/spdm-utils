@@ -17,8 +17,7 @@
 //! testing SPDM/MCTP over SMBUS. Particularly useful for machines that do not
 //! have I2C/SMBUS pinouts exposed.
 //!
-//! This depends on `-DLIBSPDM_ENABLE_CAPABILITY_CHUNK_CAP=1`, see README for how to
-//! enable chunking support when building libspdm.
+//! This depends on `-DLIBSPDM_ENABLE_CAPABILITY_CHUNK_CAP=1`, which is the default.
 //!
 //! SAFETY: This file includes unsafe Rust.
 //!

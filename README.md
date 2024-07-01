@@ -111,7 +111,6 @@ Note that we build `libspdm` with chunking enabled. Chunking allows us to keep t
 in a single burst down by chunking the SPDM message data into frames of digestible size(s).
 
 For example, `usb_i2c` communication with the `tock-responder` requires it, so we enable it by default.
-You can disable `LIBSPDM_ENABLE_CAPABILITY_CHUNK_CAP` for other targets if required by omitting the `CFLAGS="-DLIBSPDM_ENABLE_CAPABILITY_CHUNK_CAP=1` in the invocation of `cmake`.
 
 ## Build the binary
 
