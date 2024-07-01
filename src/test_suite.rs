@@ -26,6 +26,7 @@ use libspdm::libspdm_rs::{
 use libspdm::libspdm_status_construct;
 use std::fs::File;
 use std::io::Write;
+use std::path::Path;
 use std::process::Command;
 
 /// Defines the type of backend to be used in testing
@@ -404,6 +405,13 @@ pub fn test_set_certificate(cntx: *mut c_void, cert_slot_id: u8) -> Result<(), (
 
     info!("Device Certificate successfully set for slot {cert_slot_id}");
     info!("Set Certificate ... [OK]");
+
+    // Cleanup after test slot
+    let cleanup_path = format!("./certs/slot{}", cert_slot_id);
+    if Path::new(&cleanup_path).is_dir() {
+        std::fs::remove_dir_all(cleanup_path).expect("Failed to cleanup test slot");
+    }
+
     Ok(())
 }
 
