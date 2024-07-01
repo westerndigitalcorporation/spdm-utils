@@ -412,6 +412,25 @@ pub fn test_set_certificate(cntx: *mut c_void, cert_slot_id: u8) -> Result<(), (
         std::fs::remove_dir_all(cleanup_path).expect("Failed to cleanup test slot");
     }
 
+    let csr_artifacts = [
+        "./csr_response.cert",
+        "./csr_response.cert.der",
+        "./csr_response.der",
+        "./csr_response.req",
+        "./set-cert.der",
+    ];
+
+    for artifact in csr_artifacts {
+        match std::fs::remove_file(artifact) {
+            Err(e) => {
+                if e.kind() == std::io::ErrorKind::NotFound {
+                    warn!("{:?}: does not exist", artifact)
+                }
+            }
+            _ => {}
+        }
+    }
+
     Ok(())
 }
 
