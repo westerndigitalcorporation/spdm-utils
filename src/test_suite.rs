@@ -450,30 +450,25 @@ pub fn test_set_certificate(cntx: *mut c_void, cert_slot_id: u8) -> Result<(), (
 pub unsafe fn start_tests(cntx: *mut c_void, backend: TestBackend) -> ! {
     match backend {
         TestBackend::DoeBackend => {
-            responder_validator_tests(cntx).unwrap();
             // Run DOE conformance tests
             test_discovery_basic().unwrap();
             test_discovery_all().unwrap();
             test_discovery_error().unwrap();
-            if let Err(libpsm_err) = do_tcg_dice_evidence_binding_request_checks(cntx) {
-                panic!("    request failed with libspdm err: {:x}", libpsm_err);
-            }
-            if let Err(e) = request_all_measurements(cntx) {
-                panic!("    failed to request all measurements err:  {:x}", e);
-            }
-            assert!(test_set_certificate(cntx, 1).is_ok());
         }
-        TestBackend::SocketBackend => {
-            responder_validator_tests(cntx).unwrap();
-            if let Err(libpsm_err) = do_tcg_dice_evidence_binding_request_checks(cntx) {
-                panic!("    request failed with libspdm err: {:x}", libpsm_err);
-            }
-            if let Err(e) = request_all_measurements(cntx) {
-                panic!("    failed to request all measurements err:  {:x}", e);
-            }
-            assert!(test_set_certificate(cntx, 1).is_ok());
-        }
+        TestBackend::SocketBackend => {}
     }
+
+    responder_validator_tests(cntx).unwrap();
+
+    if let Err(libpsm_err) = do_tcg_dice_evidence_binding_request_checks(cntx) {
+        panic!("    request failed with libspdm err: {:x}", libpsm_err);
+    }
+    if let Err(e) = request_all_measurements(cntx) {
+        panic!("    failed to request all measurements err:  {:x}", e);
+    }
+
+    test_set_certificate(cntx, 1).unwrap();
+
     info!("Testing Complete ...");
     std::process::exit(0);
 }
