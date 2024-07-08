@@ -1202,6 +1202,41 @@ pub fn qemu_scsi_ack_valid_msg(
     Ok(())
 }
 
+struct QemuNvmeTransportHeaderCompact {
+    spsp0_op: u8,
+    length: u32,
+}
+
+fn qemu_nvme_decode_transport_header(
+    transport_msg_len: usize,
+    transport_msg: &mut [u8],
+) -> Result<QemuNvmeTransportHeaderCompact, ()> {
+    let mut transport_cmd = 0;
+    // Allocation length for an IF_RECV, Transfer length for an IF_SEND
+    let mut len: u32 = 0;
+    let rc = unsafe {
+        libspdm_transport_storage_nvme_decode_management_cmd(
+            transport_msg_len,
+            transport_msg.as_mut_ptr() as *mut c_void,
+            &mut transport_cmd,
+            &mut len,
+        )
+    };
+
+    if !spdm::LibspdmReturnStatus::libspdm_status_is_success(rc) {
+        error!(
+            "Malformed NVMe Storage Transport header: {:x?}",
+            &transport_msg[..transport_msg_len]
+        );
+        return Err(());
+    }
+
+    Ok(QemuNvmeTransportHeaderCompact {
+        spsp0_op: transport_cmd,
+        length: len,
+    })
+}
+
 /// # Summary
 ///
 /// Sends message to the QEMU by writing the
@@ -1247,48 +1282,29 @@ unsafe extern "C" fn qemu_send_message_nvme(
     //       We are using a bunch of memory here.
     let mut incoming_msg: [u8; SEND_RECEIVE_BUFFER_LEN] = [0; SEND_RECEIVE_BUFFER_LEN];
     let mut incoming_msg_len = 0;
-    let mut transport_cmd: u8 = 0;
 
     loop {
-        match qemu_get_next_storage_cmd(&mut stream, &mut incoming_msg_len, &mut incoming_msg) {
+        let cmd = qemu_get_next_storage_cmd(&mut stream, &mut incoming_msg_len, &mut incoming_msg);
+        let hdr = qemu_nvme_decode_transport_header(incoming_msg_len, &mut incoming_msg);
+        if hdr.is_err() {
+            qemu_nvme_ack_invalid_msg(
+                &mut stream,
+                SOCKET_SPDM_STORAGE_ACK_STATUS,
+                SOCKET_TRANSPORT_TYPE_NVME,
+            )
+            .expect("Failed to ack message");
+            continue;
+        }
+        let hdr = hdr.unwrap();
+        match cmd {
             SOCKET_SPDM_STORAGE_IF_SEND => {
                 // We have an SPDM response to send, but the requester has sent
                 // us another IF_SEND instead of receiving our pending response
                 // with IF_RECV. The only valid spdm_storage_operations are
                 // discovery and pending_info at in this context.
-                let rc = libspdm_transport_storage_nvme_decode_management_cmd(
-                    incoming_msg_len,
-                    incoming_msg.as_mut_ptr() as *mut c_void,
-                    &mut transport_cmd,
-                );
-
-                if !spdm::LibspdmReturnStatus::libspdm_status_is_success(rc) {
-                    error!(
-                        "Malformed IF_SEND SPDM storage message: {:x?}",
-                        &incoming_msg[..incoming_msg_len]
-                    );
-                    qemu_nvme_ack_invalid_msg(
-                        &mut stream,
-                        SOCKET_SPDM_STORAGE_ACK_STATUS,
-                        SOCKET_TRANSPORT_TYPE_NVME,
-                    )
-                    .expect("Failed to ack message");
-                    continue;
-                }
-
-                if SpdmOperationCodes::try_from(transport_cmd).is_err() {
-                    error!("Undefined SPDM Operation Type: {:}", transport_cmd);
-                    qemu_nvme_ack_invalid_msg(
-                        &mut stream,
-                        SOCKET_SPDM_STORAGE_ACK_STATUS,
-                        SOCKET_TRANSPORT_TYPE_NVME,
-                    )
-                    .expect("Failed to ack message");
-                    continue;
-                };
 
                 // Ack the incoming message if valid
-                match SpdmOperationCodes::try_from(transport_cmd).unwrap() {
+                match SpdmOperationCodes::try_from(hdr.spsp0_op).unwrap() {
                     SpdmOperationCodes::SpdmStorageDiscovery => {
                         debug!("Storage Transport Discovery Command - Nothing to do (IF_SEND)");
                     }
@@ -1303,7 +1319,7 @@ unsafe extern "C" fn qemu_send_message_nvme(
                     | SpdmOperationCodes::SpdmStorageSecMessage => {
                         error!(
                             "Unexpected IF_SEND with {:?}",
-                            SpdmOperationCodes::try_from(transport_cmd).unwrap()
+                            SpdmOperationCodes::try_from(hdr.spsp0_op).unwrap()
                         );
                         qemu_nvme_ack_invalid_msg(
                             &mut stream,
@@ -1325,27 +1341,10 @@ unsafe extern "C" fn qemu_send_message_nvme(
             SOCKET_SPDM_STORAGE_IF_RECV => {
                 // This IF_RECV could be for the SPDM response message or a transport
                 // command
-                if incoming_msg_len < crate::storage_standards::SPDM_STORAGE_SPSP0_LEN {
-                    // QEMU Failed to forward us SPSP0.
-                    error!("SPSP0 Transport Command for IF_RECV was not received!");
-                    qemu_nvme_ack_invalid_msg(
-                        &mut stream,
-                        SOCKET_SPDM_STORAGE_ACK_STATUS,
-                        SOCKET_TRANSPORT_TYPE_NVME,
-                    )
-                    .expect("Failed to ack message");
-                    continue;
-                }
-
-                // Parse SPSP0
-                let spsp0_operation = incoming_msg[0] >> 2;
-                let _spsp0_connection_id = incoming_msg[0] & 0b11;
-
-                if SpdmOperationCodes::try_from(spsp0_operation).is_err() {
-                    error!(
-                        "Incoming IF_RECV with unknown transport command {:x}",
-                        spsp0_operation
-                    );
+                if (incoming_msg_len as usize)
+                    < std::mem::size_of::<storage_nvme_data_object_header_t>()
+                {
+                    error!("Malformed transport header for IF_RECV!");
                     qemu_nvme_ack_invalid_msg(
                         &mut stream,
                         SOCKET_SPDM_STORAGE_ACK_STATUS,
@@ -1358,7 +1357,7 @@ unsafe extern "C" fn qemu_send_message_nvme(
                 let mut transport_msg_len = 32;
                 let mut transport_msg: [u8; 32] = [0; 32];
 
-                match SpdmOperationCodes::try_from(spsp0_operation).unwrap() {
+                match SpdmOperationCodes::try_from(hdr.spsp0_op).unwrap() {
                     SpdmOperationCodes::SpdmStorageDiscovery => {
                         debug!("Handling Storage Transport Discovery Command (IF_RECV)");
                         assert!(spdm::LibspdmReturnStatus::libspdm_status_is_success(
@@ -1388,11 +1387,14 @@ unsafe extern "C" fn qemu_send_message_nvme(
                         // Get the transport cmd of the pending response message
                         // from libspdm, so we can check that the types match
                         let mut libspdm_response_transport_cmd: u8 = 0;
+                        let mut msg_length: u32 = 0;
                         let rc = libspdm_transport_storage_nvme_decode_management_cmd(
                             libspdm_message_size,
                             libspdm_message_ptr,
                             &mut libspdm_response_transport_cmd,
+                            &mut msg_length,
                         );
+
                         if !spdm::LibspdmReturnStatus::libspdm_status_is_success(rc) {
                             error!(
                                 "Invalid SPDM response generated by libspdm {:x?}",
@@ -1400,7 +1402,8 @@ unsafe extern "C" fn qemu_send_message_nvme(
                             );
                             panic!("Invalid message generated by libspdm");
                         }
-                        if libspdm_response_transport_cmd != spsp0_operation {
+                        assert_eq!(msg_length as usize, libspdm_message_size);
+                        if libspdm_response_transport_cmd != hdr.spsp0_op {
                             // Only a warning since the responder may have
                             // initiated a secures session response, see
                             // SPDM-Spec 1.3: Margin 156 Page 35.
@@ -1408,9 +1411,27 @@ unsafe extern "C" fn qemu_send_message_nvme(
                                 "Responder Generated: {:?}, Requester Expected: {:?}",
                                 SpdmOperationCodes::try_from(libspdm_response_transport_cmd)
                                     .unwrap(),
-                                SpdmOperationCodes::try_from(spsp0_operation).unwrap()
+                                SpdmOperationCodes::try_from(hdr.spsp0_op).unwrap()
                             );
                         }
+                        let outgoing_len = libspdm_message_size
+                            - std::mem::size_of::<storage_nvme_data_object_header_t>();
+                        if (hdr.length as usize) < outgoing_len {
+                            error!(
+                                "Requester allocation length too small to receive {:?} message.  Minimum required {:}, Got {:}",
+                                SpdmOperationCodes::try_from(hdr.spsp0_op).unwrap(),
+                                outgoing_len,
+                                hdr.length
+                            );
+                            qemu_nvme_ack_invalid_msg(
+                                &mut stream,
+                                SOCKET_SPDM_STORAGE_ACK_STATUS,
+                                SOCKET_TRANSPORT_TYPE_NVME,
+                            )
+                            .expect("Failed to ack message");
+                            continue;
+                        }
+
                         // We received an IF_RECV with the matching operation code,
                         qemu_nvme_ack_valid_msg(
                             &mut stream,
@@ -1419,12 +1440,14 @@ unsafe extern "C" fn qemu_send_message_nvme(
                         )
                         .expect("Failed to ack message");
 
+                        // Strip the libspdm transport encoding header
                         qemu_socket_xfer_to_requester(
                             &mut stream,
                             SOCKET_SPDM_STORAGE_IF_RECV,
                             SOCKET_TRANSPORT_TYPE_NVME,
-                            u32::try_from(libspdm_message_size).unwrap(),
-                            &libspdm_msg_buf,
+                            u32::try_from(outgoing_len).unwrap(),
+                            &libspdm_msg_buf
+                                [std::mem::size_of::<storage_nvme_data_object_header_t>()..],
                         )
                         .expect("failed to write response to requester");
 
@@ -1510,48 +1533,23 @@ unsafe extern "C" fn qemu_receive_message_nvme(
     let mut incoming_msg_len = 0;
 
     loop {
-        match qemu_get_next_storage_cmd(
-            &mut stream,
-            &mut incoming_msg_len,
-            &mut libspdm_message_buf,
-        ) {
+        let cmd =
+            qemu_get_next_storage_cmd(&mut stream, &mut incoming_msg_len, &mut libspdm_message_buf);
+        let hdr = qemu_nvme_decode_transport_header(incoming_msg_len, &mut libspdm_message_buf);
+        if hdr.is_err() {
+            qemu_nvme_ack_invalid_msg(
+                &mut stream,
+                SOCKET_SPDM_STORAGE_ACK_STATUS,
+                SOCKET_TRANSPORT_TYPE_NVME,
+            )
+            .expect("Failed to ack message");
+            continue;
+        }
+        let hdr = hdr.unwrap();
+        match cmd {
             SOCKET_SPDM_STORAGE_IF_SEND => {
                 // Contextually, we are expecting an IF_SEND with a storage/secure msg.
                 // But we could also get discovery/pending_info here.
-                let mut transport_cmd: u8 = 0;
-
-                let rc = libspdm_transport_storage_nvme_decode_management_cmd(
-                    incoming_msg_len,
-                    libspdm_message_buf.as_mut_ptr() as *mut c_void,
-                    &mut transport_cmd,
-                );
-
-                if !spdm::LibspdmReturnStatus::libspdm_status_is_success(rc) {
-                    error!(
-                        "Failed to decode storage message libspdm_errno: {:x} | {:x?}",
-                        rc,
-                        &libspdm_message_buf[..incoming_msg_len]
-                    );
-
-                    qemu_nvme_ack_invalid_msg(
-                        &mut stream,
-                        SOCKET_SPDM_STORAGE_ACK_STATUS,
-                        SOCKET_TRANSPORT_TYPE_NVME,
-                    )
-                    .expect("Failed to ack message");
-                    continue;
-                }
-
-                if SpdmOperationCodes::try_from(transport_cmd).is_err() {
-                    error!("Undefined SPDM Operation Type: {:}", transport_cmd);
-                    qemu_nvme_ack_invalid_msg(
-                        &mut stream,
-                        SOCKET_SPDM_STORAGE_ACK_STATUS,
-                        SOCKET_TRANSPORT_TYPE_NVME,
-                    )
-                    .expect("Failed to ack message");
-                    continue;
-                };
                 qemu_nvme_ack_valid_msg(
                     &mut stream,
                     SOCKET_SPDM_STORAGE_ACK_STATUS,
@@ -1559,7 +1557,7 @@ unsafe extern "C" fn qemu_receive_message_nvme(
                 )
                 .expect("Failed to ack message");
 
-                match SpdmOperationCodes::try_from(transport_cmd).unwrap() {
+                match SpdmOperationCodes::try_from(hdr.spsp0_op).unwrap() {
                     SpdmOperationCodes::SpdmStorageDiscovery => {
                         debug!("Storage Transport Discovery Command - Nothing to do (IF_SEND)");
                         continue;
@@ -1572,11 +1570,11 @@ unsafe extern "C" fn qemu_receive_message_nvme(
                     SpdmOperationCodes::SpdmStorageMessage
                     | SpdmOperationCodes::SpdmStorageSecMessage => {
                         // Received an actual SPDM message
-                        *libspdm_message_size = incoming_msg_len;
+                        *libspdm_message_size = hdr.length as usize;
                         debug!(
                             "SPDM Received {:?}: {:x?}",
-                            SpdmOperationCodes::try_from(transport_cmd).unwrap(),
-                            &libspdm_message_buf[..incoming_msg_len]
+                            SpdmOperationCodes::try_from(hdr.spsp0_op).unwrap(),
+                            &libspdm_message_buf[..(hdr.length as usize)]
                         );
                         // The data was received into the memory allocated by libspdm
                         // no more work to do.
@@ -1586,27 +1584,17 @@ unsafe extern "C" fn qemu_receive_message_nvme(
             }
             SOCKET_SPDM_STORAGE_IF_RECV => {
                 // We have no data to return in this context, an IF_RECV should
-                // only mean that it was a transport command.
-                if incoming_msg_len < crate::storage_standards::SPDM_STORAGE_SPSP0_LEN {
-                    // QEMU Failed to forward us SPSP0.
-                    error!("SPSP0 Transport Command for IF_RECV was not received!");
-                    qemu_nvme_ack_invalid_msg(
-                        &mut stream,
-                        SOCKET_SPDM_STORAGE_ACK_STATUS,
-                        SOCKET_TRANSPORT_TYPE_NVME,
-                    )
-                    .expect("Failed to ack message");
-                    continue;
-                }
+                // only mean that it was a transport Discovery/Pending Info
+                // command.
+                let mut transport_msg_len: usize = 32;
+                let mut transport_msg: [u8; 32] = [0; 32];
 
-                // Parse SPSP0
-                let spsp0_operation = libspdm_message_buf[0] >> 2;
-                let _spsp0_connection_id = libspdm_message_buf[0] & 0b11;
-
-                if SpdmOperationCodes::try_from(spsp0_operation).is_err() {
+                if (hdr.length as usize) < transport_msg_len {
                     error!(
-                        "Incoming IF_RECV with unknown transport command {:x}",
-                        spsp0_operation
+                        "Requester allocation length too small to receive {:?} message. Minimum required {:?}, Got {:?}",
+                        SpdmOperationCodes::try_from(hdr.spsp0_op).unwrap(),
+                        transport_msg_len,
+                        hdr.length
                     );
                     qemu_nvme_ack_invalid_msg(
                         &mut stream,
@@ -1617,10 +1605,7 @@ unsafe extern "C" fn qemu_receive_message_nvme(
                     continue;
                 }
 
-                let mut transport_msg_len = 32;
-                let mut transport_msg: [u8; 32] = [0; 32];
-
-                let rc = match SpdmOperationCodes::try_from(spsp0_operation).unwrap() {
+                let rc = match SpdmOperationCodes::try_from(hdr.spsp0_op).unwrap() {
                     SpdmOperationCodes::SpdmStorageDiscovery => {
                         debug!("Handling Storage Transport Discovery Command (IF_RECV)");
                         libspdm_transport_storage_encode_discovery_response(
@@ -1641,7 +1626,7 @@ unsafe extern "C" fn qemu_receive_message_nvme(
                     _ => {
                         error!(
                             "Unexpected IF_RECV with {:?}",
-                            SpdmOperationCodes::try_from(spsp0_operation).unwrap()
+                            SpdmOperationCodes::try_from(hdr.spsp0_op).unwrap()
                         );
                         qemu_nvme_ack_invalid_msg(
                             &mut stream,
