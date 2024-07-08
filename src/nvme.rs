@@ -69,8 +69,7 @@ unsafe extern "C" fn nvme_send_message(
         .expect("Failed to establish a conntection to the NVMe Controller");
 
     // Setup a security receive command for security protocol discovery
-    // TODO: The transport should already be encoded, just extract from it.
-    let mut cmd = match NvmeSecSendCmds::gen_spdm_message_args(&mut dptr, *nsid) {
+    let mut cmd = match NvmeSecSendCmds::gen_libspdm_encoded_sec_send_args(&mut dptr, *nsid) {
         Ok(cmd) => cmd,
         Err(why) => {
             panic!("Failed to generate SPDM Message Command: {:?}", why)
@@ -478,8 +477,7 @@ impl NvmeSecSendCmds {
     ///
     /// Generates an @nvme_security_send_args suitable for an `SPDM Storage
     /// Message`. @dptr shall be the message buffer that contains the SPDM
-    /// request data. The length of @dptr vector shall be the number of bytes
-    /// transferred to the controller
+    /// request data (with transport encoding from libspdm).
     ///
     /// # Note
     ///
@@ -499,15 +497,37 @@ impl NvmeSecSendCmds {
     /// `NVMe Security Receive` command for an SPDM request.
     ///
     /// Returns Err(ENOMSG), if @dptr is empty
-    pub fn gen_spdm_message_args(
+    pub fn gen_libspdm_encoded_sec_send_args(
         dptr: &mut Vec<u8>,
         nsid: u32,
     ) -> Result<nvme_security_send_args, Errno> {
-        if dptr.len() == 0 {
+        if dptr.len() == 0 || dptr.len() < std::mem::size_of::<storage_nvme_data_object_header_t>()
+        {
             // Nothing to send
             return Err(Errno::ENOMSG);
         }
-        let conn_id: u8 = 0;
+
+        let trans_hdr = unsafe { *(dptr.as_mut_ptr() as *mut storage_nvme_data_object_header_t) };
+        assert_eq!(
+            trans_hdr.security_protocol,
+            u8::from(SpcSecurityProtocols::DmtfSpdm)
+        );
+        let spsp0: u8;
+        let spsp1: u8;
+        if cfg!(target_endian = "big") {
+            spsp0 = (trans_hdr.security_protocol_specific & 0xFF) as u8;
+            spsp1 = (trans_hdr.security_protocol_specific >> 8) as u8;
+        } else {
+            spsp0 = (trans_hdr.security_protocol_specific >> 8) as u8;
+            spsp1 = (trans_hdr.security_protocol_specific & 0xFF) as u8;
+        }
+        // Strip the transport header, only send the SPDM message.
+        // The transport relevant SPDM data is passed through the storage API.
+        let transfer_len = u32::from_be(trans_hdr.length) as usize
+            - std::mem::size_of::<storage_nvme_data_object_header_t>();
+        if transfer_len <= 0 {
+            return Err(Errno::ENOMSG);
+        }
         // Setup a security send command for an SPDM message
         let args = nvme_security_send_args {
             args_size: core::ffi::c_int::try_from(std::mem::size_of::<nvme_security_send_args>())
@@ -515,12 +535,16 @@ impl NvmeSecSendCmds {
             fd: 0, // Set at transport level
             nsid: nsid,
             nssf: 0, //RSVD
-            spsp0: ((SpdmOperationCodes::SpdmStorageMessage as u8) << 2) | (0b11 & conn_id),
-            spsp1: 0, // RSVD
-            secp: u8::from(SpcSecurityProtocols::DmtfSpdm),
-            tl: dptr.len() as u32,
-            data_len: dptr.len() as u32,
-            data: dptr.as_mut_ptr() as *mut c_void,
+            spsp0: spsp0,
+            spsp1: spsp1,
+            secp: trans_hdr.security_protocol,
+            tl: u32::try_from(transfer_len).unwrap(),
+            data_len: u32::try_from(transfer_len).unwrap(),
+            data: unsafe {
+                dptr.as_mut_ptr()
+                    .add(std::mem::size_of::<storage_nvme_data_object_header_t>())
+                    as *mut c_void
+            },
             timeout: 0, // Set at transport
             result: ptr::null_mut(),
         };
@@ -538,8 +562,8 @@ impl NvmeSecRecvCmds {
     ///
     /// @dptr shall be the message buffer into to which an SPDM response shall
     /// be copied to, from the NVMe controller. As an SPDM Response maybe of
-    /// arbitrary size, a vector of capacity `NVME_STORAGE_MSG_MAX_SIZE` is enforced,
-    /// to accommodate the worst case scenario.
+    /// arbitrary size, a vector of capacity `NVME_STORAGE_MSG_MAX_SIZE` is
+    /// enforced, to accommodate the worst case scenario.
     ///
     /// # Note
     ///
@@ -585,10 +609,8 @@ impl NvmeSecRecvCmds {
             timeout: 0, // Set at transport
             result: ptr::null_mut(),
         };
-        let header_len = LIBSPDM_STORAGE_NVME_TRANSPORT_HEADER_SIZE as usize;
+
         let mut transport_message_len = message_size;
-        // We pass a pointer to this pointer when calling `libspdm_storage_scsi_encode_message()`
-        // and buf_ptr ends up being changed to point at a section of `reply` in libspdm.
         let mut transport_message = ptr::null_mut();
 
         unsafe {
@@ -599,7 +621,7 @@ impl NvmeSecRecvCmds {
                     ptr::null(),
                     false,
                     true,
-                    message_size - header_len,
+                    message_size - LIBSPDM_STORAGE_NVME_TRANSPORT_HEADER_SIZE as usize,
                     message as *mut _ as *mut c_void,
                     &mut transport_message_len,
                     &mut transport_message as *mut *mut c_void,
@@ -607,27 +629,29 @@ impl NvmeSecRecvCmds {
             );
         }
 
-        let transp_message = transport_message as *const u8;
-        let transp_msg_buf = unsafe { from_raw_parts(transp_message, transport_message_len) };
-
+        assert!(transport_message_len >= LIBSPDM_STORAGE_NVME_TRANSPORT_HEADER_SIZE as usize);
+        let trans_hdr =
+            unsafe { *(transport_message as *const u8 as *mut storage_nvme_data_object_header_t) };
+        assert_eq!(
+            trans_hdr.security_protocol,
+            u8::from(SpcSecurityProtocols::DmtfSpdm)
+        );
         // Update based on libspdm encoded data
-        args.secp = transp_msg_buf[0];
-        let spsp = u16::from_ne_bytes(transp_msg_buf[1..=2].try_into().unwrap());
+        args.secp = trans_hdr.security_protocol;
         // libspdm uses the host-byte order.
         if cfg!(target_endian = "big") {
-            args.spsp0 = (spsp & 0xFF) as u8;
-            args.spsp1 = (spsp >> 8) as u8;
+            args.spsp0 = (trans_hdr.security_protocol_specific & 0xFF) as u8;
+            args.spsp1 = (trans_hdr.security_protocol_specific >> 8) as u8;
         } else {
-            args.spsp0 = (spsp >> 8) as u8;
-            args.spsp1 = (spsp & 0xFF) as u8;
+            args.spsp0 = (trans_hdr.security_protocol_specific >> 8) as u8;
+            args.spsp1 = (trans_hdr.security_protocol_specific & 0xFF) as u8;
         }
+        let transport_message_len = u32::from_be(trans_hdr.length);
         assert!(args.spsp0 != 0);
         assert!(args.spsp1 == 0);
-
-        let length = u32::from_be_bytes(transp_msg_buf[3..=6].try_into().unwrap());
-        assert!(length as usize <= dptr.len());
-        assert!(length != 0);
-        args.data_len = length;
+        assert!((transport_message_len as usize) <= dptr.len());
+        assert!(transport_message_len != 0);
+        args.data_len = u32::try_from(transport_message_len).unwrap();
 
         Ok(args)
     }
@@ -683,29 +707,27 @@ impl NvmeSecRecvCmds {
             panic!("libspdm failed to encode transport: {:x}", rc);
         }
 
+        let trans_hdr = unsafe { *(dptr.as_mut_ptr() as *mut storage_nvme_data_object_header_t) };
+
         // Update based on libspdm encoded data
-        args.secp = dptr[0];
-        let spsp = u16::from_ne_bytes(dptr[1..=2].try_into().unwrap());
+        args.secp = trans_hdr.security_protocol;
         // libspdm uses the host-byte order.
         if cfg!(target_endian = "big") {
-            args.spsp0 = (spsp & 0xFF) as u8;
-            args.spsp1 = (spsp >> 8) as u8;
+            args.spsp0 = (trans_hdr.security_protocol_specific & 0xFF) as u8;
+            args.spsp1 = (trans_hdr.security_protocol_specific >> 8) as u8;
         } else {
-            args.spsp0 = (spsp >> 8) as u8;
-            args.spsp1 = (spsp & 0xFF) as u8;
+            args.spsp0 = (trans_hdr.security_protocol_specific >> 8) as u8;
+            args.spsp1 = (trans_hdr.security_protocol_specific & 0xFF) as u8;
         }
-
+        let transport_message_len = u32::from_be(trans_hdr.length);
         assert!(args.spsp0 != 0);
-        // Reserved
         assert!(args.spsp1 == 0);
-
-        let length = u32::from_be_bytes(dptr[3..=6].try_into().unwrap());
-        assert!(length as usize <= dptr.len());
-        assert!(length != 0);
-        assert!(allocation_len != 0);
+        assert!(transport_message_len as usize <= dptr.len());
+        assert!(transport_message_len != 0);
+        assert!(transport_message_len != 0);
 
         args.al = std::cmp::max(allocation_len as u32, LIBNVME_RECV_ARG_MIN_AL_LEN as u32);
-        args.data_len = std::cmp::max(length, LIBNVME_RECV_ARG_MIN_AL_LEN as u32);
+        args.data_len = std::cmp::max(transport_message_len, LIBNVME_RECV_ARG_MIN_AL_LEN as u32);
 
         Ok(args)
     }
