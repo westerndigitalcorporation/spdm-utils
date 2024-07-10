@@ -343,7 +343,7 @@ impl SgCmd {
         cdb_len: u8,
         direction: i32,
         bufsz: u32,
-        header: &[u8; LIBSPDM_STORAGE_SCSI_TRANSPORT_HEADER_SIZE as usize],
+        header: &[u8; LIBSPDM_STORAGE_TRANSPORT_HEADER_SIZE as usize],
     ) -> Result<SgCmd, Errno> {
         let mut sg_cmd = SgCmd::new(cdb_len, direction, bufsz)?;
 
@@ -351,7 +351,7 @@ impl SgCmd {
         // OpCode
         sg_cmd.cmdp[0] = CmdType::SecurityProtocolOut.into();
 
-        let header_len = LIBSPDM_STORAGE_SCSI_TRANSPORT_HEADER_SIZE as usize;
+        let header_len = LIBSPDM_STORAGE_TRANSPORT_HEADER_SIZE as usize;
         sg_cmd.cmdp[1..(header_len + 1)].copy_from_slice(header);
 
         Ok(sg_cmd)
@@ -379,14 +379,14 @@ impl SgCmd {
         // OpCode
         sg_cmd.cmdp[0] = CmdType::SecurityProtocolIn.into();
 
-        let header_len = LIBSPDM_STORAGE_SCSI_TRANSPORT_HEADER_SIZE as usize;
+        let header_len = LIBSPDM_STORAGE_TRANSPORT_HEADER_SIZE as usize;
         let mut transport_message_len = message_size;
-        // We pass a pointer to this pointer when calling `libspdm_storage_scsi_encode_message()`
+        // We pass a pointer to this pointer when calling `libspdm_storage_encode_message()`
         // and buf_ptr ends up being changed to point at a section of `reply` in libspdm.
         let mut transport_message = ptr::null_mut();
 
         unsafe {
-            libspdm_storage_scsi_encode_message(
+            libspdm_storage_encode_message(
                 ptr::null_mut(),
                 0,
                 message_size - header_len,
@@ -597,7 +597,7 @@ unsafe extern "C" fn scsi_send_message(
     let dev = BlkDev::new(DEV_PATH.get().unwrap(), OFlag::O_EXCL | OFlag::O_RDWR).unwrap();
 
     // 2. Generate Request Header
-    let header_len = LIBSPDM_STORAGE_SCSI_TRANSPORT_HEADER_SIZE as usize;
+    let header_len = LIBSPDM_STORAGE_TRANSPORT_HEADER_SIZE as usize;
     let mut cmd = SgCmd::gen_spdm_request(
         0,
         SG_DXFER_TO_DEV,
