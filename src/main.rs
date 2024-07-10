@@ -12,10 +12,10 @@ use async_std::task;
 use clap::{Parser, Subcommand};
 use futures::future::join_all;
 use libspdm::libspdm_rs::*;
+use nix::errno::Errno;
 use nix::unistd::geteuid;
 use sha2::{Digest, Sha256, Sha384, Sha512};
 use std::fs::File;
-use nix::errno::Errno;
 use std::fs::OpenOptions;
 use std::io::copy;
 use std::path::Path;
@@ -725,6 +725,18 @@ async fn main() -> Result<(), ()> {
             }
         }
         scsi::register_device(cntx_ptr, &cli.blk_dev_path.clone().unwrap())?;
+    } else if cli.nvme {
+        warn!(
+            "Using experimental NVMe support, for dev at: {:?}",
+            cli.blk_dev_path
+        );
+        if let Err(e) = nvme::nvme_get_sec_info(&cli.blk_dev_path.clone().unwrap(), cli.nsid) {
+            if e == Errno::ENOTSUP {
+                error!("SPDM is not supported by this NVMe device");
+                return Err(());
+            }
+        }
+        nvme::register_device(cntx_ptr, &cli.blk_dev_path.clone().unwrap(), cli.nsid).unwrap();
     } else if cli.qemu_server {
         if let Commands::Request { .. } = cli.command {
             error!("QEMU Server does not support running an SPDM requester");
@@ -756,14 +768,14 @@ async fn main() -> Result<(), ()> {
             } else if cli.scsi {
                 spdm::setup_transport_layer(
                     cntx_ptr,
-                    spdm::TransportLayer::Scsi,
+                    spdm::TransportLayer::Storage,
                     spdm::LIBSPDM_MAX_SPDM_MSG_SIZE,
                 )
                 .unwrap();
             } else if cli.nvme {
                 spdm::setup_transport_layer(
                     cntx_ptr,
-                    spdm::TransportLayer::Nvme,
+                    spdm::TransportLayer::Storage,
                     spdm::LIBSPDM_MAX_SPDM_MSG_SIZE,
                 )
                 .unwrap();
@@ -945,6 +957,10 @@ async fn main() -> Result<(), ()> {
                 return Err(());
             }
         }
+    }
+
+    if cli.nvme {
+        nvme::nvme_free_io_buffers().expect("failed to free NVMe resources");
     }
     Ok(())
 }

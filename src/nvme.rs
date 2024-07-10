@@ -21,16 +21,16 @@ use once_cell::sync::OnceCell;
 use std::slice::from_raw_parts;
 use storage_standards::{SpcSecurityProtocols, SpdmOperationCodes};
 
-const SEND_RECEIVE_BUFFER_LEN: usize =
-    LIBSPDM_MAX_SPDM_MSG_SIZE as usize + LIBSPDM_STORAGE_NVME_TRANSPORT_HEADER_SIZE as usize;
-static mut SEND_BUFFER: OnceCell<[u8; SEND_RECEIVE_BUFFER_LEN]> = OnceCell::new();
-static mut RECEIVE_BUFFER: OnceCell<[u8; SEND_RECEIVE_BUFFER_LEN]> = OnceCell::new();
-static mut NVME_DEV_INFO: OnceCell<(String, u32)> = OnceCell::new();
+/// Limit maximum transfers to 4k, if we allocate bigger IO buffers, we then need
+/// to rely on kernel support mmap(2) with MAP_HUGETLB. To allocate aligned
+/// and contiguos buffers.
+const NVME_STORAGE_MSG_MAX_SIZE: usize = 4096;
+const LIBSPDM_MAX_TRANSPORT_MSG_LEN: usize = NVME_STORAGE_MSG_MAX_SIZE;
 
-const NVME_STORAGE_MSG_MAX_SIZE: usize = SEND_RECEIVE_BUFFER_LEN as usize;
-
-/// The allocation length for a receive command has to be > 32bytes, or the
-/// command will stall and the syscall will get interrupted. Unsure why (?)
+static mut SEND_BUFFER: OnceCell<*mut c_void> = OnceCell::new();
+static mut RECEIVE_BUFFER: OnceCell<*mut c_void> = OnceCell::new();
+static mut NVME_DEV: OnceCell<NvmeDev> = OnceCell::new();
+/// Transfer lengths must be DWORD Aligned.
 const LIBNVME_RECV_ARG_MIN_AL_LEN: usize = 32;
 
 /// # Summary
@@ -61,15 +61,12 @@ unsafe extern "C" fn nvme_send_message(
     let message = message_ptr as *const u8;
     let mut dptr = unsafe { from_raw_parts(message, message_size) }.to_vec();
 
-    let (path, nsid) = NVME_DEV_INFO
-        .get()
-        .expect("Missing NVMe device information");
-
-    let mut dev = NvmeDev::new(path, *nsid, OFlag::O_EXCL | OFlag::O_RDWR)
-        .expect("Failed to establish a conntection to the NVMe Controller");
+    let mut dev = NVME_DEV
+        .take()
+        .expect("NVMe device lost or not initialized");
 
     // Setup a security receive command for security protocol discovery
-    let mut cmd = match NvmeSecSendCmds::gen_libspdm_encoded_sec_send_args(&mut dptr, *nsid) {
+    let mut cmd = match NvmeSecSendCmds::gen_libspdm_encoded_sec_send_args(&mut dptr, dev.nsid) {
         Ok(cmd) => cmd,
         Err(why) => {
             panic!("Failed to generate SPDM Message Command: {:?}", why)
@@ -83,6 +80,8 @@ unsafe extern "C" fn nvme_send_message(
         panic!("Failed to security send: {:?}", why);
     }
 
+    NVME_DEV.set(dev).unwrap();
+
     0
 }
 
@@ -94,7 +93,7 @@ unsafe extern "C" fn nvme_send_message(
 /// * `_context`: The SPDM context
 /// * `message_size`: Returns the number of bytes received in this transaction
 /// * `message_ptr`: A pointer to a data buffer of a minimum size of
-///                 `SEND_RECEIVE_BUFFER_LEN` to capture the received bytes.
+///                 `LIBSPDM_MAX_TRANSPORT_MSG_LEN` to capture the received bytes.
 /// * `_timeout`: Transaction timeout (Unsupported)
 ///
 /// # Returns
@@ -112,25 +111,17 @@ unsafe extern "C" fn nvme_receive_message(
     message_ptr: *mut *mut c_void,
     timeout_us: u64,
 ) -> u32 {
-    assert!(NVME_STORAGE_MSG_MAX_SIZE == SEND_RECEIVE_BUFFER_LEN);
-    assert!(*message_size <= SEND_RECEIVE_BUFFER_LEN);
-
     debug!("Sending NVMe Security Receive: SPDM Message");
 
     let message = *message_ptr as *mut u8;
-    let mut dptr = Vec::from_raw_parts(message, SEND_RECEIVE_BUFFER_LEN, SEND_RECEIVE_BUFFER_LEN);
-    let (path, nsid) = NVME_DEV_INFO
-        .get()
-        .expect("Missing NVMe device information");
-
-    let mut dev = NvmeDev::new(path, *nsid, OFlag::O_EXCL | OFlag::O_RDWR)
-        .expect("Failed to establish a connection to the NVMe Controller");
+    let mut dev = NVME_DEV
+        .take()
+        .expect("NVMe device lost or not initialized");
 
     // Setup a security receive command for security protocol discovery
     let mut cmd = match NvmeSecRecvCmds::gen_libspdm_encoded_sec_recv_args(
         context,
-        &mut dptr,
-        *nsid,
+        dev.nsid,
         message,
         *message_size,
     ) {
@@ -145,18 +136,10 @@ unsafe extern "C" fn nvme_receive_message(
     if let Err(why) = dev.nvme_sec_recv(&mut cmd, timeout_us) {
         panic!("Failed to security receive: {:?}", why);
     }
-
-    // Based on the libspdm nvme transport header
-    *message_size = u32::from_be_bytes(dptr[3..=6].try_into().unwrap()) as usize - 1;
-    assert!(*message_size <= SEND_RECEIVE_BUFFER_LEN);
-
-    debug!("Bytes Received: {:?}", *message_size);
-    debug!("SPDM Response: {:x?}", &dptr[0..*message_size]);
-
-    // NOTE: Make sure dptr`s destructor isn't invoked when it goes out of scope.
-    // The underling memory shall be free(d) by libspdm (the owner of this memory).
-    std::mem::forget(dptr);
-
+    // Allow libspdm to do top-bottom SPDM message parsing, we don't know the
+    // number of valid bytes in the reception buffer.
+    *message_size = LIBSPDM_MAX_TRANSPORT_MSG_LEN;
+    NVME_DEV.set(dev).unwrap();
     0
 }
 
@@ -173,20 +156,19 @@ unsafe extern "C" fn nvme_receive_message(
 /// # Returns
 ///
 /// (0) on success
-///
-/// # Panics
-///
-/// Panics if the SEND_BUFFER is not available
+/// (ENOMEM) if the buffer is not found
 #[no_mangle]
 unsafe extern "C" fn nvme_acquire_sender_buffer(
     _context: *mut c_void,
     msg_buf_ptr: *mut *mut c_void,
 ) -> u32 {
-    let mut buf = SEND_BUFFER.take().unwrap();
-    let buf_ptr = buf.as_mut_ptr() as *mut _ as *mut c_void;
-
-    *msg_buf_ptr = buf_ptr;
-
+    match SEND_BUFFER.take() {
+        Some(ptr) => *msg_buf_ptr = ptr,
+        _ => {
+            *msg_buf_ptr = ptr::null_mut();
+            return Errno::ENOMEM as u32;
+        }
+    }
     0
 }
 
@@ -198,21 +180,9 @@ unsafe extern "C" fn nvme_acquire_sender_buffer(
 ///
 /// * `_context`: The SPDM context
 /// * `msg_buf_ptr`: A pointer representing the sender buffer.
-///
-/// # Returns
-///
-/// (0) on success
-///
-/// # Panics
-///
-/// Panics if the `msg_buf_ptr` is invalid or has less elements
-/// than `SEND_RECEIVE_BUFFER_LEN`
 #[no_mangle]
 unsafe extern "C" fn nvme_release_sender_buffer(_context: *mut c_void, msg_buf_ptr: *const c_void) {
-    let message = msg_buf_ptr as *const u8;
-    let msg_buf = from_raw_parts(message, SEND_RECEIVE_BUFFER_LEN);
-
-    SEND_BUFFER.set(msg_buf.try_into().unwrap()).unwrap();
+    SEND_BUFFER.set(msg_buf_ptr as *mut c_void).unwrap();
 }
 
 /// # Summary
@@ -228,20 +198,19 @@ unsafe extern "C" fn nvme_release_sender_buffer(_context: *mut c_void, msg_buf_p
 /// # Returns
 ///
 /// (0) on success
-///
-/// # Panics
-///
-/// Panics if the SEND_BUFFER is not available
+/// (ENOMEM) if the buffer is not found
 #[no_mangle]
 unsafe extern "C" fn nvme_acquire_receiver_buffer(
     _context: *mut c_void,
     msg_buf_ptr: *mut *mut c_void,
 ) -> u32 {
-    let mut buf = RECEIVE_BUFFER.take().unwrap();
-    let buf_ptr = buf.as_mut_ptr() as *mut _ as *mut c_void;
-
-    *msg_buf_ptr = buf_ptr;
-
+    match RECEIVE_BUFFER.take() {
+        Some(ptr) => *msg_buf_ptr = ptr,
+        _ => {
+            *msg_buf_ptr = ptr::null_mut();
+            return Errno::ENOMEM as u32;
+        }
+    }
     0
 }
 
@@ -257,24 +226,54 @@ unsafe extern "C" fn nvme_acquire_receiver_buffer(
 /// # Returns
 ///
 /// (0) on success
-///
-/// # Panics
-///
-/// Panics if the `msg_buf_ptr` is invalid or has less elements
-/// than `SEND_RECEIVE_BUFFER_LEN`
 #[no_mangle]
 unsafe extern "C" fn nvme_release_receiver_buffer(
     _context: *mut c_void,
     msg_buf_ptr: *const c_void,
 ) {
-    let message = msg_buf_ptr as *const u8;
-    let msg_buf = from_raw_parts(message, SEND_RECEIVE_BUFFER_LEN);
-
-    RECEIVE_BUFFER.set(msg_buf.try_into().unwrap()).unwrap();
+    RECEIVE_BUFFER.set(msg_buf_ptr as *mut c_void).unwrap();
 }
 
 /// # Summary
 ///
+/// Free NVMe device IO buffers allocated, this shall only be called after an
+/// SPDM session has been terminated.
+///
+/// # Parameter
+///
+/// * `context`: The SPDM context
+///
+/// # Returns
+///
+/// Ok(()) on success
+/// Err(Errno) on failure to free either buffer
+pub fn nvme_free_io_buffers() -> Result<(), Errno> {
+    let mut buffer_lost = false;
+    match unsafe { SEND_BUFFER.take() } {
+        Some(ptr) => unsafe { nix::libc::free(ptr) },
+        _ => {
+            error!("Lost reference to NVMe Send Buffer");
+            buffer_lost = true
+        }
+    }
+    match unsafe { RECEIVE_BUFFER.take() } {
+        Some(ptr) => unsafe { nix::libc::free(ptr) },
+        _ => {
+            error!("Lost reference to NVMe Receive Buffer");
+            buffer_lost = true
+        }
+    }
+
+    if buffer_lost {
+        return Err(Errno::ENXIO);
+    }
+    Ok(())
+}
+
+/// # Summary
+///
+/// Setup device IO buffers and register the transport/IO functions to the
+/// given libspdm @context.
 ///
 /// # Parameter
 ///
@@ -288,13 +287,50 @@ unsafe extern "C" fn nvme_release_receiver_buffer(
 ///
 /// Panics if `SEND_BUFFER/RECEIVE_BUFFER` is occupied
 pub fn register_device(context: *mut c_void, dev_path: &String, nsid: u32) -> Result<(), Errno> {
-    let buffer_send = [0; SEND_RECEIVE_BUFFER_LEN];
-    let buffer_receive = [0; SEND_RECEIVE_BUFFER_LEN];
+    let mut buffer_send: *mut c_void = ptr::null_mut();
+    let mut buffer_recv: *mut c_void = ptr::null_mut();
+
+    if LIBSPDM_MAX_TRANSPORT_MSG_LEN % page_size::get() != 0 {
+        error!("Requested SEND/RECV buffer size is not target page size aligned");
+        return Err(Errno::EINVAL);
+    }
+
+    if LIBSPDM_MAX_TRANSPORT_MSG_LEN > LIBSPDM_MAX_SPDM_MSG_SIZE as usize {
+        error!("NVMe Transport buffers bigger than libspdm max supported");
+        return Err(Errno::EINVAL);
+    }
+
+    let dev = NvmeDev::new(dev_path, nsid, OFlag::O_EXCL | OFlag::O_RDWR)
+        .expect("Failed to establish a connection to the NVMe Controller");
 
     unsafe {
+        // The buffers used for NVMe must be page aligned, hence we manually
+        // allocate them here and keep a reference.
+        if nix::libc::posix_memalign(
+            &mut buffer_recv as *mut *mut c_void,
+            page_size::get(),
+            LIBSPDM_MAX_TRANSPORT_MSG_LEN,
+        ) != 0
+        {
+            error!("Failed to allocate an aligned receive buffer");
+            return Err(Errno::ENOMEM);
+        }
+        if nix::libc::posix_memalign(
+            &mut buffer_send as *mut *mut c_void,
+            page_size::get(),
+            LIBSPDM_MAX_TRANSPORT_MSG_LEN,
+        ) != 0
+        {
+            error!("Failed to allocate an aligned send buffer");
+            return Err(Errno::ENOMEM);
+        }
+
+        nix::libc::memset(buffer_send, 0, LIBSPDM_MAX_TRANSPORT_MSG_LEN);
+        nix::libc::memset(buffer_recv, 0, LIBSPDM_MAX_TRANSPORT_MSG_LEN);
+
         SEND_BUFFER.set(buffer_send).unwrap();
-        RECEIVE_BUFFER.set(buffer_receive).unwrap();
-        NVME_DEV_INFO.set((dev_path.clone(), nsid)).unwrap();
+        RECEIVE_BUFFER.set(buffer_recv).unwrap();
+        NVME_DEV.set(dev).unwrap();
 
         libspdm_register_device_io_func(
             context,
@@ -303,8 +339,8 @@ pub fn register_device(context: *mut c_void, dev_path: &String, nsid: u32) -> Re
         );
         libspdm_register_device_buffer_func(
             context,
-            SEND_RECEIVE_BUFFER_LEN as u32,
-            SEND_RECEIVE_BUFFER_LEN as u32,
+            LIBSPDM_MAX_TRANSPORT_MSG_LEN as u32,
+            LIBSPDM_MAX_TRANSPORT_MSG_LEN as u32,
             Some(nvme_acquire_sender_buffer),
             Some(nvme_release_sender_buffer),
             Some(nvme_acquire_receiver_buffer),
@@ -501,17 +537,17 @@ impl NvmeSecSendCmds {
         dptr: &mut Vec<u8>,
         nsid: u32,
     ) -> Result<nvme_security_send_args, Errno> {
-        if dptr.len() == 0 || dptr.len() < std::mem::size_of::<storage_nvme_data_object_header_t>()
-        {
+        if dptr.len() == 0 || dptr.len() < LIBSPDM_STORAGE_TRANSPORT_HEADER_SIZE as usize {
             // Nothing to send
             return Err(Errno::ENOMSG);
         }
 
-        let trans_hdr = unsafe { *(dptr.as_mut_ptr() as *mut storage_nvme_data_object_header_t) };
+        let trans_hdr = unsafe { *(dptr.as_mut_ptr() as *mut storage_spdm_transport_header) };
         assert_eq!(
             trans_hdr.security_protocol,
             u8::from(SpcSecurityProtocols::DmtfSpdm)
         );
+        assert_eq!(trans_hdr.inc_512, false);
         let spsp0: u8;
         let spsp1: u8;
         if cfg!(target_endian = "big") {
@@ -524,7 +560,7 @@ impl NvmeSecSendCmds {
         // Strip the transport header, only send the SPDM message.
         // The transport relevant SPDM data is passed through the storage API.
         let transfer_len = u32::from_be(trans_hdr.length) as usize
-            - std::mem::size_of::<storage_nvme_data_object_header_t>();
+            - LIBSPDM_STORAGE_TRANSPORT_HEADER_SIZE as usize;
         if transfer_len <= 0 {
             return Err(Errno::ENOMSG);
         }
@@ -542,7 +578,7 @@ impl NvmeSecSendCmds {
             data_len: u32::try_from(transfer_len).unwrap(),
             data: unsafe {
                 dptr.as_mut_ptr()
-                    .add(std::mem::size_of::<storage_nvme_data_object_header_t>())
+                    .add(LIBSPDM_STORAGE_TRANSPORT_HEADER_SIZE as usize)
                     as *mut c_void
             },
             timeout: 0, // Set at transport
@@ -562,7 +598,7 @@ impl NvmeSecRecvCmds {
     ///
     /// @dptr shall be the message buffer into to which an SPDM response shall
     /// be copied to, from the NVMe controller. As an SPDM Response maybe of
-    /// arbitrary size, a vector of capacity `NVME_STORAGE_MSG_MAX_SIZE` is
+    /// arbitrary size, a vector of capacity `LIBSPDM_MAX_TRANSPORT_MSG_LEN` is
     /// enforced, to accommodate the worst case scenario.
     ///
     /// # Note
@@ -587,7 +623,6 @@ impl NvmeSecRecvCmds {
     /// Returns Err(ENOMEM) if @dptr does not mean size requirements.
     pub fn gen_libspdm_encoded_sec_recv_args(
         context: *mut c_void,
-        dptr: &mut Vec<u8>,
         nsid: u32,
         message: *mut u8,
         message_size: usize,
@@ -603,9 +638,9 @@ impl NvmeSecRecvCmds {
             spsp0: 0,
             spsp1: 0, // RSVD
             secp: 0,
-            al: dptr.len() as u32,
+            al: LIBSPDM_MAX_TRANSPORT_MSG_LEN as u32,
             data_len: 0,
-            data: dptr.as_mut_ptr() as *mut c_void,
+            data: message as *mut c_void,
             timeout: 0, // Set at transport
             result: ptr::null_mut(),
         };
@@ -616,12 +651,12 @@ impl NvmeSecRecvCmds {
         unsafe {
             let context = context as *mut libspdm_context_t;
             assert!(
-                libspdm_transport_storage_nvme_encode_message(
+                libspdm_transport_storage_encode_message(
                     context as *mut c_void,
                     ptr::null(),
                     false,
                     true,
-                    message_size - LIBSPDM_STORAGE_NVME_TRANSPORT_HEADER_SIZE as usize,
+                    message_size - LIBSPDM_STORAGE_TRANSPORT_HEADER_SIZE as usize,
                     message as *mut _ as *mut c_void,
                     &mut transport_message_len,
                     &mut transport_message as *mut *mut c_void,
@@ -629,13 +664,14 @@ impl NvmeSecRecvCmds {
             );
         }
 
-        assert!(transport_message_len >= LIBSPDM_STORAGE_NVME_TRANSPORT_HEADER_SIZE as usize);
+        assert!(transport_message_len >= LIBSPDM_STORAGE_TRANSPORT_HEADER_SIZE as usize);
         let trans_hdr =
-            unsafe { *(transport_message as *const u8 as *mut storage_nvme_data_object_header_t) };
+            unsafe { *(transport_message as *const u8 as *mut storage_spdm_transport_header) };
         assert_eq!(
             trans_hdr.security_protocol,
             u8::from(SpcSecurityProtocols::DmtfSpdm)
         );
+        assert_eq!(trans_hdr.inc_512, false);
         // Update based on libspdm encoded data
         args.secp = trans_hdr.security_protocol;
         // libspdm uses the host-byte order.
@@ -646,12 +682,11 @@ impl NvmeSecRecvCmds {
             args.spsp0 = (trans_hdr.security_protocol_specific >> 8) as u8;
             args.spsp1 = (trans_hdr.security_protocol_specific & 0xFF) as u8;
         }
-        let transport_message_len = u32::from_be(trans_hdr.length);
+
         assert!(args.spsp0 != 0);
         assert!(args.spsp1 == 0);
-        assert!((transport_message_len as usize) <= dptr.len());
-        assert!(transport_message_len != 0);
-        args.data_len = u32::try_from(transport_message_len).unwrap();
+        assert!(LIBSPDM_MAX_TRANSPORT_MSG_LEN % page_size::get() == 0);
+        args.data_len = LIBSPDM_MAX_TRANSPORT_MSG_LEN as u32;
 
         Ok(args)
     }
@@ -660,7 +695,7 @@ impl NvmeSecRecvCmds {
         dptr: &mut Vec<u8>,
         nsid: u32,
     ) -> Result<nvme_security_receive_args, Errno> {
-        if dptr.len() < LIBSPDM_STORAGE_NVME_TRANSPORT_HEADER_SIZE as usize {
+        if dptr.len() < LIBSPDM_STORAGE_TRANSPORT_HEADER_SIZE as usize {
             return Err(Errno::ENOMEM);
         }
 
@@ -693,7 +728,7 @@ impl NvmeSecRecvCmds {
         let mut allocation_len: usize = 0;
 
         let rc = unsafe {
-            libspdm_transport_storage_nvme_encode_management_cmd(
+            libspdm_transport_storage_encode_management_cmd(
                 u8::try_from(LIBSPDM_STORAGE_CMD_DIRECTION_IF_RECV).unwrap(),
                 SpdmOperationCodes::SpdmStorageDiscovery as u8,
                 conn_id,
@@ -707,7 +742,7 @@ impl NvmeSecRecvCmds {
             panic!("libspdm failed to encode transport: {:x}", rc);
         }
 
-        let trans_hdr = unsafe { *(dptr.as_mut_ptr() as *mut storage_nvme_data_object_header_t) };
+        let trans_hdr = unsafe { *(dptr.as_mut_ptr() as *mut storage_spdm_transport_header) };
 
         // Update based on libspdm encoded data
         args.secp = trans_hdr.security_protocol;
@@ -755,7 +790,7 @@ impl NvmeSecRecvCmds {
 /// Err(Errno::ENOTSUP), is DMTF SPDM is not supported
 pub fn nvme_get_sec_info(path: &String, nsid: u32) -> Result<(), Errno> {
     let mut dev = NvmeDev::new(path, nsid, OFlag::O_EXCL | OFlag::O_RDONLY)?;
-    let mut dptr = vec![0; NVME_STORAGE_MSG_MAX_SIZE];
+    let mut dptr = vec![0; 64];
 
     let mut sec_recv_args =
         NvmeSecRecvCmds::gen_libspdm_encoded_discovery_request_args(&mut dptr, nsid)?;
