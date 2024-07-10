@@ -277,9 +277,7 @@ pub enum TransportLayer {
     /// DMTF Management Component Transport Protocol
     Mctp,
     /// SCSI Security Protocol In/Out commands
-    Scsi,
-    /// NVME Storage Security Send/Recv commands
-    Nvme,
+    Storage,
 }
 
 #[cfg(feature = "no_std")]
@@ -508,24 +506,14 @@ pub unsafe fn setup_transport_layer(
                 Some(libspdm_transport_mctp_decode_message),
             );
         }
-        TransportLayer::Scsi => {
+        TransportLayer::Storage => {
             libspdm_register_transport_layer_func(
                 context,
                 libspdm_max_spdm_msg_size,
-                LIBSPDM_STORAGE_SCSI_TRANSPORT_HEADER_SIZE,
-                LIBSPDM_STORAGE_SCSI_TRANSPORT_TAIL_SIZE,
-                Some(libspdm_transport_storage_scsi_encode_message),
-                Some(libspdm_transport_storage_scsi_decode_message),
-            );
-        }
-        TransportLayer::Nvme => {
-            libspdm_register_transport_layer_func(
-                context,
-                libspdm_max_spdm_msg_size,
-                LIBSPDM_STORAGE_NVME_TRANSPORT_HEADER_SIZE,
-                LIBSPDM_STORAGE_NVME_TRANSPORT_TAIL_SIZE,
-                Some(libspdm_transport_storage_nvme_encode_message),
-                Some(libspdm_transport_storage_nvme_decode_message),
+                LIBSPDM_STORAGE_TRANSPORT_HEADER_SIZE,
+                LIBSPDM_STORAGE_TRANSPORT_TAIL_SIZE,
+                Some(libspdm_transport_storage_encode_message),
+                Some(libspdm_transport_storage_decode_message),
             );
         }
     }

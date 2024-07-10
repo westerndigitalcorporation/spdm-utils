@@ -78,6 +78,3 @@ impl TryFrom<u8> for SpcSecurityProtocols {
         }
     }
 }
-
-/// Length of SPSP0 in bytes
-pub const SPDM_STORAGE_SPSP0_LEN: usize = 1;
