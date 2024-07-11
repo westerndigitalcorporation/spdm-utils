@@ -14,8 +14,8 @@ use which::which;
 fn main() {
     println!("cargo:rerun-if-changed=wrapper.h");
     println!("cargo:rerun-if-changed=manifest/manifest.in.cbor");
-    println!("cargo:rerun-if-changed=certs/device.der");
-    println!("cargo:rerun-if-changed=certs/immutable.der");
+    println!("cargo:rerun-if-changed=certs/alias/slot0/device.der");
+    println!("cargo:rerun-if-changed=certs/alias/slot0/immutable.der");
 
     // cargo:rustc-link-lib doesn't seem to support start-group/end-group
     // so we manually pass the arguments
@@ -100,7 +100,7 @@ fn main() {
 
     println!("cargo:rustc-link-arg=-Wl,--end-group");
 
-    if !Path::new("certs/slot0/bundle_responder.certchain.der").is_file() {
+    if !Path::new("certs/alias/slot0/bundle_responder.certchain.der").is_file() {
         Command::new("./setup_certs.sh")
             .current_dir(env::current_dir().unwrap().join("certs"))
             .output()

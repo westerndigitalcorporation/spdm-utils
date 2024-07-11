@@ -9,22 +9,18 @@ set -e
 # "single public-private key pair per supported
 # algorithm for its leaf certificates". So we generate one
 # certificate for slot0 and use that for all other slots
-pushd slot0
+pushd alias/slot0
 
 # Generate Alias CA (DeviceID in RIoT)
-openssl req -nodes -newkey ec:param.pem \
+openssl req -nodes -newkey ec:../../slot0/param.pem \
 	-keyout alias.key -out alias.req -sha384 -batch \
 	-subj "/CN=Test Bootloader CA"
 openssl x509 -req -in alias.req -out alias.cert -CA device.der -sha384 -days 3650 -set_serial 3 -extensions alias_ca -extfile ../openssl.cnf
 
-# Generate AliasCert (Alias key pair in RIoT)
-openssl req -nodes -newkey ec:param.pem \
-	-keyout end_requester.key -out end_requester.req -sha384 -batch \
-	-subj "/CN=Test Bootloader AliasCert"
-openssl req -nodes -newkey ec:param.pem \
-	-keyout end_responder.key -out end_responder.req -sha384 -batch \
-	-subj "/CN=Test Bootloader AliasCert"
+# Copy in CSRs
+cp ../../slot0/end* ./
 
+# Sign the CSRs
 openssl x509 -req -in end_requester.req -out end_requester.cert -CA alias.cert -CAkey alias.key -sha384 -days 3650 -set_serial 4 -extensions leaf -extfile ../openssl.cnf
 openssl x509 -req -in end_responder.req -out end_responder.cert -CA alias.cert -CAkey alias.key -sha384 -days 3650 -set_serial 5 -extensions leaf -extfile ../openssl.cnf
 
@@ -37,6 +33,8 @@ cat immutable.der alias.cert.der end_requester.cert.der > bundle_requester.certc
 cat immutable.der alias.cert.der end_responder.cert.der > bundle_responder.certchain.der
 
 popd
+
+pushd alias
 
 for slot in "slot1" "slot2" "slot3" "slot4" "slot5" "slot6" "slot7"
 do
@@ -77,3 +75,5 @@ do
 
 	popd
 done
+
+popd

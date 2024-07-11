@@ -1155,7 +1155,7 @@ pub unsafe extern "C" fn libspdm_write_certificate_to_nvm(
     }
     #[cfg(not(feature = "no_std"))]
     {
-        let dir_name = format!("certs/slot{}", slot_id);
+        let dir_name = format!("certs/alias/slot{}", slot_id);
         let file_name = format!("{}/immutable.der", dir_name);
         let path = Path::new(&file_name);
 
@@ -1226,13 +1226,13 @@ pub unsafe extern "C" fn libspdm_gen_csr(
 
     #[cfg(feature = "no_std")]
     {
-        key_buffer = include_bytes!("../../certs/slot0/device.key");
+        key_buffer = include_bytes!("../../certs/alias/slot0/device.key");
     }
     #[cfg(not(feature = "no_std"))]
     let mut key_reader;
     #[cfg(not(feature = "no_std"))]
     {
-        let key_path = Path::new("certs/slot0/device.key");
+        let key_path = Path::new("certs/alias/slot0/device.key");
 
         let key_file = match OpenOptions::new().read(true).write(false).open(key_path) {
             Err(why) => panic!("couldn't open {}: {}", key_path.display(), why),
@@ -1267,13 +1267,13 @@ pub unsafe extern "C" fn libspdm_gen_csr(
 
     #[cfg(feature = "no_std")]
     {
-        cert_buffer = include_bytes!("../../certs/slot0/device.cert.der");
+        cert_buffer = include_bytes!("../../certs/alias/slot0/device.cert.der");
     }
     #[cfg(not(feature = "no_std"))]
     let mut cert_reader;
     #[cfg(not(feature = "no_std"))]
     {
-        let cert_path = Path::new("certs/slot0/device.cert.der");
+        let cert_path = Path::new("certs/alias/slot0/device.cert.der");
 
         let cert_file = match OpenOptions::new().read(true).write(false).open(cert_path) {
             Err(why) => panic!("couldn't open {}: {}", cert_path.display(), why),

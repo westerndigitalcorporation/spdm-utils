@@ -229,7 +229,7 @@ SPDM spec).
 For example to set the certificate run:
 
 ```shell
-spdm_utils --doe-pci-cfg request --cert-path ./certs/slot0/immutable.der set-certificate
+spdm_utils --doe-pci-cfg request --cert-path ./certs/alias/slot0/immutable.der set-certificate
 ```
 
 You can additionally specify `--cert-slot-id` to specify the target slot number, valid slot numbers range from
@@ -263,7 +263,7 @@ openssl req -inform der -in ./csr_response.der -out csr_response.req
 You can now sign the CSR
 
 ```shell
-openssl x509 -req -in csr_response.req -out csr_response.cert -CA ./certs/slot0/inter.der -sha384 -days 3650 -set_serial 2 -extensions device_ca -extfile ./certs/openssl.cnf
+openssl x509 -req -in csr_response.req -out csr_response.cert -CA ./certs/alias/slot0/inter.der -sha384 -days 3650 -set_serial 2 -extensions device_ca -extfile ./certs/alias/openssl.cnf
 ```
 
 Then convert the certificate back to DER
@@ -275,7 +275,7 @@ openssl asn1parse -in csr_response.cert -out csr_response.cert.der
 Combine all of the immutable certs
 
 ```shell
-cat ./certs/slot0/ca.cert.der ./certs/slot0/inter.cert.der ./csr_response.cert.der > set-cert.der
+cat ./certs/alias/slot0/ca.cert.der ./certs/alias/slot0/inter.cert.der ./csr_response.cert.der > set-cert.der
 ```
 
 Now you can set the certificate of a slot

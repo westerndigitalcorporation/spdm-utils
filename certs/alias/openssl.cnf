@@ -1,0 +1,58 @@
+[ device_ca ]
+basicConstraints = CA:true
+keyUsage = cRLSign, keyCertSign, digitalSignature, nonRepudiation, keyEncipherment, dataEncipherment, keyAgreement, keyCertSign, cRLSign
+subjectKeyIdentifier = hash
+extendedKeyUsage = critical, serverAuth, clientAuth, OCSPSigning
+
+1.3.6.1.4.1.412.274.6 = ASN1:SEQUENCE:device_ca_spdm_cert_oids # id-spdm-cert-oids
+
+2.23.133.5.4.100.6 = ASN1:NULL # tcg-dice-kp-identityInit
+2.23.133.5.4.100.12 = ASN1:NULL # tcg-dice-kp-eca
+2.23.133.5.4.100.10 = ASN1:NULL # tcg-dice-kp-assertInit
+2.23.133.5.4.100.8 = ASN1:NULL # tcg-dice-kp-attestInit
+
+[ device_ca_spdm_cert_oids ]
+id-spdm-cert-oid = SEQUENCE:device_ca_spdm_cert_hardware_identity_oid
+
+[ device_ca_spdm_cert_hardware_identity_oid ]
+id-DMTF-hardware-identity = OID:1.3.6.1.4.1.412.274.2
+
+[ alias_ca ]
+basicConstraints = CA:true
+keyUsage = cRLSign, keyCertSign, digitalSignature, nonRepudiation, keyEncipherment, dataEncipherment, keyAgreement, keyCertSign, cRLSign
+subjectKeyIdentifier = hash
+extendedKeyUsage = critical, serverAuth, clientAuth, OCSPSigning
+
+1.3.6.1.4.1.412.274.6 = ASN1:SEQUENCE:alias_ca_spdm_cert_oids # id-spdm-cert-oids
+
+2.23.133.5.4.100.12 = ASN1:NULL # tcg-dice-kp-eca
+2.23.133.5.4.100.7 = ASN1:NULL # tcg-dice-kp-identityLoc
+2.23.133.5.4.100.9 = ASN1:NULL # tcg-dice-kp-attestLoc
+2.23.133.5.4.100.11 = ASN1:NULL # tcg-dice-kp-assertLoc
+
+[ alias_ca_spdm_cert_oids ]
+id-spdm-cert-oid = SEQUENCE:alias_ca_spdm_cert_mutable_oid
+
+[ alias_ca_spdm_cert_mutable_oid ]
+id-DMTF-mutable-certificate = OID:1.3.6.1.4.1.412.274.5
+
+[ leaf ]
+basicConstraints = critical,CA:false
+keyUsage = nonRepudiation, digitalSignature, keyEncipherment
+subjectKeyIdentifier = hash
+subjectAltName = otherName:2.23.147;UTF8:Vendor=1b36:Device=0010:CC=010802:REV=02:SSVID=1af4:SSID=1100
+# Add SPDM Responder Authentication { id-DMTF-spdm 3 } and SPDM Requester Authentication { id-DMTF-spdm 4 }
+extendedKeyUsage = critical, serverAuth, clientAuth, OCSPSigning, 1.3.6.1.4.1.412.274.3, 1.3.6.1.4.1.412.274.4
+
+1.3.6.1.4.1.412.274.6 = ASN1:SEQUENCE:leaf_spdm_cert_oids # id-spdm-cert-oids
+
+2.23.133.5.4.100.12 = ASN1:NULL # tcg-dice-kp-eca
+2.23.133.5.4.100.7 = ASN1:NULL # tcg-dice-kp-identityLoc
+2.23.133.5.4.100.9 = ASN1:NULL # tcg-dice-kp-attestLoc
+2.23.133.5.4.100.11 = ASN1:NULL # tcg-dice-kp-assertLoc
+
+[ leaf_spdm_cert_oids ]
+id-spdm-cert-oid = SEQUENCE:leaf_spdm_cert_mutabl_oid
+
+[ leaf_spdm_cert_mutabl_oid ]
+id-DMTF-mutable-certificate = OID:1.3.6.1.4.1.412.274.5
