@@ -27,6 +27,9 @@ use std::path::Path;
 /// * `ver`: SPDM Version
 /// * `asym_algo`: Asymmetric algorithm used
 /// * `hash_algo`: Hashing algorithm used
+/// * `heartbeat_period`: Specifies the `HeartbeatPeriod` in units of seconds.
+///    This value is communicated to the Requester in the `KEY_EXCHANGE_RSP` and
+///    `PSK_EXCHANGE_RSP` messages. A value of 0 disables the heart beat.
 ///
 /// # Returns
 ///
@@ -43,6 +46,7 @@ pub fn setup_capabilities(
     spdm_ver: Option<u8>,
     asym_algo: u32,
     hash_algo: u32,
+    heartbeat_period: u8,
 ) -> Result<(), ()> {
     assert!(slot_id < 8);
     unsafe {
@@ -59,7 +63,9 @@ pub fn setup_capabilities(
             | SPDM_GET_CAPABILITIES_RESPONSE_FLAGS_CSR_CAP
             | SPDM_GET_CAPABILITIES_RESPONSE_FLAGS_SET_CERT_CAP
             | SPDM_GET_CAPABILITIES_RESPONSE_FLAGS_CERT_INSTALL_RESET_CAP
-            | SPDM_GET_CAPABILITIES_RESPONSE_FLAGS_CHUNK_CAP;
+            | SPDM_GET_CAPABILITIES_RESPONSE_FLAGS_CHUNK_CAP
+            | SPDM_GET_CAPABILITIES_RESPONSE_FLAGS_HBEAT_CAP
+            | SPDM_GET_CAPABILITIES_RESPONSE_FLAGS_KEY_UPD_CAP;
         let data_ptr = &mut data as *mut _ as *mut c_void;
         libspdm_set_data(
             context,
@@ -110,6 +116,16 @@ pub fn setup_capabilities(
         libspdm_set_data(
             context,
             libspdm_data_type_t_LIBSPDM_DATA_MEASUREMENT_SPEC,
+            &parameter as *const libspdm_data_parameter_t,
+            data_ptr,
+            core::mem::size_of::<u8>(),
+        );
+
+        let mut data: u8 = heartbeat_period;
+        let data_ptr = &mut data as *mut _ as *mut c_void;
+        libspdm_set_data(
+            context,
+            libspdm_data_type_t_LIBSPDM_DATA_HEARTBEAT_PERIOD,
             &parameter as *const libspdm_data_parameter_t,
             data_ptr,
             core::mem::size_of::<u8>(),
