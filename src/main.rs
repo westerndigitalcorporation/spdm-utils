@@ -407,6 +407,7 @@ fn main() -> Result<(), ()> {
                         None,
                         SPDM_ALGORITHMS_BASE_ASYM_ALGO_TPM_ALG_ECDSA_ECC_NIST_P384,
                         SPDM_ALGORITHMS_BASE_HASH_ALGO_TPM_ALG_SHA_384,
+                        1,
                     )
                     .unwrap();
                     num_provisioned_slots += 1;
@@ -426,6 +427,7 @@ fn main() -> Result<(), ()> {
                 ver,
                 SPDM_ALGORITHMS_BASE_ASYM_ALGO_TPM_ALG_ECDSA_ECC_NIST_P384,
                 SPDM_ALGORITHMS_BASE_HASH_ALGO_TPM_ALG_SHA_384,
+                1,
             )
             .unwrap();
             num_provisioned_slots += 1;

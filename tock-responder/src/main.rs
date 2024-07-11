@@ -80,6 +80,7 @@ fn main() {
         Some(u8::try_from(libspdm::libspdm_rs::SPDM_MESSAGE_VERSION_13).unwrap()),
         SPDM_ALGORITHMS_BASE_ASYM_ALGO_TPM_ALG_ECDSA_ECC_NIST_P384,
         SPDM_ALGORITHMS_BASE_HASH_ALGO_TPM_ALG_SHA_384,
+        1,
     )
     .unwrap();
     writeln!(Console::writer(), "spdm-sample: setup_capabilities [ok]\r",).unwrap();
