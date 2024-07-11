@@ -15,6 +15,7 @@ use crate::doe_pci_cfg::*;
 use crate::request;
 use crate::spdm;
 use crate::spdm::get_measurement;
+use crate::spdm::SpdmSessionInfo;
 use crate::tcg_concise_evidence_binding::check_tcg_dice_evidence_binding;
 use crate::RequestCode;
 #[cfg(libspdm_tests)]
@@ -37,12 +38,7 @@ pub enum TestBackend {
 
 /// # Summary
 ///
-/// Send SPDM requests to the endpoint and automate the request process, such that
-/// any assertions within the requests can be validated. This function does not
-/// do any additional testing outside of the what the requests do.
-///
-/// This will only pass when run against a device that meets the
-/// "TCG DICE Concise Evidence Binding for SPDM" specification.
+/// Setup a spdm session in preperation for testing
 ///
 /// # Parameter
 ///
@@ -50,8 +46,8 @@ pub enum TestBackend {
 ///
 /// # Returns
 ///
-/// Success, or any errors returned by the request.
-pub fn do_tcg_dice_evidence_binding_request_checks(cntx: *mut c_void) -> Result<(), u32> {
+/// SpdmSessionInfo on Success, or any errors returned by the request.
+pub fn setup_test_backend(cntx: *mut c_void) -> Result<SpdmSessionInfo, u32> {
     let slot_id = 0;
 
     // Setup Basic Requester, this is the default config we use for spdm-utils.
@@ -83,13 +79,38 @@ pub fn do_tcg_dice_evidence_binding_request_checks(cntx: *mut c_void) -> Result<
     )?;
     info!(" RequestCode::GetCapabilities ... [OK]");
 
+    Ok(session_info)
+}
+
+/// # Summary
+///
+/// Send SPDM requests to the endpoint and automate the request process, such that
+/// any assertions within the requests can be validated. This function does not
+/// do any additional testing outside of the what the requests do.
+///
+/// This will only pass when run against a device that meets the
+/// "TCG DICE Concise Evidence Binding for SPDM" specification.
+///
+/// # Parameter
+///
+/// * `cntx`: The SPDM context
+///
+/// # Returns
+///
+/// Success, or any errors returned by the request.
+pub fn do_tcg_dice_evidence_binding_request_checks(
+    cntx: *mut c_void,
+    session_info: &mut SpdmSessionInfo,
+) -> Result<(), u32> {
+    let slot_id = 0;
+
     info!("[{slot_id}] Start RequestCode::GetDigests");
     request::prepare_request(
         cntx,
         RequestCode::GetDigests {},
         slot_id,
         None,
-        &mut session_info,
+        session_info,
     )?;
     info!(" RequestCode::GetDigests ... [OK]");
 
@@ -101,7 +122,7 @@ pub fn do_tcg_dice_evidence_binding_request_checks(cntx: *mut c_void) -> Result<
         },
         slot_id,
         None,
-        &mut session_info,
+        session_info,
     )?;
     let cert_usage = check_tcg_dice_evidence_binding(0).unwrap();
     info!(" RequestCode::GetCertificate ... [OK]");
@@ -114,15 +135,17 @@ pub fn do_tcg_dice_evidence_binding_request_checks(cntx: *mut c_void) -> Result<
         },
         slot_id,
         None,
-        &mut session_info,
+        session_info,
     )?;
     info!(" RequestCode::Challenge ... [OK]");
 
     // Setup a PSK session
+    let mut session_info_psk;
     if cert_usage.sign_responses {
-        session_info = unsafe { spdm::start_session(cntx, slot_id, true).unwrap() };
+        session_info_psk = unsafe { spdm::start_session(cntx, slot_id, true).unwrap() };
     } else {
         error!("[{slot_id}] Unable to sign Responses");
+        return Err(0);
     }
 
     // The DICE specifications describe Evidence as measurements that are to
@@ -207,7 +230,7 @@ pub fn do_tcg_dice_evidence_binding_request_checks(cntx: *mut c_void) -> Result<
         },
         slot_id,
         None,
-        &mut session_info,
+        &mut session_info_psk,
     )?;
     info!(" RequestCode::Challenge ... [OK]");
 
@@ -460,7 +483,8 @@ pub unsafe fn start_tests(cntx: *mut c_void, backend: TestBackend) -> ! {
 
     responder_validator_tests(cntx).unwrap();
 
-    if let Err(libpsm_err) = do_tcg_dice_evidence_binding_request_checks(cntx) {
+    let mut session_info = setup_test_backend(cntx).unwrap();
+    if let Err(libpsm_err) = do_tcg_dice_evidence_binding_request_checks(cntx, &mut session_info) {
         panic!("    request failed with libspdm err: {:x}", libpsm_err);
     }
     if let Err(e) = request_all_measurements(cntx) {
