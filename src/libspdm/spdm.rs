@@ -19,7 +19,6 @@ use core::{ffi::c_void, fmt, ptr};
 
 #[cfg(feature = "no_std")]
 use {
-    crate::alloc::string::ToString,
     alloc::alloc::{alloc, dealloc},
     alloc::ffi::CString,
     alloc::string::String,
@@ -2007,18 +2006,16 @@ pub unsafe extern "C" fn libspdm_psk_handshake_secret_hkdf_expand(
     let mut psk;
     let psk_size: usize;
 
-    #[allow(clippy::if_same_then_else)]
-    if psk_hint_size == 0 {
-        psk = "TestPskData".to_string();
-        psk_size = psk.chars().count();
-    } else if psk_hint == PSK_HINT && psk_hint_size == PSK_HINT.len() {
-        psk = "TestPskData".to_string();
-        psk_size = psk.chars().count();
+    // If no psk-hint or if the psk-hint matches what we expect
+    // use the `TestPskData` data. Otherwise return an error
+    if psk_hint_size == 0 || (psk_hint == PSK_HINT && psk_hint_size == PSK_HINT.len()) {
+        psk = b"TestPskData\0".clone();
+        psk_size = psk.len();
     } else {
         return false;
     }
 
-    debug!("[PSK]: {:?}", psk.as_bytes());
+    debug!("[PSK]: {:x?}", psk);
 
     let mut m_libspdm_my_zero_filled_buffer: [u8; 64] = [0; 64];
     let mut handshake_secret: [u8; 64] = [0; 64];
@@ -2097,18 +2094,16 @@ pub unsafe extern "C" fn libspdm_psk_master_secret_hkdf_expand(
     let mut psk;
     let psk_size: usize;
 
-    #[allow(clippy::if_same_then_else)]
-    if psk_hint_size == 0 {
-        psk = "TestPskData".to_string();
-        psk_size = psk.chars().count();
-    } else if psk_hint == PSK_HINT && psk_hint_size == PSK_HINT.len() {
-        psk = "TestPskData".to_string();
-        psk_size = psk.chars().count();
+    // If no psk-hint or if the psk-hint matches what we expect
+    // use the `TestPskData` data. Otherwise return an error
+    if psk_hint_size == 0 || (psk_hint == PSK_HINT && psk_hint_size == PSK_HINT.len()) {
+        psk = b"TestPskData\0".clone();
+        psk_size = psk.len();
     } else {
         return false;
     }
 
-    debug!("[PSK]: {:?}", psk.as_bytes());
+    debug!("[PSK]: {:x?}", psk);
 
     let mut m_libspdm_my_zero_filled_buffer: [u8; 64] = [0; 64];
     let mut handshake_secret: [u8; 64] = [0; 64];
