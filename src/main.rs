@@ -392,7 +392,7 @@ fn main() -> Result<(), ()> {
         Commands::Response { spdm_ver } => {
             let mut num_provisioned_slots = 0;
             for slot_id in 1..8 {
-                let file_name = format!("certs/slot{}/immutable.der", slot_id);
+                let file_name = format!("certs/alias/slot{}/immutable.der", slot_id);
                 let path = Path::new(&file_name);
 
                 if OpenOptions::new()

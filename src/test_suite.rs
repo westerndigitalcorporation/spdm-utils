@@ -375,7 +375,7 @@ pub fn test_set_certificate(cntx: *mut c_void, cert_slot_id: u8) -> Result<(), (
         .arg("-extensions")
         .arg("device_ca")
         .arg("-extfile")
-        .arg("./certs/openssl.cnf")
+        .arg("./certs/alias/openssl.cnf")
         .output()
         .expect("Failed to Sign the CSR")
         .status
@@ -430,7 +430,7 @@ pub fn test_set_certificate(cntx: *mut c_void, cert_slot_id: u8) -> Result<(), (
     info!("Set Certificate ... [OK]");
 
     // Cleanup after test slot
-    let cleanup_path = format!("./certs/slot{}", cert_slot_id);
+    let cleanup_path = format!("./certs/alias/slot{}", cert_slot_id);
     if Path::new(&cleanup_path).is_dir() {
         std::fs::remove_dir_all(cleanup_path).expect("Failed to cleanup test slot");
     }

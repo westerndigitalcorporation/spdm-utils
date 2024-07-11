@@ -241,13 +241,13 @@ pub fn setup_capabilities(
         #[cfg(feature = "no_std")]
         {
             assert!(slot_id == 0);
-            buffer = include_bytes!("../../certs/slot0/bundle_responder.certchain.der");
+            buffer = include_bytes!("../../certs/alias/slot0/bundle_responder.certchain.der");
         }
         #[cfg(not(feature = "no_std"))]
         let mut reader;
         #[cfg(not(feature = "no_std"))]
         {
-            let file_path = format!("certs/slot{}/bundle_responder.certchain.der", slot_id);
+            let file_path = format!("certs/alias/slot{}/bundle_responder.certchain.der", slot_id);
             let path = Path::new(&file_path);
 
             let file = match OpenOptions::new().read(true).write(false).open(path) {

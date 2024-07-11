@@ -1,12 +1,12 @@
 target
-certs/alias.*
-certs/end_*
-certs/bundle*
 
-certs/slot*/alias.*
-certs/slot*/end_*
-certs/slot*/bundle*
-certs/slot*/immutable.sha
+certs/*/slot*/alias.*
+certs/alias/slot*/bundle*
+certs/alias/slot*/end_*
+certs/alias/slot*/immutable.der
+
+certs/slot0/inter.*
+certs/slot0/param.pem
 
 manifest.cbor
 manifest/manifest.out.cbor

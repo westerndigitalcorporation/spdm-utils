@@ -213,7 +213,7 @@ pub fn setup_capabilities(
 
         // Only support slot0
         let path = match slot_id {
-            0 => Path::new("certs/slot0/end_requester.cert.der"),
+            0 => Path::new("certs/alias/slot0/end_requester.cert.der"),
             _ => unimplemented!(),
         };
 
