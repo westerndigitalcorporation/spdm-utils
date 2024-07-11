@@ -15,6 +15,12 @@ use std::io::{BufRead, BufReader};
 #[cfg(not(feature = "no_std"))]
 use std::path::Path;
 
+#[derive(Debug, Copy, Clone, PartialEq)]
+pub enum CertModel {
+    Alias,
+    Device,
+}
+
 /// # Summary
 ///
 /// Setup the capabilities of the responder. This matches the minimum required
@@ -46,6 +52,7 @@ pub fn setup_capabilities(
     spdm_ver: Option<u8>,
     asym_algo: u32,
     hash_algo: u32,
+    cert_mode: CertModel,
     heartbeat_period: u8,
 ) -> Result<(), ()> {
     assert!(slot_id < 8);
@@ -59,13 +66,17 @@ pub fn setup_capabilities(
             | SPDM_GET_CAPABILITIES_RESPONSE_FLAGS_CHAL_CAP
             | SPDM_GET_CAPABILITIES_RESPONSE_FLAGS_MEAS_CAP_SIG
             | SPDM_GET_CAPABILITIES_RESPONSE_FLAGS_MAC_CAP
-            | SPDM_GET_CAPABILITIES_RESPONSE_FLAGS_ALIAS_CERT_CAP
             | SPDM_GET_CAPABILITIES_RESPONSE_FLAGS_CSR_CAP
             | SPDM_GET_CAPABILITIES_RESPONSE_FLAGS_SET_CERT_CAP
             | SPDM_GET_CAPABILITIES_RESPONSE_FLAGS_CERT_INSTALL_RESET_CAP
             | SPDM_GET_CAPABILITIES_RESPONSE_FLAGS_CHUNK_CAP
             | SPDM_GET_CAPABILITIES_RESPONSE_FLAGS_HBEAT_CAP
             | SPDM_GET_CAPABILITIES_RESPONSE_FLAGS_KEY_UPD_CAP;
+
+        if cert_mode == CertModel::Alias {
+            data |= SPDM_GET_CAPABILITIES_RESPONSE_FLAGS_ALIAS_CERT_CAP;
+        }
+
         let data_ptr = &mut data as *mut _ as *mut c_void;
         libspdm_set_data(
             context,
@@ -237,17 +248,32 @@ pub fn setup_capabilities(
             return Err(());
         }
 
-        let buffer;
+        let (cert_chain_buffer, cert_chain_size);
         #[cfg(feature = "no_std")]
         {
             assert!(slot_id == 0);
-            buffer = include_bytes!("../../certs/alias/slot0/bundle_responder.certchain.der");
+            if cert_mode == CertModel::Alias {
+                let buffer =
+                    include_bytes!("../../certs/alias/slot0/bundle_responder.certchain.der");
+                (cert_chain_buffer, cert_chain_size) =
+                    get_local_certchain(buffer, asym_algo, hash_algo, false);
+            } else {
+                let buffer =
+                    include_bytes!("../../certs/device/slot0/bundle_responder.certchain.der");
+                (cert_chain_buffer, cert_chain_size) =
+                    get_local_certchain(buffer, asym_algo, hash_algo, false);
+            }
         }
         #[cfg(not(feature = "no_std"))]
-        let mut reader;
-        #[cfg(not(feature = "no_std"))]
         {
-            let file_path = format!("certs/alias/slot{}/bundle_responder.certchain.der", slot_id);
+            let file_path = if cert_mode == CertModel::Alias {
+                format!("certs/alias/slot{}/bundle_responder.certchain.der", slot_id)
+            } else {
+                format!(
+                    "certs/device/slot{}/bundle_responder.certchain.der",
+                    slot_id
+                )
+            };
             let path = Path::new(&file_path);
 
             let file = match OpenOptions::new().read(true).write(false).open(path) {
@@ -255,12 +281,13 @@ pub fn setup_capabilities(
                 Ok(file) => file,
             };
 
-            reader = BufReader::new(file);
-            buffer = reader.fill_buf().unwrap();
+            let mut reader = BufReader::new(file);
+            let buffer = reader.fill_buf().unwrap();
+
+            (cert_chain_buffer, cert_chain_size) =
+                get_local_certchain(buffer, asym_algo, hash_algo, false);
         }
 
-        let (cert_chain_buffer, cert_chain_size) =
-            get_local_certchain(buffer, asym_algo, hash_algo, false);
         if LibspdmReturnStatus::libspdm_status_is_error(libspdm_set_data(
             context,
             libspdm_data_type_t_LIBSPDM_DATA_LOCAL_PUBLIC_CERT_CHAIN,

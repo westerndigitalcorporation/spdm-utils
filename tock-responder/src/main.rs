@@ -17,6 +17,7 @@ use libspdm::libspdm_rs::{
     SPDM_ALGORITHMS_BASE_HASH_ALGO_TPM_ALG_SHA_384,
 };
 use libspdm::responder;
+use libspdm::responder::CertModel;
 use libspdm::spdm;
 use libtock::console::Console;
 use libtock::runtime::{set_main, stack_size};
@@ -80,6 +81,7 @@ fn main() {
         Some(u8::try_from(libspdm::libspdm_rs::SPDM_MESSAGE_VERSION_13).unwrap()),
         SPDM_ALGORITHMS_BASE_ASYM_ALGO_TPM_ALG_ECDSA_ECC_NIST_P384,
         SPDM_ALGORITHMS_BASE_HASH_ALGO_TPM_ALG_SHA_384,
+        CertModel::Alias,
         1,
     )
     .unwrap();
