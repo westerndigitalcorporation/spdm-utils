@@ -1155,6 +1155,8 @@ pub unsafe extern "C" fn libspdm_write_certificate_to_nvm(
     }
     #[cfg(not(feature = "no_std"))]
     {
+        // TODO: We have no way to know if this is an alias or device
+        // certificate.
         let dir_name = format!("certs/alias/slot{}", slot_id);
         let file_name = format!("{}/immutable.der", dir_name);
         let path = Path::new(&file_name);

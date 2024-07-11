@@ -15,7 +15,7 @@ use std::path::Path;
 #[macro_use]
 extern crate log;
 use env_logger::Env;
-use libspdm::{responder, spdm};
+use libspdm::{responder, responder::CertModel, spdm};
 
 pub static SOCKET_PATH: &str = "SPDM-Utils-loopback-socket";
 
@@ -181,6 +181,14 @@ enum Commands {
         /// These are communicated through the `GET_VERSION / VERSION` messages.
         #[arg(long, default_value = "1.3")]
         spdm_ver: Option<String>,
+
+        /// The SPDM certificate model to use. See `Figure 1 — SPDM certificate chain models`
+        /// in SPDM (DSP0274) version 1.3 for details.
+        /// Supports:
+        ///     - device: DeviceCert Model
+        ///     - alias: AliasCert Model (the default)
+        #[arg(long, default_value = "alias")]
+        certificate_model: String,
     },
     Tests,
 }
@@ -389,10 +397,31 @@ fn main() -> Result<(), ()> {
             request::prepare_request(cntx_ptr, code, cert_slot_id, cert_path, &mut session_info)
                 .unwrap();
         }
-        Commands::Response { spdm_ver } => {
+        Commands::Response {
+            spdm_ver,
+            certificate_model,
+        } => {
             let mut num_provisioned_slots = 0;
+
+            let model = if certificate_model == "alias" {
+                CertModel::Alias
+            } else if certificate_model == "device" {
+                CertModel::Device
+            } else {
+                panic!("Unsupported certificate model");
+            };
+
             for slot_id in 1..8 {
-                let file_name = format!("certs/alias/slot{}/immutable.der", slot_id);
+                let file_name = if certificate_model == "alias" {
+                    format!("certs/alias/slot{}/immutable.der", slot_id)
+                } else if certificate_model == "device" {
+                    format!(
+                        "certs/device/slot{}/bundle_responder.certchain.der",
+                        slot_id
+                    )
+                } else {
+                    panic!("Unsupported certificate model");
+                };
                 let path = Path::new(&file_name);
 
                 if OpenOptions::new()
@@ -407,6 +436,7 @@ fn main() -> Result<(), ()> {
                         None,
                         SPDM_ALGORITHMS_BASE_ASYM_ALGO_TPM_ALG_ECDSA_ECC_NIST_P384,
                         SPDM_ALGORITHMS_BASE_HASH_ALGO_TPM_ALG_SHA_384,
+                        model,
                         1,
                     )
                     .unwrap();
@@ -427,6 +457,7 @@ fn main() -> Result<(), ()> {
                 ver,
                 SPDM_ALGORITHMS_BASE_ASYM_ALGO_TPM_ALG_ECDSA_ECC_NIST_P384,
                 SPDM_ALGORITHMS_BASE_HASH_ALGO_TPM_ALG_SHA_384,
+                model,
                 1,
             )
             .unwrap();
