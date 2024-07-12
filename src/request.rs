@@ -211,23 +211,11 @@ pub fn setup_capabilities(
             return Err(());
         }
 
-        // First, let's see if there is a `slot_id` file, that
-        // means we have been provided our own custom cert from SET_CERTIFICATE
-        let file_name = format!("slot_id{}", slot_id);
-        let mut path = Path::new(&file_name);
-
-        if OpenOptions::new()
-            .read(true)
-            .write(false)
-            .open(path)
-            .is_err()
-        {
-            // Only support slot0
-            path = match slot_id {
-                0 => Path::new("certs/slot0/end_requester.cert.der"),
-                _ => unimplemented!(),
-            };
-        }
+        // Only support slot0
+        let path = match slot_id {
+            0 => Path::new("certs/slot0/end_requester.cert.der"),
+            _ => unimplemented!(),
+        };
 
         let file = match OpenOptions::new().read(true).write(false).open(path) {
             Err(why) => panic!("couldn't open {}: {}", path.display(), why),
