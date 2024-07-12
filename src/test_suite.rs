@@ -322,6 +322,15 @@ pub fn test_set_certificate(cntx: *mut c_void, cert_slot_id: u8) -> Result<(), (
 
     let mut session_info = unsafe { spdm::start_session(cntx, session_slot_id, false).unwrap() };
 
+    let alias_cert = unsafe {
+        crate::libspdm_is_capabilities_flag_supported(
+            cntx as *const crate::libspdm_context_t,
+            true,
+            0,
+            crate::SPDM_GET_CAPABILITIES_RESPONSE_FLAGS_ALIAS_CERT_CAP,
+        )
+    };
+
     // Do GetCsr
     if let Err(rc) = request::prepare_request(
         cntx,
@@ -358,28 +367,53 @@ pub fn test_set_certificate(cntx: *mut c_void, cert_slot_id: u8) -> Result<(), (
         .success());
 
     // 2. Sign the CSR
-    assert!(Command::new("openssl")
-        .arg("x509")
-        .arg("-req")
-        .arg("-in")
-        .arg("csr_response.req")
-        .arg("-out")
-        .arg("csr_response.cert")
-        .arg("-CA")
-        .arg("./certs/slot0/inter.der")
-        .arg("-sha384")
-        .arg("-days")
-        .arg("3650")
-        .arg("-set_serial")
-        .arg("2")
-        .arg("-extensions")
-        .arg("device_ca")
-        .arg("-extfile")
-        .arg("./certs/alias/openssl.cnf")
-        .output()
-        .expect("Failed to Sign the CSR")
-        .status
-        .success());
+    if alias_cert {
+        assert!(Command::new("openssl")
+            .arg("x509")
+            .arg("-req")
+            .arg("-in")
+            .arg("csr_response.req")
+            .arg("-out")
+            .arg("csr_response.cert")
+            .arg("-CA")
+            .arg("./certs/slot0/inter.der")
+            .arg("-sha384")
+            .arg("-days")
+            .arg("3650")
+            .arg("-set_serial")
+            .arg("2")
+            .arg("-extensions")
+            .arg("device_ca")
+            .arg("-extfile")
+            .arg("./certs/alias/openssl.cnf")
+            .output()
+            .expect("Failed to Sign the CSR")
+            .status
+            .success());
+    } else {
+        assert!(Command::new("openssl")
+            .arg("x509")
+            .arg("-req")
+            .arg("-in")
+            .arg("csr_response.req")
+            .arg("-out")
+            .arg("csr_response.cert")
+            .arg("-CA")
+            .arg("./certs/slot0/inter.der")
+            .arg("-sha384")
+            .arg("-days")
+            .arg("3650")
+            .arg("-set_serial")
+            .arg("2")
+            .arg("-extensions")
+            .arg("leaf")
+            .arg("-extfile")
+            .arg("./certs/device/openssl.cnf")
+            .output()
+            .expect("Failed to Sign the CSR")
+            .status
+            .success());
+    }
 
     // 3. Convert the Certificate back to DER format
     assert!(Command::new("openssl")
@@ -430,7 +464,11 @@ pub fn test_set_certificate(cntx: *mut c_void, cert_slot_id: u8) -> Result<(), (
     info!("Set Certificate ... [OK]");
 
     // Cleanup after test slot
-    let cleanup_path = format!("./certs/alias/slot{}", cert_slot_id);
+    let cleanup_path = if alias_cert {
+        format!("./certs/alias/slot{}", cert_slot_id)
+    } else {
+        format!("./certs/device/slot{}", cert_slot_id)
+    };
     if Path::new(&cleanup_path).is_dir() {
         std::fs::remove_dir_all(cleanup_path).expect("Failed to cleanup test slot");
     }
@@ -484,8 +522,22 @@ pub unsafe fn start_tests(cntx: *mut c_void, backend: TestBackend) -> ! {
     responder_validator_tests(cntx).unwrap();
 
     let mut session_info = setup_test_backend(cntx).unwrap();
-    if let Err(libpsm_err) = do_tcg_dice_evidence_binding_request_checks(cntx, &mut session_info) {
-        panic!("    request failed with libspdm err: {:x}", libpsm_err);
+
+    let alias_cert = unsafe {
+        crate::libspdm_is_capabilities_flag_supported(
+            cntx as *const crate::libspdm_context_t,
+            true,
+            0,
+            crate::SPDM_GET_CAPABILITIES_RESPONSE_FLAGS_ALIAS_CERT_CAP,
+        )
+    };
+
+    if alias_cert {
+        if let Err(libpsm_err) =
+            do_tcg_dice_evidence_binding_request_checks(cntx, &mut session_info)
+        {
+            panic!("    request failed with libspdm err: {:x}", libpsm_err);
+        }
     }
     if let Err(e) = request_all_measurements(cntx) {
         panic!("    failed to request all measurements err:  {:x}", e);
