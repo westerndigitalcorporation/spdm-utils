@@ -40,7 +40,10 @@ jobs:
             -DCOMPILED_LIBCRYPTO_PATH=/usr/lib/ \
             -DCOMPILED_LIBSSL_PATH=/usr/lib/ \
             -DDISABLE_TESTS=1 \
-            -DCMAKE_C_FLAGS="-DLIBSPDM_ENABLE_CAPABILITY_EVENT_CAP=0" \
+            -DCMAKE_C_FLAGS=" \
+                  -DLIBSPDM_ENABLE_CAPABILITY_EVENT_CAP=0 \
+                  -DLIBSPDM_ENABLE_CAPABILITY_MEL_CAP=0 \
+                  " \
             .. ; \
           make -j8; \
           popd;
@@ -100,6 +103,7 @@ jobs:
             -DCMAKE_C_FLAGS=" \
                   -DMBEDTLS_SKIP_TIME_CHECK \
                   -DLIBSPDM_ENABLE_CAPABILITY_EVENT_CAP=0 \
+                  -DLIBSPDM_ENABLE_CAPABILITY_MEL_CAP=0 \
                   -DMBEDTLS_PLATFORM_MS_TIME_ALT \
                   " \
             .. ; \
@@ -129,6 +133,7 @@ jobs:
       #       -DCMAKE_C_FLAGS=" \
       #             -DMBEDTLS_SKIP_TIME_CHECK \
       #             -DLIBSPDM_ENABLE_CAPABILITY_EVENT_CAP=0 \
+      #             -DLIBSPDM_ENABLE_CAPABILITY_MEL_CAP=0 \
       #             " \
       #       .. ; \
       #     make -j8; \
