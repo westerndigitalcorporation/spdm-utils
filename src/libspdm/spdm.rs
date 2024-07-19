@@ -1031,6 +1031,7 @@ pub unsafe fn start_session(
 
 #[no_mangle]
 pub unsafe extern "C" fn libspdm_requester_data_sign(
+    _spdm_context: *mut c_void,
     _spdm_version: libspdm_rs::spdm_version_number_t,
     _op_code: u8,
     _req_base_asym_alg: u16,
@@ -1046,6 +1047,7 @@ pub unsafe extern "C" fn libspdm_requester_data_sign(
 #[cfg(test)]
 libspdm_match_fn_prototypes!(
     unsafe extern "C" fn(
+        *mut c_void,
         libspdm_rs::spdm_version_number_t,
         u8,
         u16,
@@ -1085,6 +1087,7 @@ libspdm_match_fn_prototypes!(
 /// True  signing success, false otherwise
 #[no_mangle]
 pub unsafe extern "C" fn libspdm_responder_data_sign(
+    _spdm_context: *mut c_void,
     spdm_version: libspdm_rs::spdm_version_number_t,
     op_code: u8,
     base_asym_algo: u32,
@@ -1172,15 +1175,16 @@ pub unsafe extern "C" fn libspdm_responder_data_sign(
 #[cfg(test)]
 libspdm_match_fn_prototypes!(
     unsafe extern "C" fn(
-        spdm_version: libspdm_rs::spdm_version_number_t,
-        op_code: u8,
-        base_asym_algo: u32,
-        base_hash_algo: u32,
-        is_data_hash: bool,
-        message: *const u8,
-        message_size: usize,
-        signature: *mut u8,
-        sig_size: *mut usize,
+        *mut c_void,
+        libspdm_rs::spdm_version_number_t,
+        u8,
+        u32,
+        u32,
+        bool,
+        *const u8,
+        usize,
+        *mut u8,
+        *mut usize,
     ) -> bool,
     libspdm_responder_data_sign
 );
@@ -1204,6 +1208,7 @@ libspdm_match_fn_prototypes!(
 /// True if certificate saved to NV successfully, otherwise, false
 #[no_mangle]
 pub unsafe extern "C" fn libspdm_write_certificate_to_nvm(
+    _spdm_context: *mut c_void,
     slot_id: u8,
     cert_chain: *const c_void,
     cert_chain_size: usize,
@@ -1242,10 +1247,9 @@ pub unsafe extern "C" fn libspdm_write_certificate_to_nvm(
         true
     }
 }
-
 #[cfg(test)]
 libspdm_match_fn_prototypes!(
-    unsafe extern "C" fn(u8, *const c_void, usize, u32, u32) -> bool,
+    unsafe extern "C" fn(*mut c_void, u8, *const c_void, usize, u32, u32) -> bool,
     libspdm_write_certificate_to_nvm
 );
 
@@ -1274,6 +1278,7 @@ libspdm_match_fn_prototypes!(
 /// True if CSR generation was a success, false otherwise
 #[no_mangle]
 pub unsafe extern "C" fn libspdm_gen_csr(
+    _spdm_context: *mut c_void,
     base_hash_algo: u32,
     base_asym_algo: u32,
     need_reset: *mut bool,
@@ -1413,18 +1418,19 @@ pub unsafe extern "C" fn libspdm_gen_csr(
 #[cfg(test)]
 libspdm_match_fn_prototypes!(
     unsafe extern "C" fn(
-        base_hash_algo: u32,
-        base_asym_algo: u32,
-        need_reset: *mut bool,
-        _request: *const c_void,
-        _request_size: usize,
-        requester_info: *mut u8,
-        requester_info_length: usize,
-        _opaque_data: *mut u8,
-        _opaque_data_length: u16,
-        csr_len: *mut usize,
-        csr_pointer: *mut u8,
-        is_device_cert_model: bool,
+        *mut c_void,
+        u32,
+        u32,
+        *mut bool,
+        *const c_void,
+        usize,
+        *mut u8,
+        usize,
+        *mut u8,
+        u16,
+        *mut usize,
+        *mut u8,
+        bool,
     ) -> bool,
     libspdm_gen_csr
 );
@@ -1455,6 +1461,7 @@ libspdm_match_fn_prototypes!(
 /// False if the measurement summary has is not generated/generation failure
 #[no_mangle]
 pub unsafe extern "C" fn libspdm_generate_measurement_summary_hash(
+    spdm_context: *mut c_void,
     spdm_version: libspdm_rs::spdm_version_number_t,
     base_hash_algo: u32,
     measurement_specification: u8,
@@ -1480,6 +1487,7 @@ pub unsafe extern "C" fn libspdm_generate_measurement_summary_hash(
             let mut device_measurement_count = 0;
 
             let ret = libspdm_measurement_collection(
+                spdm_context,
                 spdm_version,
                 measurement_specification,
                 measurement_hash_algo,
@@ -1575,13 +1583,14 @@ pub unsafe extern "C" fn libspdm_generate_measurement_summary_hash(
 #[cfg(test)]
 libspdm_match_fn_prototypes!(
     unsafe extern "C" fn(
-        spdm_version: libspdm_rs::spdm_version_number_t,
-        base_hash_algo: u32,
-        measurement_specification: u8,
-        measurement_hash_algo: u32,
-        measurement_summary_hash_type: u8,
-        measurement_summary_hash: *mut u8,
-        measurement_summary_hash_size: u32,
+        *mut c_void,
+        libspdm_rs::spdm_version_number_t,
+        u32,
+        u8,
+        u32,
+        u8,
+        *mut u8,
+        u32,
     ) -> bool,
     libspdm_generate_measurement_summary_hash
 );
@@ -1900,6 +1909,7 @@ unsafe fn libspdm_fill_measurement_device_mode_block(
 /// RETURN_***: Any other RETURN_ error indicating the type of failure.
 #[no_mangle]
 pub unsafe extern "C" fn libspdm_measurement_collection(
+    _spdm_context: *mut c_void,
     spdm_version: libspdm_rs::spdm_version_number_t,
     measurement_specification: u8,
     measurement_hash_algo: u32,
@@ -2084,15 +2094,16 @@ pub unsafe extern "C" fn libspdm_measurement_collection(
 #[cfg(test)]
 libspdm_match_fn_prototypes!(
     unsafe extern "C" fn(
-        spdm_version: libspdm_rs::spdm_version_number_t,
-        measurement_specification: u8,
-        measurement_hash_algo: u32,
-        measurements_index: u8,
-        request_attribute: u8,
-        content_changed: *mut u8,
-        measurements_count: *mut u8,
-        measurements: *mut c_void,
-        measurements_size: *mut usize,
+        *mut c_void,
+        libspdm_rs::spdm_version_number_t,
+        u8,
+        u32,
+        u8,
+        u8,
+        *mut u8,
+        *mut u8,
+        *mut c_void,
+        *mut usize,
     ) -> u32,
     libspdm_measurement_collection
 );
@@ -2353,6 +2364,7 @@ libspdm_match_fn_prototypes!(
 /// Format the certificate specified by `path` into what `libspdm` expects
 #[no_mangle]
 pub unsafe extern "C" fn libspdm_measurement_opaque_data(
+    _spdm_context: *mut c_void,
     _spdm_version: libspdm_rs::spdm_version_number_t,
     _measurement_specification: u8,
     _measurement_hash_algo: u32,
@@ -2376,19 +2388,21 @@ pub unsafe extern "C" fn libspdm_measurement_opaque_data(
 #[cfg(test)]
 libspdm_match_fn_prototypes!(
     unsafe extern "C" fn(
-        _spdm_version: libspdm_rs::spdm_version_number_t,
-        _measurement_specification: u8,
-        _measurement_hash_algo: u32,
-        _measurement_index: u8,
-        _request_attribute: u8,
-        opaque_data: *mut c_void,
-        opaque_data_size: *mut usize,
+        *mut c_void,
+        libspdm_rs::spdm_version_number_t,
+        u8,
+        u32,
+        u8,
+        u8,
+        *mut c_void,
+        *mut usize,
     ) -> bool,
     libspdm_measurement_opaque_data
 );
 
 #[no_mangle]
 pub unsafe extern "C" fn libspdm_challenge_opaque_data(
+    _spdm_context: *mut c_void,
     _spdm_version: libspdm_rs::spdm_version_number_t,
     _slot_id: u8,
     _measurement_summary_hash: *mut u8,
@@ -2411,18 +2425,20 @@ pub unsafe extern "C" fn libspdm_challenge_opaque_data(
 #[cfg(test)]
 libspdm_match_fn_prototypes!(
     unsafe extern "C" fn(
-        _spdm_version: libspdm_rs::spdm_version_number_t,
-        _slot_id: u8,
-        _measurement_summary_hash: *mut u8,
-        _measurement_summary_hash_size: usize,
-        opaque_data: *mut c_void,
-        opaque_data_size: *mut usize,
+        *mut c_void,
+        libspdm_rs::spdm_version_number_t,
+        u8,
+        *mut u8,
+        usize,
+        *mut c_void,
+        *mut usize,
     ) -> bool,
     libspdm_challenge_opaque_data
 );
 
 #[no_mangle]
 pub unsafe extern "C" fn libspdm_encap_challenge_opaque_data(
+    _spdm_context: *mut c_void,
     _spdm_version: libspdm_rs::spdm_version_number_t,
     _slot_id: u8,
     _measurement_summary_hash: *mut u8,
@@ -2445,12 +2461,13 @@ pub unsafe extern "C" fn libspdm_encap_challenge_opaque_data(
 #[cfg(test)]
 libspdm_match_fn_prototypes!(
     unsafe extern "C" fn(
-        _spdm_version: libspdm_rs::spdm_version_number_t,
-        _slot_id: u8,
-        _measurement_summary_hash: *mut u8,
-        _measurement_summary_hash_size: usize,
-        opaque_data: *mut c_void,
-        opaque_data_size: *mut usize,
+        *mut c_void,
+        libspdm_rs::spdm_version_number_t,
+        u8,
+        *mut u8,
+        usize,
+        *mut c_void,
+        *mut usize,
     ) -> bool,
     libspdm_encap_challenge_opaque_data
 );
@@ -2495,6 +2512,7 @@ libspdm_match_fn_prototypes!(
 /// True if CSR generation was a success, false otherwise
 #[no_mangle]
 pub unsafe extern "C" fn libspdm_gen_csr_ex(
+    spdm_context: *mut c_void,
     base_hash_algo: c_uint,
     base_asym_algo: c_uint,
     need_reset: *mut bool,
@@ -2528,6 +2546,7 @@ pub unsafe extern "C" fn libspdm_gen_csr_ex(
         }
     };
     return libspdm_gen_csr(
+        spdm_context,
         base_hash_algo,
         base_asym_algo,
         need_reset,
@@ -2546,21 +2565,22 @@ pub unsafe extern "C" fn libspdm_gen_csr_ex(
 #[cfg(test)]
 libspdm_match_fn_prototypes!(
     unsafe extern "C" fn(
-        base_hash_algo: c_uint,
-        base_asym_algo: c_uint,
-        need_reset: *mut bool,
-        request: *const c_void,
-        request_size: usize,
-        requester_info: *mut c_uchar,
-        requester_info_length: usize,
-        opaque_data: *mut c_uchar,
-        opaque_data_length: u16,
-        csr_len: *mut usize,
-        csr_pointer: *mut c_uchar,
-        req_cert_model: c_uchar,
-        csr_tracking_tag: *mut c_uchar,
-        _req_key_pair_id: u8,
-        overwrite: bool,
+        *mut c_void,
+        c_uint,
+        c_uint,
+        *mut bool,
+        *const c_void,
+        usize,
+        *mut c_uchar,
+        usize,
+        *mut c_uchar,
+        u16,
+        *mut usize,
+        *mut c_uchar,
+        c_uchar,
+        *mut c_uchar,
+        u8,
+        bool,
     ) -> bool,
     libspdm_gen_csr_ex
 );
@@ -2806,12 +2826,12 @@ pub unsafe fn get_negotiated_algos(cntx_ptr: *mut c_void, slot_id: u8) -> Result
 
 /// return if current code is running in a trusted environment.
 #[no_mangle]
-pub unsafe extern "C" fn libspdm_is_in_trusted_environment() -> bool {
+pub unsafe extern "C" fn libspdm_is_in_trusted_environment(_spdm_context: *mut c_void) -> bool {
     true
 }
 #[cfg(test)]
 libspdm_match_fn_prototypes!(
-    unsafe extern "C" fn() -> bool,
+    unsafe extern "C" fn(*mut c_void) -> bool,
     libspdm_is_in_trusted_environment
 );
 

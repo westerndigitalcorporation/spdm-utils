@@ -49,6 +49,7 @@ fn main() {
 
         bindgen::Builder::default()
             .clang_arg("-DLIBSPDM_TESTS")
+            .clang_arg("-DLIBSPDM_HAL_PASS_SPDM_CONTEXT=1")
             .header("wrapper.h")
             .clang_arg("-Ithird-party/libspdm/include")
             .clang_arg("-Ithird-party/libspdm")
@@ -56,6 +57,7 @@ fn main() {
             .clang_arg("-Ithird-party/SPDM-Responder-Validator/common_test_framework/include/")
     } else {
         bindgen::Builder::default()
+            .clang_arg("-DLIBSPDM_HAL_PASS_SPDM_CONTEXT=1")
             .header("wrapper.h")
             .clang_arg("-Ithird-party/libspdm/include")
             .clang_arg("-Ithird-party/libspdm")
