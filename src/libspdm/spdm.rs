@@ -460,16 +460,24 @@ pub unsafe fn setup_transport_layer(
         data_ptr,
         core::mem::size_of::<u32>(),
     )) {
-        panic!("Unable to set data");
+        error!("Unable to set data");
+        return Err(());
     }
 
     let libspdm_scratch_buffer_size = libspdm_get_sizeof_required_scratch_buffer(context);
     let libspdm_scratch_buffer_layout =
-        Layout::from_size_align(libspdm_scratch_buffer_size, 8).unwrap();
+        match Layout::from_size_align(libspdm_scratch_buffer_size, 8) {
+            Ok(layout) => layout,
+            Err(e) => {
+                error!("Failed to generate layout: {:?}", e);
+                return Err(());
+            }
+        };
     let libspdm_scratch_buffer = alloc(libspdm_scratch_buffer_layout);
 
     if libspdm_scratch_buffer.is_null() {
-        panic!("Unable to allocate libspdm scratch buffer");
+        error!("Unable to allocate libspdm scratch buffer");
+        return Err(());
     }
 
     let libspdm_scratch_buffer_ptr: *mut c_void = libspdm_scratch_buffer as *mut _ as *mut c_void;
