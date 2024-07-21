@@ -302,9 +302,18 @@ pub fn register_device(context: *mut c_void, pcie_vid: u16, pcie_devid: u16) -> 
         devid: pcie_devid,
     };
     unsafe {
-        SEND_BUFFER.set(buffer_send).unwrap();
-        RECEIVE_BUFFER.set(buffer_receive).unwrap();
-        PCIE_IDENTIFIERS.set(pcie_ids).unwrap();
+        SEND_BUFFER.set(buffer_send).map_err(|e| {
+            error!("Failed to set send buffer: {e:?}");
+            ()
+        })?;
+        RECEIVE_BUFFER.set(buffer_receive).map_err(|e| {
+            error!("Failed to set receive buffer: {e:?}");
+            ()
+        })?;
+        PCIE_IDENTIFIERS.set(pcie_ids).map_err(|e| {
+            error!("Failed to set device PCIe Identifiers: {e:?}");
+            ()
+        })?;
 
         libspdm_register_device_io_func(
             context,
