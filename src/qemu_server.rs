@@ -474,9 +474,18 @@ pub fn register_device(
     for client in listener.incoming() {
         match client {
             Ok(client_conn) => {
-                info!("New connection: {}", client_conn.peer_addr().unwrap());
+                info!(
+                    "New connection: {}",
+                    client_conn.peer_addr().map_err(|e| {
+                        error!("Failed to get socket address: {:?}", e);
+                        ()
+                    })?
+                );
                 unsafe {
-                    CLIENT_CONNECTION.set(client_conn).unwrap();
+                    CLIENT_CONNECTION.set(client_conn).map_err(|_| {
+                        error!("Failed to set/save client connection");
+                        ()
+                    })?;
                 }
                 break;
             }
@@ -487,8 +496,14 @@ pub fn register_device(
     }
 
     unsafe {
-        SEND_BUFFER.set(buffer_send).unwrap();
-        RECEIVE_BUFFER.set(buffer_receive).unwrap();
+        SEND_BUFFER.set(buffer_send).map_err(|_| {
+            error!("Failed to set send buffer");
+            ()
+        })?;
+        RECEIVE_BUFFER.set(buffer_receive).map_err(|_| {
+            error!("Failed to receive buffer");
+            ()
+        })?;
 
         match transport {
             TransportLayer::Doe => {
