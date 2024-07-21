@@ -277,7 +277,10 @@ pub fn register_device(context: *mut c_void) -> Result<(), ()> {
     let socket = Path::new(SOCKET_PATH);
 
     if socket.exists() {
-        fs::remove_file(socket).unwrap();
+        fs::remove_file(socket).map_err(|e| {
+            error!("Failed to remove out socket file {:?}", e);
+            ()
+        })?;
     }
 
     let stream = match UnixListener::bind(socket) {
@@ -298,7 +301,10 @@ pub fn register_device(context: *mut c_void) -> Result<(), ()> {
                 unsafe {
                     // TODO: It would be nice to somehow save this in libspdm
                     // context
-                    CLIENT_CONNECTION.set(client_connection).unwrap();
+                    CLIENT_CONNECTION.set(client_connection).map_err(|_| {
+                        error!("Failed to set/save client connection");
+                        ()
+                    })?;
                 }
                 info!("Client connected");
                 break;
@@ -311,8 +317,14 @@ pub fn register_device(context: *mut c_void) -> Result<(), ()> {
     }
 
     unsafe {
-        SEND_BUFFER.set(buffer_send).unwrap();
-        RECEIVE_BUFFER.set(buffer_receive).unwrap();
+        SEND_BUFFER.set(buffer_send).map_err(|_| {
+            error!("Failed to set send buffer");
+            ()
+        })?;
+        RECEIVE_BUFFER.set(buffer_receive).map_err(|_| {
+            error!("Failed to set receive buffer");
+            ()
+        })?;
 
         libspdm_register_device_io_func(
             context,
