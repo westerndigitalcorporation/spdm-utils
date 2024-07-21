@@ -377,26 +377,58 @@ pub fn register_device(
     let buffer_send = [0; SEND_RECEIVE_BUFFER_LEN];
     let buffer_receive = [0; SEND_RECEIVE_BUFFER_LEN];
 
-    let udev = usb_dev.expect("USB device path not specified");
+    let udev = usb_dev.ok_or_else(|| {
+        error!("USB device path not specified");
+        ()
+    })?;
 
     let port = serialport::new(&udev, usb_baud)
         .timeout(Duration::from_secs(30))
         .open()
-        .expect("Failed to open port");
+        .map_err(|e| {
+            error!("Failed to open port {:?}", e);
+            ()
+        })?;
 
     // Clear I/O buffers to drop any misc/lingering data
-    port.clear(serialport::ClearBuffer::All)
-        .expect("Failed to clear buffer for {udev}");
-    assert_eq!(port.bytes_to_read().unwrap(), 0);
-    assert_eq!(port.bytes_to_write().unwrap(), 0);
+    port.clear(serialport::ClearBuffer::All).map_err(|_| {
+        error!("Failed to clear buffer for {udev}");
+        ()
+    })?;
+    assert_eq!(
+        port.bytes_to_read().map_err(|e| {
+            error!("Failed to read bytes: {:?}", e);
+            ()
+        })?,
+        0
+    );
+    assert_eq!(
+        port.bytes_to_write().map_err(|e| {
+            error!("Failed to read bytes: {:?}", e);
+            ()
+        })?,
+        0
+    );
 
     info!("Serial Port {:} at {:} bits/s", &udev, usb_baud);
 
-    SERIAL_PORT.lock().unwrap().replace(port);
+    SERIAL_PORT
+        .lock()
+        .map_err(|_| {
+            error!("Failed to lock serial port");
+            ()
+        })?
+        .replace(port);
 
     unsafe {
-        SEND_BUFFER.set(buffer_send).unwrap();
-        RECEIVE_BUFFER.set(buffer_receive).unwrap();
+        SEND_BUFFER.set(buffer_send).map_err(|_| {
+            error!("Failed to set send buffer");
+            ()
+        })?;
+        RECEIVE_BUFFER.set(buffer_receive).map_err(|_| {
+            error!("Failed to set receive buffer");
+            ()
+        })?;
 
         let _ = MCTPCONTEXT.set(libmctp::MCTPSMBusContext::new(
             SOURCE_ID,
