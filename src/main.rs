@@ -309,14 +309,14 @@ fn main() -> Result<(), ()> {
     if cli.doe_pci_cfg {
         // Check that a device exists with provided vid/devid
         unsafe {
-            let (pacc, _, _) = doe_pci_cfg::get_pcie_dev(cli.pcie_vid, cli.pcie_devid).unwrap();
+            let (pacc, _, _) = doe_pci_cfg::get_pcie_dev(cli.pcie_vid, cli.pcie_devid)?;
             pci_cleanup(pacc);
-            doe_pci_cfg::register_device(cntx_ptr, cli.pcie_vid, cli.pcie_devid).unwrap();
+            doe_pci_cfg::register_device(cntx_ptr, cli.pcie_vid, cli.pcie_devid)?;
         }
     } else if cli.socket_server {
-        socket_server::register_device(cntx_ptr).unwrap();
+        socket_server::register_device(cntx_ptr)?;
     } else if cli.socket_client {
-        socket_client::register_device(cntx_ptr).unwrap();
+        socket_client::register_device(cntx_ptr)?;
     } else if cli.usb_i2c {
         if let Some(proto) = cli.spdm_transport_protocol {
             if proto != spdm::TransportLayer::Mctp {
@@ -325,17 +325,16 @@ fn main() -> Result<(), ()> {
             }
         }
 
-        usb_i2c::register_device(cntx_ptr, cli.usb_i2c_dev, cli.usb_i2c_baud).unwrap();
+        usb_i2c::register_device(cntx_ptr, cli.usb_i2c_dev, cli.usb_i2c_baud)?;
     } else if cli.qemu_server {
         if let Commands::Request { .. } = cli.command {
             error!("QEMU Server does not support running an SPDM requester");
             return Err(());
         }
         if let Some(proto) = cli.spdm_transport_protocol {
-            qemu_server::register_device(cntx_ptr, cli.qemu_port, proto).unwrap();
+            qemu_server::register_device(cntx_ptr, cli.qemu_port, proto)?;
         } else {
-            qemu_server::register_device(cntx_ptr, cli.qemu_port, spdm::TransportLayer::Doe)
-                .unwrap();
+            qemu_server::register_device(cntx_ptr, cli.qemu_port, spdm::TransportLayer::Doe)?;
         }
     } else {
         error!("No supported backend specified");
@@ -344,22 +343,20 @@ fn main() -> Result<(), ()> {
 
     unsafe {
         if let Some(proto) = cli.spdm_transport_protocol {
-            spdm::setup_transport_layer(cntx_ptr, proto, spdm::LIBSPDM_MAX_SPDM_MSG_SIZE).unwrap();
+            spdm::setup_transport_layer(cntx_ptr, proto, spdm::LIBSPDM_MAX_SPDM_MSG_SIZE)?;
         } else {
             if cli.usb_i2c {
                 spdm::setup_transport_layer(
                     cntx_ptr,
                     spdm::TransportLayer::Mctp,
                     spdm::LIBSPDM_MAX_SPDM_MSG_SIZE,
-                )
-                .unwrap();
+                )?;
             } else {
                 spdm::setup_transport_layer(
                     cntx_ptr,
                     spdm::TransportLayer::Doe,
                     spdm::LIBSPDM_MAX_SPDM_MSG_SIZE,
-                )
-                .unwrap();
+                )?;
             }
         }
     }
@@ -408,7 +405,8 @@ fn main() -> Result<(), ()> {
             } else if certificate_model == "device" {
                 CertModel::Device
             } else {
-                panic!("Unsupported certificate model");
+                error!("Unsupported certificate model");
+                return Err(());
             };
 
             for slot_id in 1..8 {
@@ -420,7 +418,8 @@ fn main() -> Result<(), ()> {
                         slot_id
                     )
                 } else {
-                    panic!("Unsupported certificate model");
+                    error!("Unsupported certificate model");
+                    return Err(());
                 };
                 let path = Path::new(&file_name);
 
@@ -438,8 +437,7 @@ fn main() -> Result<(), ()> {
                         SPDM_ALGORITHMS_BASE_HASH_ALGO_TPM_ALG_SHA_384,
                         model,
                         1,
-                    )
-                    .unwrap();
+                    )?;
                     num_provisioned_slots += 1;
                 }
             }
@@ -459,12 +457,15 @@ fn main() -> Result<(), ()> {
                 SPDM_ALGORITHMS_BASE_HASH_ALGO_TPM_ALG_SHA_384,
                 model,
                 1,
-            )
-            .unwrap();
+            )?;
             num_provisioned_slots += 1;
             assert!(num_provisioned_slots < 8);
-            responder::set_supported_slots_mask(num_provisioned_slots, ver, cntx_ptr)
-                .expect("failed to set supported slot mask");
+            responder::set_supported_slots_mask(num_provisioned_slots, ver, cntx_ptr).map_err(
+                |_| {
+                    error!("failed to set supported slot mask");
+                    ()
+                },
+            )?;
 
             responder::response_loop(cntx_ptr);
         }
