@@ -41,12 +41,12 @@ struct Args {
     doe_pci_cfg: bool,
 
     /// PCIe Identifier, Vendor ID of the SPDM supported device
-    #[arg(long, default_value_t = 0)]
-    pcie_vid: u16,
+    #[arg(long, default_value = "")]
+    pcie_vid: String,
 
     /// PCIe Identifier, Device ID of the SPDM supported device
-    #[arg(long, default_value_t = 0)]
-    pcie_devid: u16,
+    #[arg(long, default_value = "")]
+    pcie_devid: String,
 
     /// Use the Socket Server backend
     #[arg(long)]
@@ -309,9 +309,10 @@ fn main() -> Result<(), ()> {
     if cli.doe_pci_cfg {
         // Check that a device exists with provided vid/devid
         unsafe {
-            let (pacc, _, _) = doe_pci_cfg::get_pcie_dev(cli.pcie_vid, cli.pcie_devid)?;
+            let (vid, dev_id) = cli_helpers::parse_pcie_identifiers(cli.pcie_vid, cli.pcie_devid)?;
+            let (pacc, _, _) = doe_pci_cfg::get_pcie_dev(vid, dev_id)?;
             pci_cleanup(pacc);
-            doe_pci_cfg::register_device(cntx_ptr, cli.pcie_vid, cli.pcie_devid)?;
+            doe_pci_cfg::register_device(cntx_ptr, vid, dev_id)?;
         }
     } else if cli.socket_server {
         socket_server::register_device(cntx_ptr)?;
