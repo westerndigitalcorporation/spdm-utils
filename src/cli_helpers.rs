@@ -8,6 +8,38 @@ use crate::*;
 
 /// # Summary
 ///
+/// Parses the string arguments that specifies the PCIe Vendor ID and Device ID.
+///
+/// # Parameter
+///
+/// * `vid`: specified as a hex string "0xCAF3" or as base 10 "1234".
+/// * `dev_id`: specified as a hex string "0xCAF3" or as base 10 "1234".
+///
+/// # Returns
+///
+/// On success, OK((vid, dev_id)) or Err(()) on failure to parse.
+pub fn parse_pcie_identifiers(vid: String, dev_id: String) -> Result<(u16, u16), ()> {
+    fn parse_identifier(id: String, id_type: &str) -> Result<u16, ()> {
+        let (id, base) = if id.starts_with("0x") {
+            (id.trim_start_matches("0x"), 16)
+        } else {
+            (id.as_str(), 10)
+        };
+
+        u16::from_str_radix(id, base).map_err(|e| {
+            error!("Invalid PCIe {id_type}: {:} - err {:?}", id, e);
+            ()
+        })
+    }
+
+    let vid = parse_identifier(vid, "vendor ID")?;
+    let dev_id = parse_identifier(dev_id, "device ID")?;
+
+    Ok((vid, dev_id))
+}
+
+/// # Summary
+///
 /// Parses the CLI argument for the SPDM version used by a responder.
 ///
 /// # Parameter
