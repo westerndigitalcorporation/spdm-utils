@@ -2334,7 +2334,7 @@ pub unsafe extern "C" fn libspdm_psk_master_secret_hkdf_expand(
         base_hash_algo,
         master_secret.as_mut_ptr(),
         hash_size,
-        &info as *const _ as *const u8,
+        info,
         info_size,
         out,
         out_size,
