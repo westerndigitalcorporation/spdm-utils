@@ -817,20 +817,31 @@ pub unsafe fn get_measurements(context: *mut c_void, slot_id: u8) -> Result<(), 
         [0; LIBSPDM_MAX_MEASUREMENT_RECORD_SIZE as usize];
     let measurement_record_ptr: *mut c_void = &mut measurement_record as *mut _ as *mut c_void;
 
-    let ret = libspdm_get_measurement(
-        context,
-        ptr::null_mut(),
-        request_attribute,
-        SPDM_GET_MEASUREMENTS_REQUEST_MEASUREMENT_OPERATION_ALL_MEASUREMENTS as u8,
-        slot_id,
-        ptr::null_mut(),
-        &mut number_of_blocks,
-        &mut measurement_record_length,
-        measurement_record_ptr,
-    );
+    for i in 0..2 {
+        if i == 0 {
+            // Request the raw bitstream, so we can decode it for readability.
+            request_attribute =
+                libspdm_rs::SPDM_GET_MEASUREMENTS_REQUEST_ATTRIBUTES_RAW_BIT_STREAM_REQUESTED as u8;
+        } else {
+            request_attribute =
+                libspdm_rs::SPDM_GET_MEASUREMENTS_REQUEST_ATTRIBUTES_GENERATE_SIGNATURE as u8;
+        }
 
-    if LibspdmReturnStatus::libspdm_status_is_error(ret) {
-        return Err(ret);
+        let ret = libspdm_get_measurement(
+            context,
+            ptr::null_mut(),
+            request_attribute,
+            SPDM_GET_MEASUREMENTS_REQUEST_MEASUREMENT_OPERATION_ALL_MEASUREMENTS as u8,
+            slot_id,
+            ptr::null_mut(),
+            &mut number_of_blocks,
+            &mut measurement_record_length,
+            measurement_record_ptr,
+        );
+
+        if LibspdmReturnStatus::libspdm_status_is_error(ret) {
+            return Err(ret);
+        }
     }
 
     Ok(())
