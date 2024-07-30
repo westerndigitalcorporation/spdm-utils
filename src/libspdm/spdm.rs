@@ -1668,8 +1668,8 @@ unsafe fn libspdm_fill_measurement_image_hash_block(
 
         (*measurement_block)
             .measurement_block_common_header
-            .measurement_size = core::mem::size_of::<spdm_measurement_block_dmtf_header_t>() as u16
-            + data.len() as u16;
+            .measurement_size =
+            core::mem::size_of::<spdm_measurement_block_dmtf_header_t>() as u16 + data.len() as u16;
 
         (measurement_block.add(1) as *mut u8).copy_from(data.as_ptr(), data.len());
 
