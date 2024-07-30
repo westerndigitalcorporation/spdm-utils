@@ -24,6 +24,7 @@ jobs:
 
       - name: Install dependencies
         run: |
+          sudo apt-get update; \
           sudo apt-get install -y cmake libclang-dev libpci-dev libssl-dev python3-dev gem; \
           sudo gem install cbor-diag;
 
