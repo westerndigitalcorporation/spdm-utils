@@ -65,14 +65,14 @@ use {
 pub struct DynamicImageMeasurements {
     /// This is a list of hashes of the kernel
     /// This is set by the generate_kernel_hash() function which is run async
-    /// at start up and then access via the
+    /// at start up and then accessed via the
     /// libspdm_fill_measurement_image_hash_block() function
     pub kernel_hashes: [[u8; 64]; 3],
     /// Have the kernel hashes been populated
     pub kernel_hashes_populated: bool,
     /// This is a list of hashes of the running application
     /// This is set by the generate_app_hash() function which is run async
-    /// at start up and then access via the
+    /// at start up and then accessed via the
     /// libspdm_fill_measurement_image_hash_block() function
     pub app_hashes: [[u8; 64]; 3],
     /// Have the app hashes been populated
@@ -1254,6 +1254,7 @@ libspdm_match_fn_prototypes!(
 /// # Returns
 ///
 /// True if certificate saved to NV successfully, otherwise, false
+#[allow(unused)]
 #[no_mangle]
 pub unsafe extern "C" fn libspdm_write_certificate_to_nvm(
     _spdm_context: *mut c_void,
@@ -1775,7 +1776,7 @@ unsafe fn fill_static_measurement_image_hash_block(
 
 /// # Summary
 ///
-/// Use the already calculate `DYN_IMAGE_MEASURE` to fill the image
+/// Use the already calculated `DYN_IMAGE_MEASURE` to fill the image
 /// hash measurement block.
 ///
 /// # Parameter
