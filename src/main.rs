@@ -118,6 +118,90 @@ enum Commands {
         ///  [RESPOND_IF_READY or respond-if-ready]
         #[clap(value_parser = parse_request_codes)]
         requests: std::vec::Vec<RequestCode>,
+
+        /// the slot ID to use
+        #[arg(long, default_value_t = 0)]
+        slot_id: u8,
+
+        /// the slot ID in which to set/get a certificate.
+        /// this is only used in set-certificate/get-certificate commands.
+        /// defaults to slot-0 and is ignored for all other commands.
+        #[arg(long, default_value_t = 0)]
+        cert_slot_id: u8,
+
+        /// path to the certificate to set (default = None),
+        /// required when setting a certificate with
+        /// the `set-certificate` command.
+        /// this is ignored for all other commands.
+        #[arg(long)]
+        cert_path: Option<String>,
+
+        /// Supported asymmetric algorithms
+        ///
+        /// Multiple algorithms may be specified in this form
+        /// [RSASSA_2048,SM2_ECC_SM2_P256,RSASSA_3072]
+        ///
+        /// RSASSA_2048
+        /// RSAPSS_2048
+        /// RSASSA_3072
+        /// RSAPSS_3072
+        /// ECDSA_ECC_NIST_P256
+        /// RSASSA_4096
+        /// RSAPSS_4096
+        /// ECDSA_ECC_NIST_P384
+        /// ECDSA_ECC_NIST_P521
+        /// SM2_ECC_SM2_P256
+        /// EDDSA_ED25519
+        /// EDDSA_ED448
+        #[arg(long, default_value = "ECDSA_ECC_NIST_P384")]
+        asym_algos: Option<String>,
+
+        /// Supported hashing algorithms
+        ///
+        /// Multiple algorithms may be specified in this form
+        /// [SHA_256,SHA_384,SM3_512]
+        ///
+        /// SHA_256
+        /// SHA_384
+        /// SHA_512
+        /// SHA3_256
+        /// SHA3_384
+        /// SHA3_512
+        /// SM3_256
+        #[arg(long, default_value = "SHA_384")]
+        hash_algos: Option<String>,
+
+        /// Supported DHE Named Group
+        ///
+        /// Multiple algorithms may be specified in this form
+        /// [FFDHE_2048,FFDHE_4096,SM2_P256]
+        ///
+        ///  FFDHE_2048
+        ///  FFDHE_3072
+        ///  FFDHE_4096
+        ///  SECP_256_R1
+        ///  SECP_384_R1
+        ///  SECP_521_R1
+        ///  SM2_P256
+        #[arg(long, default_value = "SECP_384_R1,SECP_521_R1")]
+        dhe_named_groups: Option<String>,
+
+        /// Supported AEAD Cipher Suites
+        ///
+        /// Multiple algorithms may be specified in this form
+        /// [AES_128_GCM,CHACHA20_POLY1305]
+        ///
+        ///  AES_128_GCM
+        ///  AES_256_GCM
+        ///  CHACHA20_POLY1305
+        ///  AEAD_SM4_GCM
+        #[arg(long, default_value = "AES_256_GCM")]
+        aead_cipher_suites: Option<String>,
+
+        /// Setting this flag allows starting a libspdm session by using
+        /// PSK_EXCHANGE/PSK_FINISH instead of the default KEY_EXCHANGE/FINISH.
+        #[clap(long, default_value_t = false)]
+        use_psk_exchange: bool,
     },
     /// initiate a SPDM request
     Request {
@@ -320,6 +404,7 @@ impl std::str::FromStr for RequestCode {
             }
             "END_SESSION" | "end-session" => Ok(RequestCode::EndSession {}),
             "GET_CSR" | "get-csr" => Ok(RequestCode::GetCsr {}),
+            "SET_CERTIFICATE" | "set-certificate" => Ok(RequestCode::SetCertificate {}),
             "RESPOND_IF_READY" | "respond-if-ready" => Ok(RequestCode::RespondIfReady {}),
             _ => {
                 error!("Unsupported request code: {}", s);
@@ -330,14 +415,9 @@ impl std::str::FromStr for RequestCode {
 }
 
 fn parse_request_codes(s: &str) -> Result<Vec<RequestCode>, String> {
-    let requests = s.split(',');
-    let mut purse: Vec<RequestCode> = Vec::new();
-    for req in requests {
-        let parsed = req.parse::<RequestCode>()?;
-        purse.push(parsed);
-    }
-
-    Ok(purse)
+    s.split(',')
+        .map(|req| req.trim().parse::<RequestCode>())
+        .collect()
 }
 
 /// # Summary
@@ -599,8 +679,46 @@ async fn main() -> Result<(), ()> {
                 return Err(());
             }
         }
-        Commands::RequestsOnly { requests } => {
-            panic!("{:?}", requests);
+        Commands::RequestsOnly {
+            requests,
+            slot_id,
+            cert_slot_id,
+            cert_path,
+            asym_algos,
+            hash_algos,
+            dhe_named_groups,
+            aead_cipher_suites,
+            use_psk_exchange,
+        } => {
+            request::setup_capabilities(
+                cntx_ptr,
+                slot_id,
+                cli_helpers::parse_asym_algos(asym_algos).unwrap(),
+                cli_helpers::parse_hash_algos(hash_algos).unwrap(),
+                cli_helpers::parse_dhe_named_groups(dhe_named_groups).unwrap(),
+                cli_helpers::parse_aead_cipher_suite(aead_cipher_suites).unwrap(),
+            )
+            .unwrap();
+
+            let mut session_info = spdm::SpdmSessionInfo {
+                use_psk: use_psk_exchange,
+                measurement_hash_type: SPDM_CHALLENGE_REQUEST_TCB_COMPONENT_MEASUREMENT_HASH as u8,
+                slot_id,
+                session_policy: 0,
+                session_id: 0,
+                heartbeat_period: 0,
+            };
+
+            for req in requests {
+                request::prepare_request(
+                    cntx_ptr,
+                    req.clone(),
+                    cert_slot_id,
+                    cert_path.clone(),
+                    &mut session_info,
+                )
+                .map_err(|e| error!("{:?} failed with 0x{e:x}", req))?;
+            }
         }
     }
     Ok(())

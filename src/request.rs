@@ -279,7 +279,11 @@ pub fn prepare_request(
 
                 let ret = libspdm_get_digest(
                     cntx_ptr,
-                    ptr::null_mut(),
+                    if session_info.session_id == 0 {
+                        ptr::null_mut()
+                    } else {
+                        &session_info.session_id as *const u32
+                    },
                     &mut slot_mask,
                     total_digest_buffer_ptr,
                 );
@@ -307,7 +311,11 @@ pub fn prepare_request(
 
                 let ret = libspdm_get_certificate(
                     cntx_ptr,
-                    &session_info.session_id,
+                    if session_info.session_id == 0 {
+                        ptr::null_mut()
+                    } else {
+                        &session_info.session_id as *const u32
+                    },
                     cert_slot_id,
                     &mut cert_chain_size,
                     cert_chain_ptr,
@@ -504,9 +512,15 @@ pub fn prepare_request(
             }
             RequestCode::EncapsulatedSendReceive { secure_msg } => {
                 let ret = if secure_msg {
-                    let session_id_ptr = &mut session_info.session_id as *mut u32;
                     // session_id is not NULL, it is a secured message
-                    libspdm_send_receive_encap_request(cntx_ptr, session_id_ptr)
+                    libspdm_send_receive_encap_request(
+                        cntx_ptr,
+                        if session_info.session_id == 0 {
+                            ptr::null_mut()
+                        } else {
+                            &session_info.session_id as *const u32
+                        },
+                    )
                 } else {
                     // session_id is NULL, it is a normal message
                     libspdm_send_receive_encap_request(cntx_ptr, ptr::null_mut())
