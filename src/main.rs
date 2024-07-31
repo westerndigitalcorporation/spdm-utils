@@ -91,6 +91,34 @@ struct Args {
 
 #[derive(Subcommand, PartialEq)]
 enum Commands {
+    /// Only issue the specified requests to the responder without establishing
+    /// an SPDM session. It is the users responsibility to ensure that the
+    /// requests are ordered in an SPDM compliant manner. This maybe useful
+    /// when debugging or developing a responder.
+    RequestsOnly {
+        /// A list of comma separated SPDM requests.
+        /// The following is valid:
+        ///     `GET_VERSION,GET_CAPABILITIES`
+        ///     `get-version,get-measurements`
+        ///
+        /// The following requests can be issued.
+        ///
+        ///  [GET_DIGESTS or get-digest],
+        ///  [GET_CERTIFICATE or get-certificate],
+        ///  [CHALLENGE or challenge],
+        ///  [GET_VERSION or get-version],
+        ///  [GET_MEASUREMENTS or get-measurement],
+        ///  [GET_CAPABILITIES or get-capabilities],
+        ///  [NEGOTIATE_ALGORITHMS or negotiate-algorithms],
+        ///  [HEARTBEAT or heartbeat],
+        ///  [KEY_UPDATE or key-update],
+        ///  [ENCAPSULATED_SEND_RECEIVE or encapsulated-send-receive].
+        ///  [END_SESSION or end-session],
+        ///  [GET_CSR or get-csr],
+        ///  [RESPOND_IF_READY or respond-if-ready]
+        #[clap(value_parser = parse_request_codes)]
+        requests: std::vec::Vec<RequestCode>,
+    },
     /// initiate a SPDM request
     Request {
         /// the type of request
@@ -212,7 +240,7 @@ enum Commands {
 }
 
 /// SPDM commands available for an SPDM Requestor
-#[derive(Subcommand, PartialEq)]
+#[derive(Subcommand, PartialEq, Debug, Clone)]
 pub enum RequestCode {
     GetDigests {},
     GetCertificate {
@@ -224,7 +252,7 @@ pub enum RequestCode {
     Challenge {
         /// Supported Challenge request types
         ///
-        /// NO_MEASUREMENT_SUMMARY_HASH,
+        /// NO_MEASUREMENT_SUMMARY_HASH,ft yet implemented
         /// TCB_COMPONENT_MEASUREMENT_HASH,
         /// ALL_MEASUREMENTS_HASH
         #[clap(default_value = "ALL_MEASUREMENTS_HASH")]
@@ -263,6 +291,55 @@ pub enum RequestCode {
     },
 }
 
+impl std::str::FromStr for RequestCode {
+    type Err = String;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        // Support only the requests that can either function with default
+        // options, or does not require any arguments.
+        match s.to_uppercase().as_str() {
+            "GET_DIGESTS" | "get-digests" => Ok(RequestCode::GetDigests {}),
+            "GET_CERTIFICATE" | "get-certificate" => Ok(RequestCode::GetCertificate {
+                tcg_dice_evidence_binding_checks: false,
+            }),
+            "CHALLENGE" | "challenge" => Ok(RequestCode::Challenge {
+                challenge_request: Some("ALL_MEASUREMENTS_HASH".to_string()),
+            }),
+            "GET_VERSION" | "get-version" => Ok(RequestCode::GetVersion {}),
+            "GET_MEASUREMENTS" | "get-measurement" => Ok(RequestCode::GetMeasurements {}),
+            "GET_CAPABILITIES" | "get-capabilities" => Ok(RequestCode::GetCapabilities {}),
+            "NEGOTIATE_ALGORITHMS" | "negotiate-algorithms" => {
+                Ok(RequestCode::NegotiateAlgorithms {})
+            }
+            "HEARTBEAT" | "heartbeat" => Ok(RequestCode::Heartbeat {}),
+            "KEY_UPDATE" | "key-update" => Ok(RequestCode::KeyUpdate {
+                single_direction: false,
+            }),
+            "ENCAPSULATED_SEND_RECEIVE" | "encapsulated-send-receive" => {
+                Ok(RequestCode::EncapsulatedSendReceive { secure_msg: false })
+            }
+            "END_SESSION" | "end-session" => Ok(RequestCode::EndSession {}),
+            "GET_CSR" | "get-csr" => Ok(RequestCode::GetCsr {}),
+            "RESPOND_IF_READY" | "respond-if-ready" => Ok(RequestCode::RespondIfReady {}),
+            _ => {
+                error!("Unsupported request code: {}", s);
+                Err(format!("{}", s))
+            }
+        }
+    }
+}
+
+fn parse_request_codes(s: &str) -> Result<Vec<RequestCode>, String> {
+    let requests = s.split(',');
+    let mut purse: Vec<RequestCode> = Vec::new();
+    for req in requests {
+        let parsed = req.parse::<RequestCode>()?;
+        purse.push(parsed);
+    }
+
+    Ok(purse)
+}
+
 /// # Summary
 ///
 /// Initialize the logger.
@@ -274,8 +351,6 @@ fn init_logger() {
         .write_style_or("LOG_STYLE", "always");
 
     env_logger::init_from_env(env);
-
-    debug!("Logger initialisation [OK]")
 }
 
 /// # Summary
@@ -297,8 +372,8 @@ fn init_logger() {
 /// Setup test cases for SPDM-Responder-Validator and run them.
 #[async_std::main]
 async fn main() -> Result<(), ()> {
-    init_logger();
     let cli = Args::parse();
+    init_logger();
 
     let cntx_ptr = spdm::initialise_spdm_context();
 
@@ -523,6 +598,9 @@ async fn main() -> Result<(), ()> {
                 error!("The backend is not supported for testing");
                 return Err(());
             }
+        }
+        Commands::RequestsOnly { requests } => {
+            panic!("{:?}", requests);
         }
     }
     Ok(())
