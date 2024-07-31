@@ -389,6 +389,16 @@ pub fn prepare_request(
                 }
             }
             RequestCode::GetVersion {} => {
+                let ret = libspdm_get_version(
+                    cntx_ptr as *mut libspdm::libspdm_rs::libspdm_context_t,
+                    std::ptr::null_mut(),
+                    std::ptr::null_mut(),
+                );
+                if LibspdmReturnStatus::libspdm_status_is_error(ret) {
+                    error!("Failed to issue GetVersion request: {ret:x?}");
+                    return Err(ret);
+                }
+
                 let parameter = libspdm_data_parameter_t::new_connection(session_info.slot_id);
                 let mut spdm_version = spdm::SpdmVersionNumber(0);
                 let mut data_size: usize = core::mem::size_of::<u32>();
@@ -445,9 +455,24 @@ pub fn prepare_request(
                 spdm::get_measurements(cntx_ptr, session_info.slot_id)?;
             }
             RequestCode::GetCapabilities {} => {
+                let ret = libspdm_get_capabilities(
+                    cntx_ptr as *mut libspdm::libspdm_rs::libspdm_context_t,
+                );
+                if LibspdmReturnStatus::libspdm_status_is_error(ret) {
+                    error!("Failed to issue GetCapabilities request: {ret:x?}");
+                    return Err(ret);
+                }
                 get_responder_capabilities(cntx_ptr);
             }
-            RequestCode::NegotiateAlgorithms {} => {}
+            RequestCode::NegotiateAlgorithms {} => {
+                let ret = libspdm_negotiate_algorithms(
+                    cntx_ptr as *mut libspdm::libspdm_rs::libspdm_context_t,
+                );
+                if LibspdmReturnStatus::libspdm_status_is_error(ret) {
+                    error!("Failed to issue NegotiateAlgorithms request: {ret:x?}");
+                    return Err(ret);
+                }
+            }
             RequestCode::Heartbeat {} => {
                 let ret = libspdm_heartbeat(cntx_ptr, session_info.session_id);
                 if LibspdmReturnStatus::libspdm_status_is_error(ret) {
