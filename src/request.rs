@@ -19,7 +19,7 @@ use std::path::Path;
 use std::ptr;
 
 const LIBSPDM_MAX_CSR_SIZE: usize = 0x1000;
-
+const LIBSPDM_STATUS_INVALID_STATE_LOCAL: u32 = 0x80010003;
 /// # Summary
 /// Setup the capabilities of the requester
 ///
@@ -466,7 +466,9 @@ pub fn prepare_request(
                 let ret = libspdm_get_capabilities(
                     cntx_ptr as *mut libspdm::libspdm_rs::libspdm_context_t,
                 );
-                if LibspdmReturnStatus::libspdm_status_is_error(ret) {
+                if ret == LIBSPDM_STATUS_INVALID_STATE_LOCAL {
+                    warn!("GET_CAPABILITES was already issued");
+                } else if LibspdmReturnStatus::libspdm_status_is_error(ret) {
                     error!("Failed to issue GetCapabilities request: {ret:x?}");
                     return Err(ret);
                 }

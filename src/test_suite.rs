@@ -63,21 +63,14 @@ pub fn setup_test_backend(cntx: *mut c_void) -> Result<SpdmSessionInfo, u32> {
     unsafe {
         spdm::initialise_connection(cntx, slot_id).unwrap();
     }
-    let mut session_info = unsafe { spdm::start_session(cntx, slot_id, false).unwrap() };
+    let session_info = unsafe { spdm::start_session(cntx, slot_id, false).unwrap() };
     // Print out the negotiated algorithms
     unsafe {
         spdm::get_negotiated_algos(cntx, slot_id).unwrap();
     }
 
-    info!("[{slot_id}] Start RequestCode::GetCapabilities");
-    request::prepare_request(
-        cntx,
-        RequestCode::GetCapabilities {},
-        slot_id,
-        None,
-        &mut session_info,
-    )?;
-    info!(" RequestCode::GetCapabilities ... [OK]");
+    info!("[{slot_id}] Listing Responder Capabilities");
+    unsafe { request::get_responder_capabilities(cntx) };
 
     Ok(session_info)
 }
