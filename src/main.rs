@@ -12,6 +12,7 @@ use async_std::task;
 use clap::{Parser, Subcommand};
 use futures::future::join_all;
 use libspdm::libspdm_rs::*;
+use nix::unistd::geteuid;
 use sha2::{Digest, Sha256, Sha384, Sha512};
 use std::fs::File;
 use std::fs::OpenOptions;
@@ -322,6 +323,11 @@ async fn main() -> Result<(), ()> {
 
     if count > 1 {
         error!("Only a single backend can be used");
+        return Err(());
+    }
+
+    if (cli.doe_pci_cfg || cli.usb_i2c) && u32::from(geteuid()) != 0 {
+        error!("This transport operation requires root privileges");
         return Err(());
     }
 
