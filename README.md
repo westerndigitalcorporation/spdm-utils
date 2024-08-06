@@ -210,6 +210,27 @@ You can also run the libspdm tests by running tests on the socket server with:
 cargo run -- --socket-server tests
 ```
 
+### Issuing a list of request
+
+`spdm-utils` can issue a user defined list of SPDM request(s).
+It is the responsibility of the user to ensure, the SPDM requests are ordered
+in a specification compliant way. It is not checked
+by `spdm-utils` or `libspdm`.
+
+Usage is as follows, as demonstrated over the socket model. Ensure you have an
+SPDM responder server socket running in responder mode prior to issuing this
+command.
+
+```
+$./target/debug/spdm_utils --socket-client request get-version,get-capabilities,negotiate-algorithms
+```
+
+Request sub-commands can be specified as follows, refer to usage `request --help`
+for available options.
+
+```
+$./target/debug/spdm_utils --socket-client request get-version,get-measurement[index=1]
+```
 ## Testing a real device
 
 You can run SPDM-Utils on the host to interact with a real DOE device. To do
