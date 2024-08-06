@@ -94,9 +94,69 @@ struct Args {
 enum Commands {
     /// initiate a SPDM request
     Request {
-        /// the type of request
-        #[command(subcommand)]
-        code: RequestCode,
+        /// The type of SPDM request(s). A list can be specified in the following
+        /// format. The following SPDM requests are supported:
+        ///
+        /// The following requests can be issued.
+        ///
+        ///  - [GET_DIGESTS or get-digest]
+        ///
+        ///  - [GET_CERTIFICATE or get-certificate]
+        ///
+        ///  - [CHALLENGE or challenge]
+        ///
+        ///  - [GET_VERSION or get-version]
+        ///
+        ///  - [GET_MEASUREMENT or get-measurement]:
+        ///     `get-measurement[index=<measurement-index>,raw-bitstream]`
+        ///
+        ///     This request takes an index argument to specify
+        ///     the measurement index. `raw-bitstream` can also be specified
+        ///     to request the raw-bitstream of the measurement.
+        ///
+        ///  - [GET_MEASUREMENTS or get-measurements]
+        ///
+        ///  - [GET_CAPABILITIES or get-capabilities]
+        ///
+        ///  - [NEGOTIATE_ALGORITHMS or negotiate-algorithms]
+        ///
+        ///  - [HEARTBEAT or heartbeat]
+        ///
+        ///  - [KEY_UPDATE or key-update]
+        ///     `key-update[single-direction]`
+        ///
+        ///     single direction can be specified  such that the key update
+        ///     operation is `UPDATE_KEY` (single) only. Default means that
+        ///     UPDATE_ALL_KEYS is used where all keys are updated and verified.
+        ///
+        ///  - [ENCAPSULATED_SEND_RECEIVE or encapsulated-send-receive]
+        ///     `encapsulated-send-receive[secure-msg]`
+        ///
+        ///     Setting this flag ensures that the encapsulated request is a
+        ///     secured message. By default it sends a 'normal' (non-secure)
+        ///     message.
+        ///
+        ///  - [END_SESSION or end-session],
+        ///
+        ///  - [GET_CSR or get-csr]
+        ///
+        ///  - [RESPOND_IF_READY or respond-if-ready]
+        ///
+        ///  - [CUSTOM or custom]
+        ///     `custom[1234]`
+        ///
+        ///     Sub-argument is a user specified u32 value. This feature is
+        ///     currently unsupported.
+        ///
+        ///  A list of request maybe specified in the following format:
+        ///
+        ///     - get-version,get-capabilities,negotiate-algorithms
+        ///
+        ///     - get-version,get-measurements[index=2,raw-bitstream]
+        ///
+        ///     - get-version,get-capabilities,get-measurement[index=4]
+        #[clap(value_parser = parse_request_codes)]
+        requests: std::vec::Vec<RequestCode>,
 
         /// the slot ID to use
         #[arg(long, default_value_t = 0)]
@@ -213,7 +273,7 @@ enum Commands {
 }
 
 /// SPDM commands available for an SPDM Requestor
-#[derive(Subcommand, PartialEq)]
+#[derive(Subcommand, PartialEq, Clone, Debug)]
 pub enum RequestCode {
     GetDigests {},
     GetCertificate {
@@ -262,6 +322,271 @@ pub enum RequestCode {
     Custom {
         value: u32,
     },
+}
+
+impl std::str::FromStr for RequestCode {
+    type Err = String;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        // Support only the requests that can either function with default
+        // options, or does not require any arguments.
+        let (request_code, subargs) = if s.find('[').is_some() && s.find(']').is_some() {
+            // This request has sub-arguments specified
+            let (req_code, subarg) = s.split_at(s.find('[').unwrap());
+            let subarg_len = subarg.len();
+            (req_code, Some(&subarg[1..subarg_len - 1]))
+        } else {
+            (s, None)
+        };
+
+        match request_code {
+            "GET_DIGESTS" | "get-digests" => {
+                if subargs.is_some() {
+                    error!("Unexpected subargument");
+                    return Err(format!("{}", s));
+                }
+                Ok(RequestCode::GetDigests {})
+            }
+            "GET_CERTIFICATE" | "get-certificate" => {
+                if let Some(args) = subargs {
+                    if args.contains("tcg-dice-evidence-binding-checks") {
+                        return Ok(RequestCode::GetCertificate {
+                            tcg_dice_evidence_binding_checks: true,
+                        });
+                    } else {
+                        error!("Invalid request option : {args}");
+                        Err(format!("{}", s))
+                    }
+                } else {
+                    Ok(RequestCode::GetCertificate {
+                        tcg_dice_evidence_binding_checks: false,
+                    })
+                }
+            }
+            "CHALLENGE" | "challenge" => {
+                if let Some(arg) = subargs {
+                    Ok(RequestCode::Challenge {
+                        challenge_request: Some(arg.to_string()),
+                    })
+                } else {
+                    Ok(RequestCode::Challenge {
+                        challenge_request: Some("ALL_MEASUREMENTS_HASH".to_string()),
+                    })
+                }
+            }
+            "GET_VERSION" | "get-version" => {
+                if subargs.is_some() {
+                    error!("Unexpected subargument");
+                    return Err(format!("{}", s));
+                }
+                Ok(RequestCode::GetVersion {})
+            }
+            "GET_MEASUREMENT" | "get-measurement" => {
+                if let Some(args) = subargs {
+                    if !args.contains("index=") {
+                        error!("Index not specified for {request_code}");
+                        return Err(format!("{}", s));
+                    }
+
+                    let meas_index: u8 = args
+                        .split(',')
+                        .find(|t: &&str| t.starts_with("index="))
+                        .and_then(|t| t.split('=').nth(1))
+                        .and_then(|index_str| index_str.parse().ok())
+                        .ok_or_else(|| {
+                            error!("Failed to parse index");
+                            format!("{}", s)
+                        })?;
+
+                    let raw_bitstream = args.contains("raw-bitstream");
+                    Ok(RequestCode::GetMeasurement {
+                        index: meas_index,
+                        raw_bitstream: raw_bitstream,
+                    })
+                } else {
+                    error!("Index not specified for {request_code}");
+                    Err(format!("{}", s))
+                }
+            }
+            "GET_MEASUREMENTS" | "get-measurements" => {
+                if subargs.is_some() {
+                    error!("Unexpected subargument");
+                    return Err(format!("{}", s));
+                }
+                Ok(RequestCode::GetMeasurements {})
+            }
+            "GET_CAPABILITIES" | "get-capabilities" => {
+                if subargs.is_some() {
+                    error!("Unexpected subargument");
+                    return Err(format!("{}", s));
+                }
+                Ok(RequestCode::GetCapabilities {})
+            }
+            "NEGOTIATE_ALGORITHMS" | "negotiate-algorithms" => {
+                if subargs.is_some() {
+                    error!("Unexpected subargument");
+                    return Err(format!("{}", s));
+                }
+                Ok(RequestCode::NegotiateAlgorithms {})
+            }
+            "HEARTBEAT" | "heartbeat" => {
+                if subargs.is_some() {
+                    error!("Unexpected subargument");
+                    return Err(format!("{}", s));
+                }
+                Ok(RequestCode::Heartbeat {})
+            }
+            "KEY_UPDATE" | "key-update" => {
+                if let Some(args) = subargs {
+                    if args.contains("single-direction") {
+                        return Ok(RequestCode::KeyUpdate {
+                            single_direction: true,
+                        });
+                    } else {
+                        error!("Invalid sub-argument specified");
+                        Err(format!("{}", s))
+                    }
+                } else {
+                    Ok(RequestCode::KeyUpdate {
+                        single_direction: true,
+                    })
+                }
+            }
+            "ENCAPSULATED_SEND_RECEIVE" | "encapsulated-send-receive" => {
+                if let Some(args) = subargs {
+                    if args.contains("secure-msg") {
+                        return Ok(RequestCode::EncapsulatedSendReceive { secure_msg: true });
+                    } else {
+                        error!("Invalid sub-argument specified");
+                        return Err(format!("{}", s));
+                    }
+                }
+                Ok(RequestCode::EncapsulatedSendReceive { secure_msg: false })
+            }
+            "END_SESSION" | "end-session" => {
+                if subargs.is_some() {
+                    error!("Unexpected subargument");
+                    return Err(format!("{}", s));
+                }
+                Ok(RequestCode::EndSession {})
+            }
+            "GET_CSR" | "get-csr" => {
+                if subargs.is_some() {
+                    error!("Unexpected subargument");
+                    return Err(format!("{}", s));
+                }
+                Ok(RequestCode::GetCsr {})
+            }
+            "SET_CERTIFICATE" | "set-certificate" => {
+                if subargs.is_some() {
+                    error!("Unexpected subargument");
+                    return Err(format!("{}", s));
+                }
+                Ok(RequestCode::SetCertificate {})
+            }
+            "RESPOND_IF_READY" | "respond-if-ready" => {
+                if subargs.is_some() {
+                    error!("Unexpected subargument");
+                    return Err(format!("{}", s));
+                }
+                Ok(RequestCode::RespondIfReady {})
+            }
+            "CUSTOM" | "custom" => {
+                if let Some(args) = subargs {
+                    let val: u32 = args
+                        .parse()
+                        .map_err(|e| format!("Failed to parse '{args}' to u32, {e:?}"))?;
+                    Ok(RequestCode::Custom { value: val })
+                } else {
+                    error!("Invalid sub-argument specified");
+                    return Err(format!("{}", s));
+                }
+            }
+            _ => {
+                error!("Unsupported request code: {}", s);
+                Err(format!("{}", s))
+            }
+        }
+    }
+}
+
+fn parse_request_codes(s: &str) -> Result<Vec<RequestCode>, String> {
+    let mut prev_req_start_at = 0;
+    let mut subarg_start = false;
+    let mut purse: Vec<RequestCode> = Vec::new();
+    let mut skip_next_delim = false;
+    let input_len = s.len();
+
+    for (i, c) in s.chars().enumerate() {
+        if c == '[' && !subarg_start {
+            subarg_start = true;
+            continue;
+        } else if c == '[' && subarg_start {
+            error!(
+                "Invalid request argument formatting, unexpected {c} at {:?}X",
+                &s[..i]
+            );
+            return Err(format!("Failed to parse requests"));
+        } else if c != ']' && subarg_start {
+            continue;
+        }
+
+        // End of the sub arguments for the request
+        if c == ']' && subarg_start {
+            let request_parsed = &s[prev_req_start_at..=i]
+                .trim()
+                .parse::<RequestCode>()
+                .map_err(|e| format!("Failed to parse request: {e}"))?;
+            subarg_start = false;
+            purse.push(request_parsed.clone());
+            if let Some(delim) = s.chars().nth(i + 1) {
+                if delim != ',' {
+                    error!("Expected ',' after ']'");
+                    return Err(format!("Failed to parse requests"));
+                }
+                if let Some(_) = s.chars().nth(i + 2) {
+                    prev_req_start_at = i + 2;
+                    // We want to ignore the next ',' because it denotes the
+                    // beginning of a new request and not the end of one.
+                    skip_next_delim = true;
+                } else {
+                    error!("Request expected after ','");
+                    return Err(format!("Failed to parse requests"));
+                }
+            }
+
+            continue;
+        }
+
+        if c == ',' || i == input_len - 1 {
+            if skip_next_delim {
+                skip_next_delim = false;
+                continue;
+            }
+            subarg_start = false;
+            // i is at the ','
+            let last_index = if i == input_len - 1 {
+                i
+            } else {
+                match i.checked_sub(1) {
+                    Some(idx) => idx,
+                    None => {
+                        error!("Unexpected '{c}' at position {i:?}");
+                        return Err("Failed to parse requests".into());
+                    }
+                }
+            };
+            let request_parsed = &s[prev_req_start_at..=last_index]
+                .trim()
+                .parse::<RequestCode>()
+                .map_err(|e| format!("Failed to parse request: {e}"))?;
+            // Track the index after the ','
+            prev_req_start_at = i + 1;
+            purse.push(request_parsed.clone());
+        }
+    }
+
+    Ok(purse)
 }
 
 /// # Summary
@@ -389,7 +714,7 @@ async fn main() -> Result<(), ()> {
 
     match cli.command {
         Commands::Request {
-            code,
+            requests,
             slot_id,
             cert_slot_id,
             cert_path,
@@ -417,8 +742,20 @@ async fn main() -> Result<(), ()> {
             unsafe {
                 spdm::get_negotiated_algos(cntx_ptr, slot_id).unwrap();
             }
-            request::prepare_request(cntx_ptr, code, cert_slot_id, cert_path, &mut session_info)
-                .unwrap();
+            // Process one or more requests specified
+            for req in requests {
+                request::prepare_request(
+                    cntx_ptr,
+                    req.clone(),
+                    cert_slot_id,
+                    cert_path.clone(),
+                    &mut session_info,
+                )
+                .map_err(|e| {
+                    error!("Failed to do {:?} - 0x{e:x}", req);
+                    ()
+                })?;
+            }
         }
         Commands::Response {
             spdm_ver,
@@ -668,4 +1005,89 @@ async fn generate_app_hash() -> Result<(), std::io::Error> {
     Lazy::force_mut(&mut dyn_image_measure).app_hashes_populated = true;
 
     Ok(())
+}
+
+#[test]
+fn test_parse_request_codes_valid() {
+    assert_eq!(
+        parse_request_codes("get-version").unwrap(),
+        vec![RequestCode::GetVersion {}]
+    );
+    assert_eq!(
+        parse_request_codes("get-version,get-capabilities,negotiate-algorithms").unwrap(),
+        vec![
+            RequestCode::GetVersion {},
+            RequestCode::GetCapabilities {},
+            RequestCode::NegotiateAlgorithms {}
+        ]
+    );
+    assert_eq!(
+        parse_request_codes("get-version,get-measurement[index=255,raw-bitstream]").unwrap(),
+        vec![
+            RequestCode::GetVersion {},
+            RequestCode::GetMeasurement {
+                index: 255,
+                raw_bitstream: true
+            }
+        ]
+    );
+    assert_eq!(
+        parse_request_codes("get-version,get-measurement[index=32]").unwrap(),
+        vec![
+            RequestCode::GetVersion {},
+            RequestCode::GetMeasurement {
+                index: 32,
+                raw_bitstream: false
+            }
+        ]
+    );
+    // Test all valid sub arguments
+    assert_eq!(
+        parse_request_codes(
+            "get-certificate[tcg-dice-evidence-binding-checks],
+             challenge[MEAS_HASH_TYPE],key-update[single-direction],
+             encapsulated-send-receive[secure-msg],
+             custom[1234]"
+        )
+        .unwrap(),
+        vec![
+            RequestCode::GetCertificate {
+                tcg_dice_evidence_binding_checks: true
+            },
+            RequestCode::Challenge {
+                challenge_request: Some("MEAS_HASH_TYPE".to_string())
+            },
+            RequestCode::KeyUpdate {
+                single_direction: true
+            },
+            RequestCode::EncapsulatedSendReceive { secure_msg: true },
+            RequestCode::Custom { value: 1234 }
+        ]
+    );
+}
+
+#[test]
+fn test_parse_request_codes_invalid() {
+    // Negative test for invalid user inputs
+    // Unexpected ',' at the end
+    assert!(parse_request_codes("get-version,").is_err());
+    // Missing ',' delimeter
+    assert!(parse_request_codes("get-versionget-capabilities").is_err());
+    // Missing required "index=<measurement_index>"
+    assert!(parse_request_codes("get-measurement[raw-bitsream]").is_err());
+    // Missing required subargument
+    assert!(parse_request_codes("get-measurement").is_err());
+    // Invalid measurement index specified
+    assert!(parse_request_codes("get-measurement[index=wompwomp,raw-bitstream]").is_err());
+    // Invalid subarguments
+    assert!(parse_request_codes("get-certificate[tcg-blah...]").is_err());
+    assert!(parse_request_codes("key-update[double-direction]").is_err());
+    assert!(parse_request_codes("encapsulated-send-receive[blah]").is_err());
+    assert!(parse_request_codes("custom[decaf]").is_err());
+    // Unexpected subarguments
+    assert!(parse_request_codes("get-digests[]").is_err());
+    assert!(parse_request_codes("get-version[deadpool]").is_err());
+    // Total Nonsense
+    assert!(parse_request_codes(",get-version.cpp").is_err());
+    assert!(parse_request_codes("[]").is_err());
 }
