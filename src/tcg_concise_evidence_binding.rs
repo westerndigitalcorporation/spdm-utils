@@ -60,20 +60,34 @@ fn spdm_cert_oids_parser(i: &[u8]) -> ParseResult<Oid> {
     })
 }
 
-fn check_for_extensions(x509: &X509Certificate, name: &str, extension: &Oid) -> Result<(), ()> {
-    match x509.get_extension_unique(extension) {
-        Ok(Some(_extension)) => {}
+fn check_for_extended_key_usage(
+    x509: &X509Certificate,
+    name: &str,
+    extension: &Oid,
+) -> Result<(), ()> {
+    match x509.extended_key_usage() {
+        Ok(Some(extended_key_usage)) => {
+            println!(
+                "extended_key_usage.other: {:?}",
+                extended_key_usage.value.other
+            );
+
+            if extended_key_usage.value.other.contains(extension) {
+                Ok(())
+            } else {
+                error!("'{}' Certificate doesn't contain {name}", x509.subject());
+                Err(())
+            }
+        }
         Ok(None) => {
-            error!("'{}' Certificate doesn't contain {name}", x509.subject());
-            return Err(());
+            error!("Certificate doesn't contain extendedKeyUsage");
+            Err(())
         }
         Err(_e) => {
-            error!("Duplicate {name}");
-            return Err(());
+            error!("Duplicate extendedKeyUsage");
+            Err(())
         }
     }
-
-    Ok(())
 }
 
 fn check_for_basic_contraints_ca(x509: &X509Certificate, value: bool) -> Result<(), ()> {
@@ -216,7 +230,7 @@ pub fn check_tcg_dice_evidence_binding(cert_slot_id: u8) -> Result<CertificateUs
                                             // Certificate, then this certificate is used to issue
                                             // Intermediate CA certificates.
                                             info!("    Used to sign ECA");
-                                            check_for_extensions(
+                                            check_for_extended_key_usage(
                                                 &x509,
                                                 "tcg-dice-kp-eca",
                                                 &TCG_DICE_KP_ECA,
@@ -252,11 +266,17 @@ pub fn check_tcg_dice_evidence_binding(cert_slot_id: u8) -> Result<CertificateUs
                 }
 
                 // Check for extensions that we should contain
-                check_for_extensions(&x509, "tcg-dice-kp-identityInit", &TCG_DICE_KP_IDENTITYINIT)?;
+                check_for_extended_key_usage(
+                    &x509,
+                    "tcg-dice-kp-identityInit",
+                    &TCG_DICE_KP_IDENTITYINIT,
+                )?;
 
-                if let Ok(_extension) =
-                    check_for_extensions(&x509, "tcg-dice-kp-attestInit", &TCG_DICE_KP_ATTESTINIT)
-                {
+                if let Ok(_extension) = check_for_extended_key_usage(
+                    &x509,
+                    "tcg-dice-kp-attestInit",
+                    &TCG_DICE_KP_ATTESTINIT,
+                ) {
                     // This chain is used to sign evidence
                     info!("    Used to sign Evidence");
                     usage.sign_evidence = true;
@@ -266,9 +286,11 @@ pub fn check_tcg_dice_evidence_binding(cert_slot_id: u8) -> Result<CertificateUs
                     }
                 }
 
-                if let Ok(_extension) =
-                    check_for_extensions(&x509, "tcg-dice-kp-attestInit", &TCG_DICE_KP_ATTESTINIT)
-                {
+                if let Ok(_extension) = check_for_extended_key_usage(
+                    &x509,
+                    "tcg-dice-kp-attestInit",
+                    &TCG_DICE_KP_ATTESTINIT,
+                ) {
                     // This chain is used to sign evidence
                     info!("    Used to sign Evidence");
                     usage.sign_evidence = true;
@@ -278,9 +300,11 @@ pub fn check_tcg_dice_evidence_binding(cert_slot_id: u8) -> Result<CertificateUs
                     }
                 }
 
-                if let Ok(_extension) =
-                    check_for_extensions(&x509, "tcg-dice-kp-assertInit", &TCG_DICE_KP_ASSERTINIT)
-                {
+                if let Ok(_extension) = check_for_extended_key_usage(
+                    &x509,
+                    "tcg-dice-kp-assertInit",
+                    &TCG_DICE_KP_ASSERTINIT,
+                ) {
                     // This chain is used to sign attestation
                     info!("    Used to sign Attestation");
                     usage.sign_attestation = true;
@@ -324,21 +348,25 @@ pub fn check_tcg_dice_evidence_binding(cert_slot_id: u8) -> Result<CertificateUs
                 // Intermediate CA certificates.
                 // Therefore TCG requires these
                 info!("    Used to sign ECA");
-                check_for_extensions(&x509, "tcg-dice-kp-eca", &TCG_DICE_KP_ECA)?;
+                check_for_extended_key_usage(&x509, "tcg-dice-kp-eca", &TCG_DICE_KP_ECA)?;
                 check_for_basic_contraints_ca(&x509, true)?;
 
                 // Check for certificates that we should contain
-                if let Ok(_extension) =
-                    check_for_extensions(&x509, "tcg-dice-kp-identityLoc", &TCG_DICE_KP_IDENTITYLOC)
-                {
+                if let Ok(_extension) = check_for_extended_key_usage(
+                    &x509,
+                    "tcg-dice-kp-identityLoc",
+                    &TCG_DICE_KP_IDENTITYLOC,
+                ) {
                     // This chain is used to sign a device identity challenge
                     info!("    Used to sign Device Identity Challenge");
                     usage.sign_identity_challenge = true;
                 }
 
-                if let Ok(_extension) =
-                    check_for_extensions(&x509, "tcg-dice-kp-attestLoc", &TCG_DICE_KP_ATTESTLOC)
-                {
+                if let Ok(_extension) = check_for_extended_key_usage(
+                    &x509,
+                    "tcg-dice-kp-attestLoc",
+                    &TCG_DICE_KP_ATTESTLOC,
+                ) {
                     // This chain is used to sign evidence
                     info!("    Used to sign Evidence");
                     // This should already be set
@@ -351,9 +379,11 @@ pub fn check_tcg_dice_evidence_binding(cert_slot_id: u8) -> Result<CertificateUs
                     }
                 }
 
-                if let Ok(_extension) =
-                    check_for_extensions(&x509, "tcg-dice-kp-assertLoc", &TCG_DICE_KP_ASSERTLOC)
-                {
+                if let Ok(_extension) = check_for_extended_key_usage(
+                    &x509,
+                    "tcg-dice-kp-assertLoc",
+                    &TCG_DICE_KP_ASSERTLOC,
+                ) {
                     // This chain is used to sign attestation
                     info!("    Used to sign Attestation");
                     if !usage.sign_attestation {
@@ -423,9 +453,11 @@ pub fn check_tcg_dice_evidence_binding(cert_slot_id: u8) -> Result<CertificateUs
                     }
                 }
 
-                if let Ok(_extension) =
-                    check_for_extensions(&x509, "tcg-dice-kp-identityLoc", &TCG_DICE_KP_IDENTITYLOC)
-                {
+                if let Ok(_extension) = check_for_extended_key_usage(
+                    &x509,
+                    "tcg-dice-kp-identityLoc",
+                    &TCG_DICE_KP_IDENTITYLOC,
+                ) {
                     // This chain is used to sign a device identity challenge
                     info!("    Used to sign Device Identity Challenge");
                     // This should already be set
@@ -438,9 +470,11 @@ pub fn check_tcg_dice_evidence_binding(cert_slot_id: u8) -> Result<CertificateUs
                     }
                 }
 
-                if let Ok(_extension) =
-                    check_for_extensions(&x509, "tcg-dice-kp-attestLoc", &TCG_DICE_KP_ATTESTLOC)
-                {
+                if let Ok(_extension) = check_for_extended_key_usage(
+                    &x509,
+                    "tcg-dice-kp-attestLoc",
+                    &TCG_DICE_KP_ATTESTLOC,
+                ) {
                     // This chain is used to sign evidence
                     info!("    Used to sign Evidence");
                     // This should already be set
@@ -453,9 +487,11 @@ pub fn check_tcg_dice_evidence_binding(cert_slot_id: u8) -> Result<CertificateUs
                     }
                 }
 
-                if let Ok(_extension) =
-                    check_for_extensions(&x509, "tcg-dice-kp-assertLoc", &TCG_DICE_KP_ASSERTLOC)
-                {
+                if let Ok(_extension) = check_for_extended_key_usage(
+                    &x509,
+                    "tcg-dice-kp-assertLoc",
+                    &TCG_DICE_KP_ASSERTLOC,
+                ) {
                     // This chain is used to sign attestation
                     info!("    Used to sign Attestation");
                     if !usage.sign_attestation {
