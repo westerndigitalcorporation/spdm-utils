@@ -88,6 +88,11 @@ struct Args {
     /// option is not specified.
     #[arg(long, default_value_t = 2323)]
     qemu_port: u16,
+
+    /// Do not initialize an SPDM session with the responder, instead, only
+    /// send the requests specified
+    #[arg(long, default_value_t = false)]
+    no_session: bool,
 }
 
 #[derive(Subcommand, PartialEq)]
@@ -733,11 +738,23 @@ async fn main() -> Result<(), ()> {
                 cli_helpers::parse_aead_cipher_suite(aead_cipher_suites).unwrap(),
             )
             .unwrap();
-            unsafe {
-                spdm::initialise_connection(cntx_ptr, slot_id).unwrap();
-            }
-            let mut session_info =
-                unsafe { spdm::start_session(cntx_ptr, slot_id, use_psk_exchange).unwrap() };
+
+            let mut session_info = if cli.no_session {
+                spdm::SpdmSessionInfo {
+                    use_psk: use_psk_exchange,
+                    measurement_hash_type: SPDM_CHALLENGE_REQUEST_TCB_COMPONENT_MEASUREMENT_HASH
+                        as u8,
+                    slot_id,
+                    session_policy: 0,
+                    session_id: 0,
+                    heartbeat_period: 0,
+                }
+            } else {
+                unsafe {
+                    spdm::initialise_connection(cntx_ptr, slot_id).unwrap();
+                    spdm::start_session(cntx_ptr, slot_id, use_psk_exchange).unwrap()
+                }
+            };
             // Print out the negotiated algorithms
             unsafe {
                 spdm::get_negotiated_algos(cntx_ptr, slot_id).unwrap();
