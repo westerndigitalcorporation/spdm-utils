@@ -231,6 +231,23 @@ for available options.
 ```
 $./target/debug/spdm_utils --socket-client request get-version,get-measurement[index=1]
 ```
+
+### Direct SPDM requests with no session establishment
+
+`spdm-utils` can send SPDM request(s) directly, without establishing a session.
+This maybe useful for development, testing and CI. The `--no-session` argument
+shall be specified to indicate this. In this mode, it is the responsibility of
+the user to ensure that the requests are ordered in an SPDM specification
+compliant way. `spdm-utils` or `libspdm` do not check the request order, instead
+directly issues them to the responder.
+
+```
+$ ./target/debug/spdm_utils --socket-client --no-session request get-version,get-capabilities,negotiate-algorithms,get-digests,get-certificate,challenge
+```
+
+This command with issue the requests listed in the order in which they are listed
+to the responder.
+
 ## Testing a real device
 
 You can run SPDM-Utils on the host to interact with a real DOE device. To do
