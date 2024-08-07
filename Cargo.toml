@@ -9,6 +9,7 @@ readme = "README.md"
 
 [features]
 default = ["std"]
+libspdm_tests = []
 
 no_std = []
 std = ["clap", "memmap2", "once_cell", "sha2", "env_logger", "serialport", "lazy_static", "colored", "which", "asn1-rs", "x509-parser", "minicbor", "minicbor-derive", "async-std", "futures", "nix"]

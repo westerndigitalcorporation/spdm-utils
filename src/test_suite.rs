@@ -18,7 +18,7 @@ use crate::spdm::get_measurement;
 use crate::spdm::SpdmSessionInfo;
 use crate::tcg_concise_evidence_binding::check_tcg_dice_evidence_binding;
 use crate::RequestCode;
-#[cfg(libspdm_tests)]
+#[cfg(feature = "libspdm_tests")]
 use crate::*;
 use core::ffi::c_void;
 use libspdm::libspdm_rs::{
@@ -563,7 +563,7 @@ pub unsafe fn start_tests(cntx: *mut c_void, backend: TestBackend) -> ! {
 /// should be looked at to find the point of failure.
 #[allow(unused_variables)]
 pub unsafe fn responder_validator_tests(context: *mut c_void) -> Result<(), ()> {
-    #[cfg(libspdm_tests)]
+    #[cfg(feature = "libspdm_tests")]
     {
         let mut m_spdm_test_group_capabilities_configs = [
             common_test_case_config_t {

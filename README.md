@@ -183,7 +183,7 @@ make -j8
 We can now build SPDM-Utils with
 
 ```shell
-RUSTFLAGS='--cfg libspdm_tests' cargo build
+cargo build --features libspdm_tests
 ```
 
 ## Testing completely on the host

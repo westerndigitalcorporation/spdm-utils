@@ -43,7 +43,7 @@ fn main() {
     println!("cargo:rustc-link-arg=-lspdm_transport_mctp_lib");
 
     // Link SPDM Test Libraries
-    let mut builder = if cfg!(libspdm_tests) {
+    let mut builder = if cfg!(feature = "libspdm_tests") {
         println!("cargo:rustc-link-arg=-lcommon_test_utility_lib");
         println!("cargo:rustc-link-arg=-lspdm_responder_conformance_test_lib");
 
@@ -73,7 +73,7 @@ fn main() {
         println!("cargo:rustc-link-search={sysroot}/usr/lib/");
     } else {
         println!("cargo:rustc-link-search=third-party/libspdm/build/lib/");
-        #[cfg(libspdm_tests)]
+        #[cfg(feature = "libspdm_tests")]
         {
             println!("cargo:rustc-link-search=third-party/SPDM-Responder-Validator/build/lib/");
         }
