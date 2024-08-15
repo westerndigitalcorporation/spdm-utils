@@ -21,8 +21,8 @@ openssl x509 -req -in alias.req -out alias.cert -CA device.der -sha384 -days 365
 cp ../../slot0/end* ./
 
 # Sign the CSRs
-openssl x509 -req -in end_requester.req -out end_requester.cert -CA alias.cert -CAkey alias.key -sha384 -days 3650 -set_serial 4 -extensions leaf -extfile ../openssl.cnf
-openssl x509 -req -in end_responder.req -out end_responder.cert -CA alias.cert -CAkey alias.key -sha384 -days 3650 -set_serial 5 -extensions leaf -extfile ../openssl.cnf
+openssl x509 -req -in end_requester.req -out end_requester.cert -CA alias.cert -CAkey alias.key -sha384 -days 3650 -set_serial 4 -extensions leaf_requester -extfile ../openssl.cnf
+openssl x509 -req -in end_responder.req -out end_responder.cert -CA alias.cert -CAkey alias.key -sha384 -days 3650 -set_serial 5 -extensions leaf_responder -extfile ../openssl.cnf
 
 # Generate der files
 openssl asn1parse -in alias.cert -out alias.cert.der
