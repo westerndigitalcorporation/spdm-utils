@@ -478,6 +478,28 @@ unsafe fn doe_wait_status_dor(device: *mut pci_dev, doe_offset: i32) -> Result<(
     Ok(())
 }
 
+/// # Summary
+///
+/// A helper function to retrieve the DOE version,
+///
+/// # Parameter
+///
+/// * `device`: `pci_dev` pointing to the target device
+/// * `doe_offset`: offset at which doe sits in the extended capability list
+///
+/// # Returns
+///
+/// The capability version
+///
+/// # Panics
+///
+/// Panics if `pci_dev` is invalid
+unsafe fn doe_capability_version(device: *mut pci_dev, doe_offset: i32) -> u8 {
+    let doe_extended_cap = pci_read_long(device, doe_offset);
+
+    ((doe_extended_cap & 0xF0000) >> 16) as u8
+}
+
 //---------------------FOLLOWING CODE IS FOR TESTING--------------------------//
 
 /// DOE Header
@@ -498,17 +520,23 @@ const DOE_RESPONSE_VID_MASK: u32 = 0x0000_FFFF;
 const DOE_RESPONSE_PROTOCOL_MASK: u32 = 0x00FF_0000;
 const DOE_RESPONSE_NEXT_INDEX_MASK: u32 = 0xFF00_0000;
 const DOE_RESPONSE_LEN_MASK: u32 = 0x0001_FFFF;
+const DOE_RESPONSE_MAX_DO_LEN_MASK: u32 = 0x0003_FFFF;
+const DOE_RESPONSE_ADD_INFO_MASK: u32 = 0xFFFC_0000;
 
 // Shifts for Discovery Response
 const DOE_RESPONSE_VID_SHIFT: u32 = 0;
 const DOE_RESPONSE_PROTOCOL_SHIFT: u32 = 16;
 const DOE_RESPONSE_NEXT_INDEX_SHIFT: u32 = 24;
+const DOE_RESPONSE_ADD_INFO_SHIFT: u32 = 18;
 
 // Masks for Discovery Request
 const DOE_REQUEST_INDEX: u32 = 0x0000_00FF;
 const DOE_REQUEST_VID_MASK: u32 = 0x0000_FFFF;
 const DOE_REQUEST_PROTOCOL_MASK: u32 = 0x00FF_0000;
 const DOE_REQUEST_LEN_MASK: u32 = 0x0001_FFFF;
+
+const DOE_VERSION: u8 = 2;
+const DOE_REQUEST_VERSION_SHIFT: u32 = 8;
 
 // Shifts for Discovery Request
 const _DOE_REQUEST_VID_SHIFT: u32 = 0;
@@ -522,17 +550,17 @@ pub struct DoeDiscoveryPacket {
     dw0: u32,
 }
 
-pub struct DoeDiscoveryResponse(Vec<u32>);
-
 impl DoeDiscoveryPacket {
     pub fn as_array(&self) -> [u32; 3] {
         [self.header1, self.header2, self.dw0]
     }
 }
 
+pub struct DoeDiscoveryResponse(Vec<u32>);
+
 impl fmt::Display for DoeDiscoveryResponse {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        if self.0.len() != 3 {
+        if !(self.0.len() == 3 || self.0.len() == 4) {
             return writeln!(f, "inner vector invalid");
         }
         let header1 = self.0[0];
@@ -554,6 +582,15 @@ impl fmt::Display for DoeDiscoveryResponse {
             (dw0 & DOE_RESPONSE_PROTOCOL_MASK) >> DOE_RESPONSE_PROTOCOL_SHIFT,
             dw0 & DOE_RESPONSE_VID_MASK
         )?;
+        if self.0.len() == 4 {
+            let dw1 = self.0[3];
+            writeln!(
+                f,
+                "\tDISC_RESP: [ADDITIONAL_INFO: {}, MAX_DO_LEN: {}]",
+                (dw1 & DOE_RESPONSE_ADD_INFO_MASK) >> DOE_RESPONSE_ADD_INFO_SHIFT,
+                dw1 & DOE_RESPONSE_MAX_DO_LEN_MASK
+            )?;
+        }
         writeln!(f, "}}")
     }
 }
@@ -598,13 +635,26 @@ pub unsafe fn test_discovery_basic() -> Result<(), ()> {
     let pcie_ids = PCIE_IDENTIFIERS.get().unwrap();
     let (pacc, device, doe_offset) = get_pcie_dev(pcie_ids.vid, pcie_ids.devid).unwrap();
     doe_wait_not_busy(device, doe_offset)?;
+    let doe_version = doe_capability_version(device, doe_offset);
     let doe_discovery_index: u32 = 0;
-    let discovery_packet = DoeDiscoveryPacket {
-        header1: (PCI_DOE_PROTOCOL_DISCOVERY << DOE_HEADER1_OFST_TYPE)
-            | (PCI_VENDOR_ID_PCI_SIG << DOE_HEADER1_OFST_VID),
-        // We are sending 3DWs (inc 2 for header)
-        header2: 3 << DOE_HEADER2_OFST_LEN,
-        dw0: doe_discovery_index << DOE_DISC_OFST_SHIFT,
+
+    let discovery_packet = if doe_version == DOE_VERSION {
+        DoeDiscoveryPacket {
+            header1: (PCI_DOE_PROTOCOL_DISCOVERY << DOE_HEADER1_OFST_TYPE)
+                | (PCI_VENDOR_ID_PCI_SIG << DOE_HEADER1_OFST_VID),
+            // We are sending 3DWs (inc 2 for header)
+            header2: 3 << DOE_HEADER2_OFST_LEN,
+            dw0: doe_discovery_index << DOE_DISC_OFST_SHIFT
+                | (DOE_VERSION as u32) << DOE_REQUEST_VERSION_SHIFT,
+        }
+    } else {
+        DoeDiscoveryPacket {
+            header1: (PCI_DOE_PROTOCOL_DISCOVERY << DOE_HEADER1_OFST_TYPE)
+                | (PCI_VENDOR_ID_PCI_SIG << DOE_HEADER1_OFST_VID),
+            // We are sending 3DWs (inc 2 for header)
+            header2: 3 << DOE_HEADER2_OFST_LEN,
+            dw0: doe_discovery_index << DOE_DISC_OFST_SHIFT,
+        }
     };
     info!("Discovery Request: {}", discovery_packet);
     for data in discovery_packet.as_array().iter() {
@@ -668,6 +718,8 @@ pub unsafe fn test_discovery_all() -> Result<(), ()> {
     let (pacc, device, doe_offset) = get_pcie_dev(pcie_ids.vid, pcie_ids.devid).unwrap();
     doe_wait_not_busy(device, doe_offset)?;
 
+    let doe_version = doe_capability_version(device, doe_offset);
+
     let mut doe_discovery_index: u32 = 0;
     let mut discovery_packet = DoeDiscoveryPacket {
         header1: (PCI_DOE_PROTOCOL_DISCOVERY << DOE_HEADER1_OFST_TYPE)
@@ -681,6 +733,10 @@ pub unsafe fn test_discovery_all() -> Result<(), ()> {
         // We want to loop till we hit the end of discoverable objects on the
         // doe instance. Response `next_index` = 0 to indicate the final entry.
         discovery_packet.dw0 = doe_discovery_index << DOE_DISC_OFST_SHIFT;
+        if doe_version == DOE_VERSION {
+            discovery_packet.dw0 |= (DOE_VERSION as u32) << DOE_REQUEST_VERSION_SHIFT;
+        }
+
         info!("Discovery Request: {}", discovery_packet);
 
         for data in discovery_packet.as_array().iter() {
@@ -708,22 +764,38 @@ pub unsafe fn test_discovery_all() -> Result<(), ()> {
             doe_status = pci_read_long(device, doe_offset + DOE_STATUS);
         }
 
-        assert_eq!(
-            recv.0.len(),
-            3,
-            "Response expected bytes mismatch, expected 12bytes got {}bytes",
-            recv.0.len() * 4
-        );
         // This is the 3rd dword which is the response data (see table 6-42)
         doe_discovery_index =
             (recv.0[2] & DOE_RESPONSE_NEXT_INDEX_MASK) >> DOE_RESPONSE_NEXT_INDEX_SHIFT;
         let vid = (recv.0[2] & DOE_RESPONSE_VID_MASK) >> DOE_RESPONSE_VID_SHIFT;
 
         match (recv.0[2] & DOE_RESPONSE_PROTOCOL_MASK) >> DOE_RESPONSE_PROTOCOL_SHIFT {
-            0 => info!("VID: {} - Discovery Support [OK]", vid),
-            1 => info!("VID: {} - CMA/SPDM Support [OK]", vid),
-            2 => info!("VID: {} - Secured CMA/SPDM Support [OK]", vid),
-            _ => info!("Reserved"),
+            0 => {
+                info!("VID: {} - Discovery Support [OK]", vid);
+                assert_eq!(
+                    recv.0.len(),
+                    3,
+                    "Response expected bytes mismatch, expected 12bytes got {}bytes",
+                    recv.0.len() * 4
+                );
+            }
+            1 => {
+                info!("VID: {} - CMA/SPDM Support [OK]", vid);
+                assert!(
+                    recv.0.len() == 3 || recv.0.len() == 4,
+                    "Response expected bytes mismatch, expected 12 or 16bytes got {}bytes",
+                    recv.0.len() * 4
+                );
+            }
+            2 => {
+                info!("VID: {} - Secured CMA/SPDM Support [OK]", vid);
+                assert!(
+                    recv.0.len() == 3 || recv.0.len() == 4,
+                    "Response expected bytes mismatch, expected 12 or 16bytes got {}bytes",
+                    recv.0.len() * 4
+                );
+            }
+            _ => info!("Reserved/Unsupported by SPDM-Utils"),
         }
         // Print the receive buffer.
         info!("Discovery Response: {}", recv);
@@ -757,16 +829,32 @@ pub unsafe fn test_discovery_error() -> Result<(), ()> {
     info!("--- Testing Discovery: Error Cases ---");
     let pcie_ids = PCIE_IDENTIFIERS.get().unwrap();
     let (pacc, device, doe_offset) = get_pcie_dev(pcie_ids.vid, pcie_ids.devid).unwrap();
+
     doe_wait_not_busy(device, doe_offset)?;
+
+    let doe_version = doe_capability_version(device, doe_offset);
+
     // Note that this index is invalid
     let doe_discovery_index: u32 = 32;
-    let discovery_packet = DoeDiscoveryPacket {
-        header1: (PCI_DOE_PROTOCOL_DISCOVERY << DOE_HEADER1_OFST_TYPE)
-            | (PCI_VENDOR_ID_PCI_SIG << DOE_HEADER1_OFST_VID),
-        // We are sending 3DWs (inc 2 for header)
-        header2: 3 << DOE_HEADER2_OFST_LEN,
-        dw0: doe_discovery_index << DOE_DISC_OFST_SHIFT,
+    let discovery_packet = if doe_version == DOE_VERSION {
+        DoeDiscoveryPacket {
+            header1: (PCI_DOE_PROTOCOL_DISCOVERY << DOE_HEADER1_OFST_TYPE)
+                | (PCI_VENDOR_ID_PCI_SIG << DOE_HEADER1_OFST_VID),
+            // We are sending 3DWs (inc 2 for header)
+            header2: 3 << DOE_HEADER2_OFST_LEN,
+            dw0: doe_discovery_index << DOE_DISC_OFST_SHIFT
+                | (DOE_VERSION as u32) << DOE_REQUEST_VERSION_SHIFT,
+        }
+    } else {
+        DoeDiscoveryPacket {
+            header1: (PCI_DOE_PROTOCOL_DISCOVERY << DOE_HEADER1_OFST_TYPE)
+                | (PCI_VENDOR_ID_PCI_SIG << DOE_HEADER1_OFST_VID),
+            // We are sending 3DWs (inc 2 for header)
+            header2: 3 << DOE_HEADER2_OFST_LEN,
+            dw0: doe_discovery_index << DOE_DISC_OFST_SHIFT,
+        }
     };
+
     info!("Discovery Request: {}", discovery_packet);
 
     for data in discovery_packet.as_array().iter() {
