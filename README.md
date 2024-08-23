@@ -56,7 +56,7 @@ You will also need a few host dependencies
 ## Fedora
 
 ```shell
-sudo dnf install cmake clang-libs clang-devel pciutils-devel openssl openssl-devel python3-devel systemd-devel
+sudo dnf install cmake clang-libs clang-devel pciutils-devel openssl openssl-devel python3-devel systemd-devel libnvme
 ```
 
 ## Ruby
@@ -258,6 +258,15 @@ that you can run the following example to get digest information
 
 ```shell
 ./target/debug/spdm_utils --doe-pci-cfg request get-digests
+```
+
+### Interacting with SCSI/NVMe devices over SPDM over Storage Transport
+
+SPDM-utils supports the SPDM over storage transport as defined by the DMTF DSP0286.
+For example, the following command can be used to interact with an NVMe device.
+
+```shell
+$ ./target/debug/spdm_utils --blk-dev-path /dev/nvme0 --nvme --no-session request get-version,get-capabilities
 ```
 
 ## Setting the certificate
