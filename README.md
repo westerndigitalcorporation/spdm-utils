@@ -59,11 +59,11 @@ Note: `dnf` commands are for Fedora, and `apt` is used for Debian/Ubuntu based
 distributions.
 
 ```shell
-$ sudo dnf install cmake clang-libs clang-devel pciutils-devel openssl openssl-devel python3-devel systemd-devel
+$ sudo dnf install cmake clang-libs clang-devel pciutils-devel openssl openssl-devel python3-devel systemd-devel libnvme
 
 or
 
-$ sudo apt install cmake clang libclang-dev pciutils libpci-dev openssl libssl-dev libsystemd-dev python3-dev
+$ sudo apt install cmake clang libclang-dev pciutils libpci-dev openssl libssl-dev libsystemd-dev python3-dev libnvme-dev
 ```
 
 ### Ruby
@@ -301,6 +301,15 @@ invoked as below:
 ./target/debug/spdm_utils --pcie-vid <VendorID> --pcie-devid <DeviceID> --doe-pci-cfg request get-digests
 ```
 
+### Interacting with SCSI/NVMe devices over SPDM over Storage Transport
+
+SPDM-utils supports the SPDM over storage transport as defined by the DMTF DSP0286.
+For example, the following command can be used to interact with an NVMe device.
+
+```shell
+$ ./target/debug/spdm_utils --blk-dev-path /dev/nvme0 --nvme --no-session request get-version,get-capabilities
+```
+
 ## Setting the certificate
 
 From a host you can set the certificate of the device. As SPDM-Utils uses
@@ -429,7 +438,7 @@ As before, we need to start SPDM-Utils before QEMU, the following options are
 required.
 
 ```shell
-$ ./target/debug/spdm_utils --qemu-server --spdm-transport-protocol=nvme response
+$ ./target/debug/spdm_utils --qemu-server --spdm-transport-protocol=storage response
 
 [2024-06-07T00:09:06Z DEBUG spdm_utils] Logger initialisation [OK]
 [2024-06-07T00:09:06Z INFO  spdm_utils] Using Nvme transport for QEMU
@@ -454,7 +463,7 @@ SPDM-Utils for this as well.
 First we want to start a SPDM-Utils server to act as a SPDM responder.
 
 ```shell
-$ ./target/debug/spdm_utils --spdm-transport-protocol scsi --qemu-server response
+$ ./target/debug/spdm_utils --spdm-transport-protocol=storage --qemu-server response
 ```
 
 ### Start tcmu-runner
