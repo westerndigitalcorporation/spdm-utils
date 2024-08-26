@@ -7,7 +7,7 @@
         / environment-map / {
           / class / 0: {
             / class-id / 0:
-              / tagged-oid-type / 111(h'06072B06010401A807'), / 1.3.6.1.4.1.5127 /
+              / tagged-oid-type / 111(h'2B06010401A807'), / 1.3.6.1.4.1.5127 /
               / vendor / 1: "Western Digital Test"
           }
         },
