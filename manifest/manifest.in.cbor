@@ -20,7 +20,7 @@
             }
           },
           / authorised-by / 2: [
-            / tagged-pkix-base64-key-type / 554("base64_key_X")
+            / tagged-pkix-base64-key-type / 554("3076301006072a8648ce3d020106052b81040022036200046e52173c2613c44ed91fcbd360834ee493b9fbcbcf4c7645d3df1068c69fffc55a86291ba1de260bd7bda6a94347d6b962573dc556f4d907d742e316262c782fc85c915b1bc3e74d47dc1dd3b91a7905ebb99015b3b73ecf23177aba1670c34d")
           ]
         },
         / measurement-map / {
@@ -31,7 +31,7 @@
             }
           },
           / authorised-by / 2: [
-            / tagged-pkix-base64-key-type / 554("base64_key_X")
+            / tagged-pkix-base64-key-type / 554("3076301006072a8648ce3d020106052b81040022036200046e52173c2613c44ed91fcbd360834ee493b9fbcbcf4c7645d3df1068c69fffc55a86291ba1de260bd7bda6a94347d6b962573dc556f4d907d742e316262c782fc85c915b1bc3e74d47dc1dd3b91a7905ebb99015b3b73ecf23177aba1670c34d")
           ]
         },
         / measurement-map / {
@@ -42,7 +42,7 @@
             }
           },
           / authorised-by / 2: [
-            / tagged-pkix-base64-key-type / 554("base64_key_X")
+            / tagged-pkix-base64-key-type / 554("3076301006072a8648ce3d020106052b81040022036200046e52173c2613c44ed91fcbd360834ee493b9fbcbcf4c7645d3df1068c69fffc55a86291ba1de260bd7bda6a94347d6b962573dc556f4d907d742e316262c782fc85c915b1bc3e74d47dc1dd3b91a7905ebb99015b3b73ecf23177aba1670c34d")
           ]
         }
         ]
