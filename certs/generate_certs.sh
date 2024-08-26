@@ -23,6 +23,10 @@ openssl asn1parse -in inter.cert -out inter.cert.der
 openssl asn1parse -in inter.key -out inter.key.der
 cat inter.cert.der inter.key.der > inter.der
 
+# Generate the responder SubjectPublicKeyInfo
+openssl x509 -inform DER -in ca.cert.der -pubkey -noout -out ca.pub
+openssl asn1parse -in ca.pub -out ca.pub.der
+
 # Generate Leaf CSRs
 openssl req -nodes -newkey ec:param.pem \
        -keyout end_requester.key -out end_requester.req -sha384 -batch \
