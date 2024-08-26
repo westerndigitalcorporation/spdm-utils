@@ -496,8 +496,11 @@ unsafe fn doe_wait_status_dor(device: *mut pci_dev, doe_offset: i32) -> Result<(
 /// Panics if `pci_dev` is invalid
 unsafe fn doe_capability_version(device: *mut pci_dev, doe_offset: i32) -> u8 {
     let doe_extended_cap = pci_read_long(device, doe_offset);
-
-    ((doe_extended_cap & 0xF0000) >> 16) as u8
+    // DOE Extended Capability Header Fields
+    //  31:20 Next Cap Offset
+    //  19:16 Capability Version
+    //  15:0  PCIe Extended Cap ID
+    ((doe_extended_cap >> 15) & 0xF) as u8
 }
 
 //---------------------FOLLOWING CODE IS FOR TESTING--------------------------//
