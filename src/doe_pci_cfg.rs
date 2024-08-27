@@ -761,13 +761,13 @@ pub unsafe fn test_discovery_basic() -> Result<(), ()> {
         pci_write_long(device, doe_offset + DOE_READ_DATA_MAILBOX, 0xDEADBEEF);
         doe_status = pci_read_long(device, doe_offset + DOE_STATUS);
     }
+    info!("Discovery Response: {}", recv);
     assert_eq!(
         recv.0.len(),
         3,
         "Response expected bytes mismatch, expected 12bytes got {}bytes",
         recv.0.len() * 4
     );
-    info!("Discovery Response: {}", recv);
     pci_cleanup(pacc);
     info!("[OK]\n");
     Ok(())
