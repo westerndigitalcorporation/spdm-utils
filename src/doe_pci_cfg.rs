@@ -15,21 +15,26 @@
 
 use crate::*;
 use core::ffi::c_void;
+use libspdm::libspdm_status_construct;
 use libspdm::spdm::LIBSPDM_MAX_SPDM_MSG_SIZE;
 use once_cell::sync::OnceCell;
 use std::fmt;
 use std::slice::{from_raw_parts, from_raw_parts_mut};
 
 const SEND_RECEIVE_BUFFER_LEN: usize = LIBSPDM_MAX_SPDM_MSG_SIZE as usize;
+const LIBSPDM_STATUS_ERROR_PEER: u32 =
+    libspdm_status_construct!(LIBSPDM_SEVERITY_ERROR, LIBSPDM_SOURCE_CORE, 0x000a);
 static mut SEND_BUFFER: OnceCell<[u8; SEND_RECEIVE_BUFFER_LEN]> = OnceCell::new();
 static mut RECEIVE_BUFFER: OnceCell<[u8; SEND_RECEIVE_BUFFER_LEN]> = OnceCell::new();
 
 const DOE_CONTROL: i32 = 0x08;
 const DOE_CONTROL_GO: u32 = 1 << 31;
+const DOE_CONTROL_ABORT: u32 = 1 << 0;
 
 const DOE_STATUS: i32 = 0x0c;
 const DOE_STATUS_BUSY: u32 = 1 << 0;
 const DOE_STATUS_DOR: u32 = 1 << 31;
+const DOE_STATUS_ERR: u32 = 1 << 2;
 
 const DOE_WRITE_DATA_MAILBOX: i32 = 0x10;
 const DOE_READ_DATA_MAILBOX: i32 = 0x14;
@@ -76,7 +81,14 @@ unsafe extern "C" fn doe_pci_cfg_send_message(
     info!("Sending message {msg_buf:x?}");
     let pcie_ids = PCIE_IDENTIFIERS.get().unwrap();
     let (pacc, device, doe_offset) = get_pcie_dev(pcie_ids.vid, pcie_ids.devid).unwrap();
-    doe_wait_not_busy(device, doe_offset).unwrap();
+    if let Err(e) = doe_wait_not_busy(device, doe_offset) {
+        match e {
+            DoeStatus::DoeStatusErr => {
+                doe_issue_abort(device, doe_offset, true);
+                return LIBSPDM_STATUS_ERROR_PEER;
+            }
+        }
+    };
 
     for chunk in msg_buf.chunks(4) {
         let data = u32::from_le_bytes(chunk[0..4].try_into().unwrap());
@@ -135,7 +147,14 @@ unsafe extern "C" fn doe_pci_cfg_receive_message(
     info!("Receiving message");
     let pcie_ids = PCIE_IDENTIFIERS.get().unwrap();
     let (pacc, device, doe_offset) = get_pcie_dev(pcie_ids.vid, pcie_ids.devid).unwrap();
-    doe_wait_status_dor(device, doe_offset).unwrap();
+    if let Err(e) = doe_wait_status_dor(device, doe_offset) {
+        match e {
+            DoeStatus::DoeStatusErr => {
+                doe_issue_abort(device, doe_offset, true);
+                return LIBSPDM_STATUS_ERROR_PEER;
+            }
+        }
+    };
 
     let mut bytes_received = 0;
     let mut doe_status = pci_read_long(device, doe_offset + DOE_STATUS);
@@ -438,17 +457,27 @@ unsafe fn get_doe_offset(pdev: *mut pci_dev) -> Result<i32, ()> {
 /// # Returns
 ///
 /// OK(()) on success, indicating the device is no longer busy
+/// Err(DoeStatusErr) if the device has set the Status::Err bit.
 ///
 /// # Panics
 ///
 /// Panics if `pci_dev` is invalid
-unsafe fn doe_wait_not_busy(device: *mut pci_dev, doe_offset: i32) -> Result<(), ()> {
+unsafe fn doe_wait_not_busy(device: *mut pci_dev, doe_offset: i32) -> Result<(), DoeStatus> {
     let mut doe_status = pci_read_long(device, doe_offset + DOE_STATUS);
 
     while doe_status & DOE_STATUS_BUSY == DOE_STATUS_BUSY {
+        if doe_status & DOE_STATUS_ERR == DOE_STATUS_ERR {
+            error!("Device DOE status error");
+            return Err(DoeStatus::DoeStatusErr);
+        }
         doe_status = pci_read_long(device, doe_offset + DOE_STATUS)
     }
     Ok(())
+}
+
+#[derive(PartialEq)]
+enum DoeStatus {
+    DoeStatusErr,
 }
 
 /// # Summary
@@ -464,18 +493,55 @@ unsafe fn doe_wait_not_busy(device: *mut pci_dev, doe_offset: i32) -> Result<(),
 /// # Returns
 ///
 /// OK(()) on success, host may attempt read the data from the target now.
+/// Err(DoeStatusErr) if the device has set the Status::Err bit.
 ///
 /// # Panics
 ///
 /// Panics if `pci_dev` is invalid
-unsafe fn doe_wait_status_dor(device: *mut pci_dev, doe_offset: i32) -> Result<(), ()> {
+unsafe fn doe_wait_status_dor(device: *mut pci_dev, doe_offset: i32) -> Result<(), DoeStatus> {
     let mut doe_status = pci_read_long(device, doe_offset + DOE_STATUS);
 
     // Wait for the data object ready to be true
     while doe_status & DOE_STATUS_DOR != DOE_STATUS_DOR {
+        if doe_status & DOE_STATUS_ERR == DOE_STATUS_ERR {
+            error!("Device DOE status error");
+            return Err(DoeStatus::DoeStatusErr);
+        }
         doe_status = pci_read_long(device, doe_offset + DOE_STATUS);
     }
     Ok(())
+}
+
+/// # Summary
+///
+/// A helper function to issue DOE Abort
+///
+/// # Parameter
+///
+/// * `device`: `pci_dev` pointing to the target device
+/// * `doe_offset`: offset at which doe sits in the extended capability list
+/// * `block_on_status_err`: block until DoE Status Error has  cleared
+///
+/// # Panics
+///
+/// Panics if `pci_dev` is invalid
+unsafe fn doe_issue_abort(device: *mut pci_dev, doe_offset: i32, block_on_status_err: bool) {
+    let doe_control = pci_read_long(device, doe_offset + DOE_CONTROL);
+    warn!("Issuing DOE Control abort");
+    pci_write_long(
+        device,
+        doe_offset + DOE_CONTROL,
+        doe_control | DOE_CONTROL_ABORT,
+    );
+
+    if block_on_status_err {
+        debug!("Waiting for DOE status error to clear");
+        let mut doe_status = pci_read_long(device, doe_offset + DOE_STATUS);
+        while doe_status & DOE_STATUS_ERR == DOE_STATUS_ERR {
+            doe_status = pci_read_long(device, doe_offset + DOE_STATUS);
+        }
+    }
+    debug!("DOE Status error Cleared");
 }
 
 /// # Summary
@@ -634,7 +700,13 @@ pub unsafe fn test_discovery_basic() -> Result<(), ()> {
     info!("--- Testing Discovery: Basic ---");
     let pcie_ids = PCIE_IDENTIFIERS.get().unwrap();
     let (pacc, device, doe_offset) = get_pcie_dev(pcie_ids.vid, pcie_ids.devid).unwrap();
-    doe_wait_not_busy(device, doe_offset)?;
+    doe_wait_not_busy(device, doe_offset).map_err(|e| match e {
+        DoeStatus::DoeStatusErr => {
+            doe_issue_abort(device, doe_offset, true);
+            ()
+        }
+    })?;
+
     let doe_version = doe_capability_version(device, doe_offset);
     let doe_discovery_index: u32 = 0;
 
@@ -670,7 +742,12 @@ pub unsafe fn test_discovery_basic() -> Result<(), ()> {
     );
 
     // Wait for a response
-    doe_wait_status_dor(device, doe_offset)?;
+    doe_wait_status_dor(device, doe_offset).map_err(|e| match e {
+        DoeStatus::DoeStatusErr => {
+            doe_issue_abort(device, doe_offset, true);
+            ()
+        }
+    })?;
 
     // Read and Print Response
     let mut recv = DoeDiscoveryResponse(Vec::new());
@@ -716,7 +793,12 @@ pub unsafe fn test_discovery_all() -> Result<(), ()> {
     info!("--- Testing Discovery: All Discoverable objects ---");
     let pcie_ids = PCIE_IDENTIFIERS.get().unwrap();
     let (pacc, device, doe_offset) = get_pcie_dev(pcie_ids.vid, pcie_ids.devid).unwrap();
-    doe_wait_not_busy(device, doe_offset)?;
+    doe_wait_not_busy(device, doe_offset).map_err(|e| match e {
+        DoeStatus::DoeStatusErr => {
+            doe_issue_abort(device, doe_offset, true);
+            ()
+        }
+    })?;
 
     let doe_version = doe_capability_version(device, doe_offset);
 
@@ -750,7 +832,12 @@ pub unsafe fn test_discovery_all() -> Result<(), ()> {
             doe_control | DOE_CONTROL_GO,
         );
         // Wait for a response
-        doe_wait_status_dor(device, doe_offset)?;
+        doe_wait_status_dor(device, doe_offset).map_err(|e| match e {
+            DoeStatus::DoeStatusErr => {
+                doe_issue_abort(device, doe_offset, true);
+                ();
+            }
+        })?;
         // Read and Print Response
         let mut recv = DoeDiscoveryResponse(Vec::new());
 
@@ -830,7 +917,12 @@ pub unsafe fn test_discovery_error() -> Result<(), ()> {
     let pcie_ids = PCIE_IDENTIFIERS.get().unwrap();
     let (pacc, device, doe_offset) = get_pcie_dev(pcie_ids.vid, pcie_ids.devid).unwrap();
 
-    doe_wait_not_busy(device, doe_offset)?;
+    doe_wait_not_busy(device, doe_offset).map_err(|e| match e {
+        DoeStatus::DoeStatusErr => {
+            doe_issue_abort(device, doe_offset, true);
+            ()
+        }
+    })?;
 
     let doe_version = doe_capability_version(device, doe_offset);
 
@@ -870,7 +962,12 @@ pub unsafe fn test_discovery_error() -> Result<(), ()> {
     );
 
     // Wait for a response
-    doe_wait_status_dor(device, doe_offset)?;
+    doe_wait_status_dor(device, doe_offset).map_err(|e| match e {
+        DoeStatus::DoeStatusErr => {
+            doe_issue_abort(device, doe_offset, true);
+            ()
+        }
+    })?;
 
     // Read and Print Response
     let mut recv = DoeDiscoveryResponse(Vec::new());
