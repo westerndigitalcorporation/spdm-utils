@@ -754,12 +754,18 @@ pub unsafe fn test_discovery_basic() -> Result<(), ()> {
 
     let mut doe_status = pci_read_long(device, doe_offset + DOE_STATUS);
 
+    debug!("DOE Status Before Operation: 0x{doe_status:x}");
+
     while doe_status & DOE_STATUS_DOR == DOE_STATUS_DOR {
-        recv.0
-            .push((pci_read_long(device, doe_offset + DOE_READ_DATA_MAILBOX)).to_le());
+        let val = (pci_read_long(device, doe_offset + DOE_READ_DATA_MAILBOX)).to_le();
+
+        recv.0.push(val);
         // Clear the data by writing to the FIFO (note we can write anything)
         pci_write_long(device, doe_offset + DOE_READ_DATA_MAILBOX, 0xDEADBEEF);
+        debug!("Reading: 0x{val:x}");
+
         doe_status = pci_read_long(device, doe_offset + DOE_STATUS);
+        debug!("DOE Status after reading: 0x{doe_status:x}");
     }
 
     info!("Discovery Response: {}", recv);
