@@ -766,6 +766,9 @@ pub unsafe fn test_discovery_basic() -> Result<(), ()> {
 
         doe_status = pci_read_long(device, doe_offset + DOE_STATUS);
         debug!("DOE Status after reading: 0x{doe_status:x}");
+
+        // std::thread::sleep(std::time::Duration::from_millis(1000));
+        // debug!("DOE Status after sleeping: 0x{doe_status:x}");
     }
 
     info!("Discovery Response: {}", recv);
