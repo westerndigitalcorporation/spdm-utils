@@ -397,7 +397,7 @@ As before, we need to start SPDM-Utils before QEMU, the following options are
 required.
 
 ```shell
-$ ./target/debug/spdm_utils --qemu-server --spdm-transport-protocol=nvme response
+$ ./target/debug/spdm_utils --qemu-server --spdm-transport-protocol=storage response
 
 [2024-06-07T00:09:06Z DEBUG spdm_utils] Logger initialisation [OK]
 [2024-06-07T00:09:06Z INFO  spdm_utils] Using Nvme transport for QEMU
@@ -422,7 +422,7 @@ SPDM-Utils for this as well.
 First we want to start a SPDM-Utils server to act as a SPDM responder.
 
 ```shell
-$ ./target/debug/spdm_utils --spdm-transport-protocol scsi --qemu-server response
+$ ./target/debug/spdm_utils --spdm-transport-protocol=storage --qemu-server response
 ```
 
 ### Start tcmu-runner
