@@ -658,9 +658,10 @@ fn qemu_storage_decode_transport_header(
 
     if !spdm::LibspdmReturnStatus::libspdm_status_is_success(rc) {
         error!(
-            "Malformed NVMe Storage Transport header: {:x?}",
+            "Malformed Storage Transport header: {:x?}",
             &transport_msg[..transport_msg_len]
         );
+        error!("libspdm err: 0x{:X}", rc);
         return Err(());
     }
 
