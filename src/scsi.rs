@@ -32,6 +32,9 @@ use std::slice::{from_raw_parts, from_raw_parts_mut};
 const SEND_RECEIVE_BUFFER_LEN: usize = LIBSPDM_MAX_SPDM_MSG_SIZE as usize;
 static mut SEND_BUFFER: OnceCell<[u8; SEND_RECEIVE_BUFFER_LEN]> = OnceCell::new();
 static mut RECEIVE_BUFFER: OnceCell<[u8; SEND_RECEIVE_BUFFER_LEN]> = OnceCell::new();
+// Global reference to the device instance to reduce sys-call overhead.
+// The execution context is already unsafe, what's the worst that could happen!
+static mut SCSI_DEV: OnceCell<BlkDev> = OnceCell::new();
 
 const SG_SENSE_MAX_LENGTH: u8 = 64;
 const SG_BUF_MAX_SIZE: u32 = SEND_RECEIVE_BUFFER_LEN as u32;
@@ -650,7 +653,7 @@ unsafe extern "C" fn scsi_send_message(
     info!("Sending SCSI SECURITY_OUT SPDM Command (request)");
 
     // 1. Open device
-    let dev = BlkDev::new(DEV_PATH.get().unwrap(), OFlag::O_EXCL | OFlag::O_RDWR).unwrap();
+    let dev = SCSI_DEV.take().unwrap();
 
     // 2. Generate Request Header
     let header_len = LIBSPDM_STORAGE_TRANSPORT_HEADER_SIZE as usize;
@@ -682,7 +685,7 @@ unsafe extern "C" fn scsi_send_message(
         cmd.scsi_cmd_exec(*fd)
             .expect("Failed to execute cmd, security in failed");
     }
-
+    SCSI_DEV.set(dev).unwrap();
     0
 }
 
@@ -718,7 +721,7 @@ unsafe extern "C" fn scsi_receive_message(
     info!("Sending SCSI SECURITY_IN SPDM Command (receive response)");
 
     // 1. Open device
-    let dev = BlkDev::new(DEV_PATH.get().unwrap(), OFlag::O_EXCL | OFlag::O_RDWR).unwrap();
+    let dev = SCSI_DEV.take().unwrap();
 
     // 2. Generate Response Header
     let mut cmd = SgCmd::gen_libspdm_response(
@@ -756,7 +759,7 @@ unsafe extern "C" fn scsi_receive_message(
 
     info!("recvd_bytes: {:?}", *message_size);
     info!("spdm-recvd: {:x?}", &msg_buf[0..*message_size]);
-
+    SCSI_DEV.set(dev).unwrap();
     0
 }
 
@@ -895,6 +898,9 @@ pub fn register_device(context: *mut c_void, dev_path: &String) -> Result<(), ()
         SEND_BUFFER.set(buffer_send).unwrap();
         RECEIVE_BUFFER.set(buffer_receive).unwrap();
         DEV_PATH.set(dev_path.clone()).unwrap();
+        SCSI_DEV
+            .set(BlkDev::new(DEV_PATH.get().unwrap(), OFlag::O_EXCL | OFlag::O_RDWR).unwrap())
+            .unwrap();
 
         libspdm_register_device_io_func(
             context,
