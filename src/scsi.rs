@@ -291,14 +291,14 @@ impl SgCmd {
     ///
     /// Ok(SgCmd), An initialised command structure
     /// Err(Errno), An error representing the cause of failure
-    fn gen_dev_inquiry_info(cdb_len: u8, direction: i32, bufsz: u32) -> Result<SgCmd, Errno> {
-        let mut sg_cmd = SgCmd::new(cdb_len, direction, bufsz)?;
+    fn gen_dev_inquiry_info(cdb_len: u8, direction: i32, bufsz: u16) -> Result<SgCmd, Errno> {
+        let mut sg_cmd = SgCmd::new(cdb_len, direction, bufsz as u32)?;
 
         // Setup Inquiry Command
         // OpCode
         sg_cmd.cmdp[0] = CmdType::Inquiry.into();
         // Allocation Bytes
-        sg_cmd.cmdp[3..=4].copy_from_slice(&(64_u16.to_be_bytes()));
+        sg_cmd.cmdp[3..=4].copy_from_slice(&(bufsz.to_be_bytes()));
 
         Ok(sg_cmd)
     }
@@ -340,7 +340,7 @@ impl SgCmd {
         sg_cmd.cmdp[3] = 0x00; // Reserved
         sg_cmd.cmdp[4] = 0x00; // Not using increments of 512B in allocation length
                                // Allocation Length Bytes
-        sg_cmd.cmdp[6..=9].copy_from_slice(&((SEND_RECEIVE_BUFFER_LEN as u32).to_be_bytes()));
+        sg_cmd.cmdp[6..=9].copy_from_slice(&((bufsz as u32).to_be_bytes()));
         // Control, TODO: Don't need (?)
         sg_cmd.cmdp[11] = 0x00;
 
@@ -540,13 +540,32 @@ impl SgCmd {
 pub fn cmd_scsi_get_sec_info(path: &String) -> Result<(), Errno> {
     // 1. Open device
     let dev = BlkDev::new(path, OFlag::O_RDWR)?;
-    let bufsz = 16; // The actual buffer has a fixed length much larger
-                    // 2. Generate command
+    let bufsz = 256; // The actual buffer has a fixed length much larger
+                     // 2. Generate command
     let mut cmd = SgCmd::gen_security_protocols_list(0, SG_DXFER_FROM_DEV, bufsz)?;
     // 3. Execute CMD
     if let Some(fd) = &dev.fd {
-        cmd.scsi_cmd_exec(*fd)
-            .expect("Failed to execute cmd, inquiry failed");
+        if let Err(e) = cmd.scsi_cmd_exec(*fd) {
+            // DUMP
+            //cmd->sense_key = sense_buf[1] & 0x0F;
+            //cmd->asc_ascq = ((int)sense_buf[2] << 8) | (int)sense_buf[3];
+
+            if ((cmd.sbp[0] & 0x7F) == 0x72) || ((cmd.sbp[0] & 0x7F) == 0x73) {
+                error!("sense_key: 0x{:x?}", cmd.sbp[1] & 0x0F);
+                error!(
+                    "asc_ascq: 0x{:x?}",
+                    (((cmd.sbp[2] as i16) << 8) | cmd.sbp[3] as i16)
+                );
+            }
+
+            if ((cmd.sbp[0] & 0x7F) == 0x70) || ((cmd.sbp[0] & 0x7F) == 0x71) {
+                error!("sense_key: 0x{:x?}", cmd.sbp[2] & 0x0F);
+                error!(
+                    "asc_ascq: 0x{:x?}",
+                    (((cmd.sbp[12] as i16) << 8) | cmd.sbp[13] as i16)
+                );
+            }
+        }
     }
 
     let sec_prot_list_len: u16 = u16::from_be_bytes(
