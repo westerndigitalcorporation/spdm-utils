@@ -139,7 +139,7 @@ impl BlkDev<'_> {
             return Err(Errno::EIO);
         }
 
-        match open(path, flags, Mode::S_IRUSR) {
+        match open(path, flags, Mode::S_IRWXU) {
             Ok(fd) => {
                 return Ok(BlkDev {
                     fd: Some(fd),
@@ -539,7 +539,7 @@ impl SgCmd {
 /// Err(Errno), on any errors
 pub fn cmd_scsi_get_sec_info(path: &String) -> Result<(), Errno> {
     // 1. Open device
-    let dev = BlkDev::new(path, OFlag::O_EXCL | OFlag::O_RDWR)?;
+    let dev = BlkDev::new(path, OFlag::O_RDWR)?;
     let bufsz = 16; // The actual buffer has a fixed length much larger
                     // 2. Generate command
     let mut cmd = SgCmd::gen_security_protocols_list(0, SG_DXFER_FROM_DEV, bufsz)?;
@@ -603,7 +603,7 @@ pub fn cmd_scsi_get_sec_info(path: &String) -> Result<(), Errno> {
 /// Err(Errno), on any errors
 pub fn cmd_scsi_get_info(path: &String) -> Result<(), Errno> {
     // 1. Open device
-    let dev = BlkDev::new(path, OFlag::O_EXCL | OFlag::O_RDONLY)?;
+    let dev = BlkDev::new(path, OFlag::O_RDONLY)?;
     // 2. Generate command
     let mut cmd = SgCmd::gen_dev_inquiry_info(0, SG_DXFER_FROM_DEV, 64)?;
     // 3. Execute CMD
@@ -899,7 +899,7 @@ pub fn register_device(context: *mut c_void, dev_path: &String) -> Result<(), ()
         RECEIVE_BUFFER.set(buffer_receive).unwrap();
         DEV_PATH.set(dev_path.clone()).unwrap();
         SCSI_DEV
-            .set(BlkDev::new(DEV_PATH.get().unwrap(), OFlag::O_EXCL | OFlag::O_RDWR).unwrap())
+            .set(BlkDev::new(DEV_PATH.get().unwrap(), OFlag::O_RDWR).unwrap())
             .unwrap();
 
         libspdm_register_device_io_func(
