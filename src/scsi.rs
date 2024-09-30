@@ -526,6 +526,39 @@ impl SgCmd {
 
 /// # Summary
 ///
+/// Given a fulfilled sense response from the device, log the Sense Key, ASC
+/// and ASCQ and return the sense_key and asc_ascq concatenated.
+///
+/// # Parameter
+///
+/// * `path: path to the device
+///
+/// # Returns
+///
+/// Some<(sense_key, asc_ascq)>, if valid
+/// None, if not set
+fn log_and_get_sense(cmd: &SgCmd) -> Option<(u8, u16)> {
+    if ((cmd.sbp[0] & 0x7F) == 0x72) || ((cmd.sbp[0] & 0x7F) == 0x73) {
+        let sense_key = cmd.sbp[1] & 0x0F;
+        let asc_ascq = ((cmd.sbp[2] as u16) << 8) | cmd.sbp[3] as u16;
+        warn!("sense_key: 0x{sense_key:x?}");
+        warn!("asc_ascq: 0x{asc_ascq:x?}");
+        return Some((sense_key, asc_ascq));
+    }
+
+    if ((cmd.sbp[0] & 0x7F) == 0x70) || ((cmd.sbp[0] & 0x7F) == 0x71) {
+        let sense_key = cmd.sbp[2] & 0x0F;
+        let asc_ascq = ((cmd.sbp[12] as u16) << 8) | cmd.sbp[13] as u16;
+        warn!("sense_key: 0x{sense_key:x?}");
+        warn!("asc_ascq: 0x{asc_ascq:x?}");
+        return Some((sense_key, asc_ascq));
+    }
+    debug!("No sense detected");
+    None
+}
+
+/// # Summary
+///
 /// Generate a command to request a list of supported security protocols by the
 /// device. We check for SPDM support.
 ///
@@ -540,32 +573,29 @@ impl SgCmd {
 pub fn cmd_scsi_get_sec_info(path: &String) -> Result<(), Errno> {
     // 1. Open device
     let dev = BlkDev::new(path, OFlag::O_RDWR)?;
-    let bufsz = 256; // The actual buffer has a fixed length much larger
-                     // 2. Generate command
+    // The actual buffer has a fixed length much larger
+    let bufsz = 256;
+    // 2. Generate command
     let mut cmd = SgCmd::gen_security_protocols_list(0, SG_DXFER_FROM_DEV, bufsz)?;
     // 3. Execute CMD
     if let Some(fd) = &dev.fd {
         if let Err(e) = cmd.scsi_cmd_exec(*fd) {
-            // DUMP
-            //cmd->sense_key = sense_buf[1] & 0x0F;
-            //cmd->asc_ascq = ((int)sense_buf[2] << 8) | (int)sense_buf[3];
-
-            if ((cmd.sbp[0] & 0x7F) == 0x72) || ((cmd.sbp[0] & 0x7F) == 0x73) {
-                error!("sense_key: 0x{:x?}", cmd.sbp[1] & 0x0F);
-                error!(
-                    "asc_ascq: 0x{:x?}",
-                    (((cmd.sbp[2] as i16) << 8) | cmd.sbp[3] as i16)
-                );
-            }
-
-            if ((cmd.sbp[0] & 0x7F) == 0x70) || ((cmd.sbp[0] & 0x7F) == 0x71) {
-                error!("sense_key: 0x{:x?}", cmd.sbp[2] & 0x0F);
-                error!(
-                    "asc_ascq: 0x{:x?}",
-                    (((cmd.sbp[12] as i16) << 8) | cmd.sbp[13] as i16)
-                );
+            if let Some((sense_key, asc_ascq)) = log_and_get_sense(&cmd) {
+                if sense_key == 0x06 && asc_ascq == 0x2900 {
+                    // This is a Power ON/Reset/Bus Reset condition, maybe the drive
+                    // wasn't initialized. Retry the command, if it fails again,
+                    // let the caller handle it.
+                    warn!("Sense Condition: Power On/Reset detected");
+                    cmd.scsi_cmd_exec(*fd)?;
+                } else {
+                    return Err(Errno::ENXIO);
+                }
+            } else {
+                return Err(e);
             }
         }
+    } else {
+        return Err(Errno::ENXIO);
     }
 
     let sec_prot_list_len: u16 = u16::from_be_bytes(
@@ -597,7 +627,7 @@ pub fn cmd_scsi_get_sec_info(path: &String) -> Result<(), Errno> {
             }
         }
     }
-    info!("--- End of Security Infomation List ---");
+    info!("--- End of Security Information List ---");
 
     if !spdm_support {
         // Device does not support SPDM
@@ -627,9 +657,14 @@ pub fn cmd_scsi_get_info(path: &String) -> Result<(), Errno> {
     let mut cmd = SgCmd::gen_dev_inquiry_info(0, SG_DXFER_FROM_DEV, 64)?;
     // 3. Execute CMD
     if let Some(fd) = &dev.fd {
-        cmd.scsi_cmd_exec(*fd)
-            .expect("Failed to execute cmd, inquiry failed");
+        cmd.scsi_cmd_exec(*fd).map_err(|e| {
+            error!("Failure to issue get info command: {e:?}");
+            e
+        })?;
+    } else {
+        return Err(Errno::ENXIO);
     }
+
     // 4. Display results
     let vendor = String::from_utf8(cmd.dxferp[8..8 + (DEV_VENDOR_LEN - 1)].to_vec()).unwrap();
     let id = String::from_utf8(cmd.dxferp[16..16 + (DEV_ID_LEN - 1)].to_vec()).unwrap();
