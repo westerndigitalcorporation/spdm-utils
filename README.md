@@ -254,7 +254,7 @@ You can run SPDM-Utils on the host to interact with a real DOE device. To do
 that you can run the following example to get digest information
 
 ```shell
-./target/debug/spdm_utils --doe-pci-cfg request get-digests
+./target/debug/spdm_utils --pcie-vid <VendorID> --pcie-devid <DevID> --doe-pci-cfg request get-digests
 ```
 
 ## Setting the certificate
@@ -267,7 +267,7 @@ SPDM spec).
 For example to set the certificate run:
 
 ```shell
-spdm_utils --doe-pci-cfg request --cert-path ./certs/alias/slot0/immutable.der set-certificate
+spdm_utils --pcie-vid <VendorID> --pcie-devid <DevID> --doe-pci-cfg request --cert-path ./certs/alias/slot0/immutable.der set-certificate
 ```
 
 You can additionally specify `--cert-slot-id` to specify the target slot number, valid slot numbers range from
@@ -279,7 +279,7 @@ A requester can get the Certificate Signing Request (CSR) from the device
 with a command similar to this:
 
 ```shell
-spdm_utils --doe-pci-cfg request get-csr
+spdm_utils --pcie-vid <VendorID> --pcie-devid <DevID> --doe-pci-cfg request get-csr
 ```
 
 Which will save the file to `csr_response.der`. You can then verify the CSR
@@ -319,13 +319,13 @@ cat ./certs/alias/slot0/ca.cert.der ./certs/alias/slot0/inter.cert.der ./csr_res
 Now you can set the certificate of a slot
 
 ```shell
-spdm_utils --doe-pci-cfg request --cert-slot-id 1 --cert-path ./set-cert.der set-certificate
+spdm_utils --pcie-vid <VendorID> --pcie-devid <DevID> --doe-pci-cfg request --cert-slot-id 1 --cert-path ./set-cert.der set-certificate
 ```
 
 Then you request the certificate back
 
 ```shell
-spdm_utils --doe-pci-cfg request --cert-slot-id 1 get-certificate
+spdm_utils --pcie-vid <VendorID> --pcie-devid <DevID> --doe-pci-cfg request --cert-slot-id 1 get-certificate
 ```
 
 If you are running the socket/client mode you will have to simulate a
