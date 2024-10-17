@@ -50,13 +50,20 @@ First you need to install Rust, instructions for that are available at: https://
 
 You will also need a few host dependencies
 
-## Fedora
+## Fedora or Ubuntu Based
+
+Note: `dnf` commands are for Fedora, and `apt` is used for Debian/Ubuntu based
+distributions.
 
 ```shell
-sudo dnf install cmake clang-libs clang-devel pciutils-devel openssl openssl-devel python3-devel systemd-devel
+$ sudo dnf install cmake clang-libs clang-devel pciutils-devel openssl openssl-devel python3-devel systemd-devel
+
+or
+
+$ sudo apt install cmake clang libclang-dev pciutils libpci-dev openssl libssl-dev libsystemd-dev python3-dev
 ```
 
-## Ruby
+### Ruby
 
 `spdm-utils` uses the [cbor-diag](https://github.com/cabo/cbor-diag) ruby gem for
 manifest encoding and decoding. Similar to the implementation of this [CBOR parsing](https://cbor.me/)
@@ -67,16 +74,25 @@ For example, for Fedora you can install it with:
 
 ```shell
 $ sudo dnf install gem
+
+or
+
+$ sudo apt install gem ruby-dev
 ```
 
 After which, you can install `cbor-diag`
 
 ```shell
 $ gem install cbor-diag
+
+or
+
+$ gem install -i <INSTALL_PATH> cbor-diag
 ```
 
-The default binary path *should* be, `$HOME/bin/`, which you may need to add to
-your `PATH`. You can test that the scripts are usable with
+The default binary path *should* (maybe different across distros) be,
+`$HOME/bin/`, which you may need to add to your `PATH`. You can test that the
+scripts are usable with
 
 ```shell
 $ which cbor2diag.rb
@@ -88,6 +104,12 @@ the serialised cbor manifest, and also a `manifest.pretty` which is the *pretty*
 of the manifest (user friendly).
 
 # Building
+
+First clone `spdm-utils` and it's submodules
+
+```shell
+$ git clone --recurse-submodules -j8 https://github.com/westerndigitalcorporation/spdm-utils.git
+```
 
 Initialise all sub-modules
 
