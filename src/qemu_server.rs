@@ -15,7 +15,7 @@ use std::io::{Read, Write};
 use std::net::{TcpListener, TcpStream};
 use std::slice::{from_raw_parts, from_raw_parts_mut};
 use std::time::Duration;
-use storage_standards::{NvmeCmdStatus, ScsiAsc, SpdmOperationCodes};
+use storage_standards::{AtaStatusErr, NvmeCmdStatus, ScsiAsc, SpdmOperationCodes};
 
 const SEND_RECEIVE_BUFFER_LEN: usize = LIBSPDM_MAX_SPDM_MSG_SIZE as usize;
 
@@ -28,6 +28,7 @@ const SOCKET_TRANSPORT_TYPE_MCTP: u32 = 0x01;
 const SOCKET_TRANSPORT_TYPE_PCI_DOE: u32 = 0x02;
 const SOCKET_TRANSPORT_TYPE_SCSI: u32 = 0x03;
 const SOCKET_TRANSPORT_TYPE_NVME: u32 = 0x04;
+const SOCKET_TRANSPORT_TYPE_ATA: u32 = 0x05;
 
 static mut SEND_BUFFER: OnceCell<[u8; SEND_RECEIVE_BUFFER_LEN]> = OnceCell::new();
 static mut RECEIVE_BUFFER: OnceCell<[u8; SEND_RECEIVE_BUFFER_LEN]> = OnceCell::new();
@@ -38,7 +39,8 @@ pub fn qemu_socket_transport_is_valid(spdm_trans: u32) -> bool {
     if !(spdm_trans == SOCKET_TRANSPORT_TYPE_PCI_DOE
         || spdm_trans == SOCKET_TRANSPORT_TYPE_MCTP
         || spdm_trans == SOCKET_TRANSPORT_TYPE_SCSI
-        || spdm_trans == SOCKET_TRANSPORT_TYPE_NVME)
+        || spdm_trans == SOCKET_TRANSPORT_TYPE_NVME
+        || spdm_trans == SOCKET_TRANSPORT_TYPE_ATA)
     {
         return false;
     }
@@ -57,7 +59,10 @@ pub fn qemu_socket_spdm_cmd_is_valid(spdm_cmd: u32) -> bool {
 }
 
 pub fn qemu_socket_storage_transport_is_valid(spdm_trans: u32) -> bool {
-    if !(spdm_trans == SOCKET_TRANSPORT_TYPE_SCSI || spdm_trans == SOCKET_TRANSPORT_TYPE_NVME) {
+    if !(spdm_trans == SOCKET_TRANSPORT_TYPE_SCSI
+        || spdm_trans == SOCKET_TRANSPORT_TYPE_NVME
+        || spdm_trans == SOCKET_TRANSPORT_TYPE_ATA)
+    {
         return false;
     }
     true
@@ -577,6 +582,21 @@ pub fn qemu_ack_invalid_msg(
                 ScsiAsc::InvalidFieldInCdb
             );
         }
+        SOCKET_TRANSPORT_TYPE_ATA => {
+            qemu_socket_storage_ack_msg(
+                stream,
+                SOCKET_SPDM_STORAGE_ACK_STATUS,
+                spdm_trans,
+                AtaStatusErr::InvalidCommand as u16,
+            )
+            .unwrap();
+
+            warn!(
+                "Acked bad message with ATA Status {:?} | ATA Error {:?}",
+                (AtaStatusErr::InvalidCommand as u16) >> 8,
+                (AtaStatusErr::InvalidCommand as u16) & 0xFF
+            );
+        }
         _ => unreachable!(),
     }
 
@@ -627,10 +647,18 @@ pub fn qemu_ack_valid_msg(
                 .unwrap();
             debug!("Acked message with status OK");
         }
+        SOCKET_TRANSPORT_TYPE_ATA => {
+            qemu_socket_storage_ack_msg(
+                stream,
+                SOCKET_SPDM_STORAGE_ACK_STATUS,
+                spdm_trans,
+                AtaStatusErr::Success as u16,
+            )
+            .unwrap();
+            debug!("Acked message with status OK");
+        }
         _ => unreachable!(),
     }
-
-    //
 
     Ok(())
 }

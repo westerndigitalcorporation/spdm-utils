@@ -4,10 +4,18 @@
 
 //! Contains all of the handlers for creating SPDM requests.
 
-/// SCSI SPDM Relatred ADDITIONAL SENSE CODE (ASQ)
+/// SCSI SPDM Related ADDITIONAL SENSE CODE (ASQ)
 #[derive(Debug)]
 pub enum ScsiAsc {
     InvalidFieldInCdb = 0x24, // ASCQ = 0x00
+}
+
+/// Defines the SPDM return status (upper byte) and error (lower byte)
+/// for ATA as defined in DSP0284.
+#[derive(Debug)]
+pub enum AtaStatusErr {
+    Success = 0x5000,
+    InvalidCommand = 0x5104,
 }
 
 /// NVME Completion Queue Command Completion Status
