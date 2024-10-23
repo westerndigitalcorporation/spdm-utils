@@ -20,6 +20,9 @@ use std::ptr;
 
 const LIBSPDM_MAX_CSR_SIZE: usize = 0x1000;
 const LIBSPDM_STATUS_INVALID_STATE_LOCAL: u32 = 0x80010003;
+const LIBSPDM_STATUS_VERIF_FAIL: u32 = 0x80020001;
+const LIBSPDM_STATUS_VERIF_NO_AUTHORITY: u32 = 0x80020003;
+const LIBSPDM_STATUS_INVALID_CERT: u32 = 0x80030000;
 /// # Summary
 /// Setup the capabilities of the requester
 ///
@@ -326,7 +329,17 @@ pub fn prepare_request(
                 let cert_offset = libspdm_get_hash_size(hash_algo) as usize + 4;
 
                 if LibspdmReturnStatus::libspdm_status_is_error(ret) {
-                    return Err(ret);
+                    match ret {
+                        LIBSPDM_STATUS_VERIF_FAIL
+                        | LIBSPDM_STATUS_VERIF_NO_AUTHORITY
+                        | LIBSPDM_STATUS_INVALID_CERT => {
+                            // libspdm failed to verify the cert. We continue
+                            // ahead to allow SPDM-Utils to dump the cert for
+                            // debug and a second error check up ahead will
+                            // report the failure to the user
+                        }
+                        _ => return Err(ret),
+                    }
                 }
                 // Write the cert_chain to a file, this can be used to compare against the original
                 let file_name = format!("retrieved_slot_id{}", cert_slot_id);
@@ -350,6 +363,18 @@ pub fn prepare_request(
                     .write_all(&cert_chain[cert_offset..cert_chain_size])
                     .unwrap();
                 writer.flush().unwrap();
+
+                if LibspdmReturnStatus::libspdm_status_is_error(ret) {
+                    match ret {
+                        LIBSPDM_STATUS_VERIF_FAIL
+                        | LIBSPDM_STATUS_VERIF_NO_AUTHORITY
+                        | LIBSPDM_STATUS_INVALID_CERT => {
+                            // This is the errors we skipped earlier
+                            return Err(ret);
+                        }
+                        _ => unreachable!(),
+                    }
+                }
 
                 if tcg_dice_evidence_binding_checks {
                     match check_tcg_dice_evidence_binding(cert_slot_id) {
