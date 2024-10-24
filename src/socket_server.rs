@@ -25,6 +25,7 @@ static mut SEND_BUFFER: OnceCell<[u8; SEND_RECEIVE_BUFFER_LEN]> = OnceCell::new(
 static mut RECEIVE_BUFFER: OnceCell<[u8; SEND_RECEIVE_BUFFER_LEN]> = OnceCell::new();
 
 static mut CLIENT_CONNECTION: OnceCell<UnixStream> = OnceCell::new();
+static mut SERVER_PERSIST: bool = false;
 
 /// # Summary
 ///
@@ -122,7 +123,6 @@ unsafe extern "C" fn sserver_receive_message(
         read_len = stream.read(msg_buf);
     }
     let read_len = read_len.unwrap();
-    CLIENT_CONNECTION.set(stream).unwrap();
 
     if read_len == 0 {
         // when read() return 0, the two likely cases are:
@@ -130,7 +130,12 @@ unsafe extern "C" fn sserver_receive_message(
         // 2. reader has reached its “end of file” and will likely no longer be
         //    able to produce bytes
         warn!("Connection dropped to client, exiting...");
-        std::process::exit(0);
+        if !SERVER_PERSIST {
+            std::process::exit(0);
+        }
+        setup_socket_and_listen().expect("failed to reset server");
+    } else {
+        CLIENT_CONNECTION.set(stream).unwrap();
     }
 
     *message_size = read_len;
@@ -254,26 +259,7 @@ unsafe extern "C" fn sserver_release_receiver_buffer(
     RECEIVE_BUFFER.set(msg_buf.try_into().unwrap()).unwrap();
 }
 
-/// # Summary
-///
-/// Registers the SPDM `context` for a `socket_server` backend.
-///
-/// # Parameter
-///
-/// * `context`: The SPDM context
-///
-/// # Returns
-///
-/// Ok(()) on success
-///
-/// # Panics
-///
-/// Panics if `SEND_BUFFER/RECEIVE_BUFFER` is occupied
-/// Panics on errors based on socket setup.
-pub fn register_device(context: *mut c_void) -> Result<(), ()> {
-    let buffer_send = [0; SEND_RECEIVE_BUFFER_LEN];
-    let buffer_receive = [0; SEND_RECEIVE_BUFFER_LEN];
-
+fn setup_socket_and_listen() -> Result<(), ()> {
     let socket = Path::new(SOCKET_PATH);
 
     if socket.exists() {
@@ -315,8 +301,33 @@ pub fn register_device(context: *mut c_void) -> Result<(), ()> {
             }
         }
     }
+    Ok(())
+}
+
+/// # Summary
+///
+/// Registers the SPDM `context` for a `socket_server` backend.
+///
+/// # Parameter
+///
+/// * `context`: The SPDM context
+///
+/// # Returns
+///
+/// Ok(()) on success
+///
+/// # Panics
+///
+/// Panics if `SEND_BUFFER/RECEIVE_BUFFER` is occupied
+/// Panics on errors based on socket setup.
+pub fn register_device(context: *mut c_void, server_persist: bool) -> Result<(), ()> {
+    let buffer_send = [0; SEND_RECEIVE_BUFFER_LEN];
+    let buffer_receive = [0; SEND_RECEIVE_BUFFER_LEN];
+
+    setup_socket_and_listen()?;
 
     unsafe {
+        SERVER_PERSIST = server_persist;
         SEND_BUFFER.set(buffer_send).map_err(|e| {
             error!("Failed to set send buffer: {e:?}");
             ()

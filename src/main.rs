@@ -59,6 +59,10 @@ struct Args {
     #[arg(long)]
     socket_server: bool,
 
+    /// If the client drops, keep the server alive
+    #[arg(long)]
+    server_persist: bool,
+
     /// Use the usb-i2c transport layer (for mctp)
     #[arg(long)]
     usb_i2c: bool,
@@ -670,7 +674,7 @@ async fn main() -> Result<(), ()> {
             doe_pci_cfg::register_device(cntx_ptr, vid, dev_id)?;
         }
     } else if cli.socket_server {
-        socket_server::register_device(cntx_ptr)?;
+        socket_server::register_device(cntx_ptr, cli.server_persist)?;
     } else if cli.socket_client {
         socket_client::register_device(cntx_ptr)?;
     } else if cli.usb_i2c {
