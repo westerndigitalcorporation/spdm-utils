@@ -482,6 +482,7 @@ pub fn prepare_request(
                     error!("Failed to issue NegotiateAlgorithms request: {ret:x?}");
                     return Err(ret);
                 }
+                spdm::get_negotiated_algos(cntx_ptr, session_info.slot_id).unwrap();
             }
             RequestCode::Heartbeat {} => {
                 let ret = libspdm_heartbeat(cntx_ptr, session_info.session_id);
