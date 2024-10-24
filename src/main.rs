@@ -756,9 +756,10 @@ async fn main() -> Result<(), ()> {
                 }
             };
             // Print out the negotiated algorithms
-            unsafe {
-                spdm::get_negotiated_algos(cntx_ptr, slot_id).unwrap();
-            }
+            if !cli.no_session {
+                unsafe { spdm::get_negotiated_algos(cntx_ptr, slot_id).unwrap() }
+            };
+
             // Process one or more requests specified
             for req in requests {
                 request::prepare_request(
