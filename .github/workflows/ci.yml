@@ -45,6 +45,8 @@ jobs:
                   -DLIBSPDM_ENABLE_CAPABILITY_EVENT_CAP=0 \
                   -DLIBSPDM_ENABLE_CAPABILITY_MEL_CAP=0 \
                   -DLIBSPDM_HAL_PASS_SPDM_CONTEXT=1 \
+                  -DLIBSPDM_ENABLE_CAPABILITY_GET_KEY_PAIR_INFO_CAP=0 \
+                  -DLIBSPDM_ENABLE_CAPABILITY_SET_KEY_PAIR_INFO_CAP=0 \
                   " \
             .. ; \
           make -j8; \
@@ -107,6 +109,8 @@ jobs:
                   -DLIBSPDM_ENABLE_CAPABILITY_EVENT_CAP=0 \
                   -DLIBSPDM_ENABLE_CAPABILITY_MEL_CAP=0 \
                   -DLIBSPDM_HAL_PASS_SPDM_CONTEXT=1 \
+                  -DLIBSPDM_ENABLE_CAPABILITY_GET_KEY_PAIR_INFO_CAP=0 \
+                  -DLIBSPDM_ENABLE_CAPABILITY_SET_KEY_PAIR_INFO_CAP=0 \
                   -DMBEDTLS_PLATFORM_MS_TIME_ALT \
                   " \
             .. ; \
