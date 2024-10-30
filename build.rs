@@ -157,9 +157,9 @@ fn main() {
                     file.write_all(&pretty_format)
                         .expect("failed to write to `manifest.pretty`");
                 }
-                Err(e) => panic!("Ruby script {script} not found : error {}", e),
+                Err(e) => {println!("\x1b[33mcargo:warning=Ruby script {script} not found : error {}\x1b[0m", e)},
             }
         }
-        Err(e) => panic!("Ruby script {script} not found : error {}", e),
+        Err(e) => println!("\x1b[33mcargo:warning=Ruby script {script} not found : error {}\nSkipping fresh manifest generation\x1b[0m", e),
     }
 }
