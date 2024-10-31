@@ -37,8 +37,6 @@ use std::time::Duration;
 // We are using libspdm chunking, so let's use smaller transfer chunks at the hardware
 // layer.
 const SEND_RECEIVE_BUFFER_LEN: usize = 128;
-static mut SEND_BUFFER: OnceCell<[u8; SEND_RECEIVE_BUFFER_LEN]> = OnceCell::new();
-static mut RECEIVE_BUFFER: OnceCell<[u8; SEND_RECEIVE_BUFFER_LEN]> = OnceCell::new();
 
 const MCTP_HEADER_LEN: usize = 10;
 const LIBSPDM_BUFFER_LEN: usize = SEND_RECEIVE_BUFFER_LEN - MCTP_HEADER_LEN;
@@ -242,122 +240,6 @@ unsafe extern "C" fn usb_i2c_receive_message(
 
 /// # Summary
 ///
-/// A helper function to capture the SEND_BUFFER into `msg_buf_ptr`
-///
-/// # Parameter
-///
-/// * `_context`: The SPDM context
-/// * `max_msg_size`: Returns the length of the sender buffer
-/// * `msg_buf_ptr`: Returns a pointer to the sender buffer (mutable)
-///
-/// # Returns
-///
-/// (0) on success
-///
-/// # Panics
-///
-/// Panics if the SEND_BUFFER is not available
-#[no_mangle]
-unsafe extern "C" fn usb_i2c_acquire_sender_buffer(
-    _context: *mut c_void,
-    msg_buf_ptr: *mut *mut c_void,
-) -> u32 {
-    let mut buf = SEND_BUFFER.take().unwrap();
-    let buf_ptr = buf.as_mut_ptr() as *mut _ as *mut c_void;
-
-    *msg_buf_ptr = buf_ptr;
-
-    0
-}
-
-/// # Summary
-///
-/// A helper function to reset the SEND_BUFFER from `msg_buf_ptr`
-///
-/// # Parameter
-///
-/// * `_context`: The SPDM context
-/// * `msg_buf_ptr`: A pointer representing the sender buffer.
-///
-/// # Returns
-///
-/// (0) on success
-///
-/// # Panics
-///
-/// Panics if the `msg_buf_ptr` is invalid or has less elements
-/// than `SEND_RECEIVE_BUFFER_LEN`
-#[no_mangle]
-unsafe extern "C" fn usb_i2c_release_sender_buffer(
-    _context: *mut c_void,
-    msg_buf_ptr: *const c_void,
-) {
-    let message = msg_buf_ptr as *const u8;
-    let msg_buf = from_raw_parts(message, SEND_RECEIVE_BUFFER_LEN);
-
-    SEND_BUFFER.set(msg_buf.try_into().unwrap()).unwrap();
-}
-
-/// # Summary
-///
-/// A helper function to capture the RECEIVE_BUFFER into `msg_buf_ptr`
-///
-/// # Parameter
-///
-/// * `_context`: The SPDM context
-/// * `max_msg_size`: Returns the length of the receiver buffer
-/// * `msg_buf_ptr`: Returns a pointer to the receiver buffer (mutable)
-///
-/// # Returns
-///
-/// (0) on success
-///
-/// # Panics
-///
-/// Panics if the SEND_BUFFER is not available
-#[no_mangle]
-unsafe extern "C" fn usb_i2c_acquire_receiver_buffer(
-    _context: *mut c_void,
-    msg_buf_ptr: *mut *mut c_void,
-) -> u32 {
-    let mut buf = RECEIVE_BUFFER.take().unwrap();
-    let buf_ptr = buf.as_mut_ptr() as *mut _ as *mut c_void;
-
-    *msg_buf_ptr = buf_ptr;
-
-    0
-}
-
-/// # Summary
-///
-/// A helper function to reset the RECEIVE_BUFFER from `msg_buf_ptr`
-///
-/// # Parameter
-///
-/// * `_context`: The SPDM context
-/// * `msg_buf_ptr`: A pointer representing the receiver buffer.
-///
-/// # Returns
-///
-/// (0) on success
-///
-/// # Panics
-///
-/// Panics if the `msg_buf_ptr` is invalid or has less elements
-/// than `SEND_RECEIVE_BUFFER_LEN`
-#[no_mangle]
-unsafe extern "C" fn usb_i2c_release_receiver_buffer(
-    _context: *mut c_void,
-    msg_buf_ptr: *const c_void,
-) {
-    let message = msg_buf_ptr as *const u8;
-    let msg_buf = from_raw_parts(message, SEND_RECEIVE_BUFFER_LEN);
-
-    RECEIVE_BUFFER.set(msg_buf.try_into().unwrap()).unwrap();
-}
-
-/// # Summary
-///
 /// # Parameter
 ///
 /// * `context`: The SPDM context
@@ -374,9 +256,6 @@ pub fn register_device(
     usb_dev: Option<String>,
     usb_baud: u32,
 ) -> Result<(), ()> {
-    let buffer_send = [0; SEND_RECEIVE_BUFFER_LEN];
-    let buffer_receive = [0; SEND_RECEIVE_BUFFER_LEN];
-
     let udev = usb_dev.ok_or_else(|| {
         error!("USB device path not specified");
         ()
@@ -421,15 +300,6 @@ pub fn register_device(
         .replace(port);
 
     unsafe {
-        SEND_BUFFER.set(buffer_send).map_err(|e| {
-            error!("Failed to set send buffer: {e:?}");
-            ()
-        })?;
-        RECEIVE_BUFFER.set(buffer_receive).map_err(|e| {
-            error!("Failed to set receive buffer: {e:?}");
-            ()
-        })?;
-
         let _ = MCTPCONTEXT.set(libmctp::MCTPSMBusContext::new(
             SOURCE_ID,
             &MSG_TYPES,
@@ -441,15 +311,7 @@ pub fn register_device(
             Some(usb_i2c_send_message),
             Some(usb_i2c_receive_message),
         );
-        libspdm_register_device_buffer_func(
-            context,
-            LIBSPDM_BUFFER_LEN as u32,
-            LIBSPDM_BUFFER_LEN as u32,
-            Some(usb_i2c_acquire_sender_buffer),
-            Some(usb_i2c_release_sender_buffer),
-            Some(usb_i2c_acquire_receiver_buffer),
-            Some(usb_i2c_release_receiver_buffer),
-        );
+        io_buffers::libspdm_setup_io_buffers(context, SEND_RECEIVE_BUFFER_LEN, LIBSPDM_BUFFER_LEN)?;
     }
 
     Ok(())

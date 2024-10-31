@@ -21,9 +21,6 @@ use std::slice::{from_raw_parts, from_raw_parts_mut};
 use std::time::Duration;
 
 const SEND_RECEIVE_BUFFER_LEN: usize = LIBSPDM_MAX_SPDM_MSG_SIZE as usize;
-static mut SEND_BUFFER: OnceCell<[u8; SEND_RECEIVE_BUFFER_LEN]> = OnceCell::new();
-static mut RECEIVE_BUFFER: OnceCell<[u8; SEND_RECEIVE_BUFFER_LEN]> = OnceCell::new();
-
 static mut CLIENT_CONNECTION: OnceCell<UnixStream> = OnceCell::new();
 static mut SERVER_PERSIST: bool = false;
 
@@ -143,122 +140,6 @@ unsafe extern "C" fn sserver_receive_message(
     0
 }
 
-/// # Summary
-///
-/// A helper function to capture the SEND_BUFFER into `msg_buf_ptr`
-///
-/// # Parameter
-///
-/// * `_context`: The SPDM context
-/// * `max_msg_size`: Returns the length of the sender buffer
-/// * `msg_buf_ptr`: Returns a pointer to the sender buffer (mutable)
-///
-/// # Returns
-///
-/// (0) on success
-///
-/// # Panics
-///
-/// Panics if the SEND_BUFFER is not available
-#[no_mangle]
-unsafe extern "C" fn sserver_acquire_sender_buffer(
-    _context: *mut c_void,
-    msg_buf_ptr: *mut *mut c_void,
-) -> u32 {
-    let mut buf = SEND_BUFFER.take().unwrap();
-    let buf_ptr = buf.as_mut_ptr() as *mut _ as *mut c_void;
-
-    *msg_buf_ptr = buf_ptr;
-
-    0
-}
-
-/// # Summary
-///
-/// A helper function to reset the SEND_BUFFER from `msg_buf_ptr`
-///
-/// # Parameter
-///
-/// * `_context`: The SPDM context
-/// * `msg_buf_ptr`: A pointer representing the sender buffer.
-///
-/// # Returns
-///
-/// (0) on success
-///
-/// # Panics
-///
-/// Panics if the `msg_buf_ptr` is invalid or has less elements
-/// than `SEND_RECEIVE_BUFFER_LEN`
-#[no_mangle]
-unsafe extern "C" fn sserver_release_sender_buffer(
-    _context: *mut c_void,
-    msg_buf_ptr: *const c_void,
-) {
-    let message = msg_buf_ptr as *const u8;
-    let msg_buf = from_raw_parts(message, SEND_RECEIVE_BUFFER_LEN);
-
-    SEND_BUFFER.set(msg_buf.try_into().unwrap()).unwrap();
-}
-
-/// # Summary
-///
-/// A helper function to capture the RECEIVE_BUFFER into `msg_buf_ptr`
-///
-/// # Parameter
-///
-/// * `_context`: The SPDM context
-/// * `max_msg_size`: Returns the length of the receiver buffer
-/// * `msg_buf_ptr`: Returns a pointer to the receiver buffer (mutable)
-///
-/// # Returns
-///
-/// (0) on success
-///
-/// # Panics
-///
-/// Panics if the SEND_BUFFER is not available
-#[no_mangle]
-unsafe extern "C" fn sserver_acquire_receiver_buffer(
-    _context: *mut c_void,
-    msg_buf_ptr: *mut *mut c_void,
-) -> u32 {
-    let mut buf = RECEIVE_BUFFER.take().unwrap();
-    let buf_ptr = buf.as_mut_ptr() as *mut _ as *mut c_void;
-
-    *msg_buf_ptr = buf_ptr;
-
-    0
-}
-
-/// # Summary
-///
-/// A helper function to reset the RECEIVE_BUFFER from `msg_buf_ptr`
-///
-/// # Parameter
-///
-/// * `_context`: The SPDM context
-/// * `msg_buf_ptr`: A pointer representing the receiver buffer.
-///
-/// # Returns
-///
-/// (0) on success
-///
-/// # Panics
-///
-/// Panics if the `msg_buf_ptr` is invalid or has less elements
-/// than `SEND_RECEIVE_BUFFER_LEN`
-#[no_mangle]
-unsafe extern "C" fn sserver_release_receiver_buffer(
-    _context: *mut c_void,
-    msg_buf_ptr: *const c_void,
-) {
-    let message = msg_buf_ptr as *const u8;
-    let msg_buf = from_raw_parts(message, SEND_RECEIVE_BUFFER_LEN);
-
-    RECEIVE_BUFFER.set(msg_buf.try_into().unwrap()).unwrap();
-}
-
 fn setup_socket_and_listen() -> Result<(), ()> {
     let socket = Path::new(SOCKET_PATH);
 
@@ -321,36 +202,21 @@ fn setup_socket_and_listen() -> Result<(), ()> {
 /// Panics if `SEND_BUFFER/RECEIVE_BUFFER` is occupied
 /// Panics on errors based on socket setup.
 pub fn register_device(context: *mut c_void, server_persist: bool) -> Result<(), ()> {
-    let buffer_send = [0; SEND_RECEIVE_BUFFER_LEN];
-    let buffer_receive = [0; SEND_RECEIVE_BUFFER_LEN];
-
     setup_socket_and_listen()?;
 
     unsafe {
         SERVER_PERSIST = server_persist;
-        SEND_BUFFER.set(buffer_send).map_err(|e| {
-            error!("Failed to set send buffer: {e:?}");
-            ()
-        })?;
-        RECEIVE_BUFFER.set(buffer_receive).map_err(|e| {
-            error!("Failed to set receive buffer: {e:?}");
-            ()
-        })?;
 
         libspdm_register_device_io_func(
             context,
             Some(sserver_send_message),
             Some(sserver_receive_message),
         );
-        libspdm_register_device_buffer_func(
+        io_buffers::libspdm_setup_io_buffers(
             context,
-            SEND_RECEIVE_BUFFER_LEN as u32,
-            SEND_RECEIVE_BUFFER_LEN as u32,
-            Some(sserver_acquire_sender_buffer),
-            Some(sserver_release_sender_buffer),
-            Some(sserver_acquire_receiver_buffer),
-            Some(sserver_release_receiver_buffer),
-        );
+            SEND_RECEIVE_BUFFER_LEN,
+            SEND_RECEIVE_BUFFER_LEN,
+        )?;
     }
 
     Ok(())
