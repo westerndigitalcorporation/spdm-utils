@@ -28,6 +28,7 @@ pub static SOCKET_PATH: &str = "SPDM-Utils-loopback-socket";
 
 mod cli_helpers;
 mod doe_pci_cfg;
+mod io_buffers;
 mod qemu_server;
 mod request;
 mod socket_client;
@@ -890,6 +891,7 @@ async fn main() -> Result<(), ()> {
             }
         }
     }
+    unsafe { io_buffers::libspdm_drop_io_buffers() }
     Ok(())
 }
 
