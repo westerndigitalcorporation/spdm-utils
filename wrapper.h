@@ -6,6 +6,7 @@
 #include <pci/pci.h>
 #include <scsi/scsi.h>
 #include <scsi/sg.h>
+#include <libnvme.h>
 #endif
 
 #include <library/spdm_common_lib.h>

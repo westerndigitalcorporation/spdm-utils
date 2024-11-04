@@ -22,6 +22,7 @@ fn main() {
     println!("cargo:rustc-link-arg=-Wl,--start-group");
 
     println!("cargo:rustc-link-arg=-lpci");
+    println!("cargo:rustc-link-arg=-lnvme");
 
     println!("cargo:rustc-link-arg=-lmemlib");
     println!("cargo:rustc-link-arg=-lmalloclib");
