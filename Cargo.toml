@@ -12,7 +12,7 @@ default = ["std"]
 libspdm_tests = []
 
 no_std = []
-std = ["clap", "memmap2", "once_cell", "sha2", "env_logger", "serialport", "lazy_static", "colored", "which", "asn1-rs", "x509-parser", "minicbor", "minicbor-derive", "async-std", "futures", "nix"]
+std = ["clap", "memmap2", "once_cell", "sha2", "env_logger", "serialport", "lazy_static", "colored", "which", "asn1-rs", "x509-parser", "minicbor", "minicbor-derive", "async-std", "futures", "nix", "page_size"]
 
 [lib]
 name = "libspdm"
@@ -45,5 +45,6 @@ minicbor-derive = { git = "https://gitlab.com/twittner/minicbor.git", features =
 async-std = { version = "1.12", features = ["attributes"], optional = true }
 futures = { version = "0.3", optional = true }
 nix = {version = "0.29.0", features = ["user", "fs", "ioctl"], optional = true }
+page_size = { version = "0.6.0", optional = true }
 
 libmctp = { git = "https://github.com/westerndigitalcorporation/libmctp.git" }

@@ -89,4 +89,3 @@ impl TryFrom<u8> for SpcSecurityProtocols {
         }
     }
 }
-
