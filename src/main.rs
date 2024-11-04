@@ -22,6 +22,7 @@ use tokio::task;
 extern crate log;
 use env_logger::Env;
 use libspdm::{responder, responder::CertModel, spdm};
+use nix::errno::Errno;
 use once_cell::sync::Lazy;
 
 pub static SOCKET_PATH: &str = "SPDM-Utils-loopback-socket";
@@ -29,10 +30,12 @@ pub static SOCKET_PATH: &str = "SPDM-Utils-loopback-socket";
 mod cli_helpers;
 mod doe_pci_cfg;
 mod io_buffers;
+mod nvme;
 mod qemu_server;
 mod request;
 mod socket_client;
 mod socket_server;
+mod storage_standards;
 mod tcg_concise_evidence_binding;
 mod test_suite;
 mod usb_i2c;
@@ -42,6 +45,18 @@ mod usb_i2c;
 struct Args {
     #[command(subcommand)]
     command: Commands,
+
+    /// Use NVMe commands for the target device
+    #[arg(short, long, requires_ifs([("true", "blk_dev_path")]))]
+    nvme: bool,
+
+    /// NVME NameSpace Identifier
+    #[arg(long, default_value_t = 1)]
+    nsid: u32,
+
+    /// Path to the block device
+    #[arg(long)]
+    blk_dev_path: Option<String>,
 
     /// Use the Linux PCIe extended configuration backend
     /// This is generally run on the Linux host machine
@@ -664,6 +679,10 @@ async fn main() -> Result<(), ()> {
 
     let mut count = 0;
 
+    cli.nvme.then(|| {
+        count += 1;
+    });
+
     cli.doe_pci_cfg.then(|| {
         count += 1;
     });
@@ -728,12 +747,21 @@ async fn main() -> Result<(), ()> {
         }
 
         usb_i2c::register_device(cntx_ptr, cli.usb_i2c_dev, cli.usb_i2c_baud)?;
+    } else if cli.nvme {
+        if let Err(e) = nvme::nvme_get_sec_info(&cli.blk_dev_path.clone().unwrap(), cli.nsid) {
+            if e == Errno::ENOTSUP {
+                error!("SPDM is not supported by this NVMe device");
+            }
+            return Err(());
+        }
+        nvme::register_device(cntx_ptr, &cli.blk_dev_path.clone().unwrap(), cli.nsid).unwrap();
     } else if cli.qemu_server {
         if let Commands::Request { .. } = cli.command {
             error!("QEMU Server does not support running an SPDM requester");
             return Err(());
         }
         if let Some(proto) = cli.spdm_transport_protocol {
+            info!("Using {:?} transport for QEMU", proto);
             qemu_server::register_device(cntx_ptr, cli.qemu_port, proto)?;
         } else {
             qemu_server::register_device(cntx_ptr, cli.qemu_port, spdm::TransportLayer::Doe)?;
@@ -745,6 +773,7 @@ async fn main() -> Result<(), ()> {
 
     unsafe {
         if let Some(proto) = cli.spdm_transport_protocol {
+            info!("Using {:?} transport", proto);
             spdm::setup_transport_layer(cntx_ptr, proto, spdm::LIBSPDM_MAX_SPDM_MSG_SIZE)?;
         } else if cli.usb_i2c {
             spdm::setup_transport_layer(
@@ -752,6 +781,13 @@ async fn main() -> Result<(), ()> {
                 spdm::TransportLayer::Mctp,
                 spdm::LIBSPDM_MAX_SPDM_MSG_SIZE,
             )?;
+        } else if cli.nvme {
+            spdm::setup_transport_layer(
+                cntx_ptr,
+                spdm::TransportLayer::Storage,
+                spdm::LIBSPDM_MAX_SPDM_MSG_SIZE,
+            )
+            .unwrap();
         } else {
             spdm::setup_transport_layer(
                 cntx_ptr,
