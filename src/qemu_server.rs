@@ -407,6 +407,7 @@ pub fn register_device(
                     Some(qemu_receive_message_mctp),
                 );
             }
+            TransportLayer::Storage => todo!(),
         }
         io_buffers::libspdm_setup_io_buffers(
             context,
