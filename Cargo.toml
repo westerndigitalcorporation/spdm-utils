@@ -35,7 +35,6 @@ std = [
     "inquire",
     "page_size",
 ]
-page_size = ["dep:page_size"]
 
 [lib]
 name = "libspdm"
@@ -75,7 +74,7 @@ minicbor-derive = { version = "0.15", features = [
 ], optional = true }
 tokio = { version = "1.49", features = ["full"], optional = true }
 futures = { version = "0.3", optional = true }
-nix = { version = "0.29", features = ["user"], optional = true }
+nix = { version = "0.29", features = ["user", "fs", "ioctl"], optional = true }
 libmctp = { version = "0.2" }
 inquire = { version = "0.7.5", optional = true}
 

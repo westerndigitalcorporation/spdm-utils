@@ -24,40 +24,40 @@ pub enum AtaStatusErr {
 #[allow(dead_code)]
 #[derive(Debug)]
 pub enum NvmeCmdStatus {
-    NvmeSuccess = 0x0000,
-    NvmeInvalidFieldInCmd = 0x0002,
-    NvmeDoNotRetry = 0x4000,
+    Success = 0x0000,
+    InvalidFieldInCmd = 0x0002,
+    DoNotRetry = 0x4000,
 }
 
 /// Spdm Storage Operations as defined in DMTF DSP0286
 #[derive(Debug, PartialEq)]
-pub enum SpdmOperationCodes {
-    SpdmStorageDiscovery = 0x01,
-    SpdmStoragePendingInfo = 0x02,
-    SpdmStorageMessage = 0x05,
-    SpdmStorageSecMessage = 0x06,
+pub enum SpdmStorageOperationCodes {
+    Discovery = 0x01,
+    PendingInfo = 0x02,
+    Message = 0x05,
+    SecMessage = 0x06,
 }
 
-impl TryFrom<u8> for SpdmOperationCodes {
+impl TryFrom<u8> for SpdmStorageOperationCodes {
     type Error = ();
     fn try_from(value: u8) -> Result<Self, Self::Error> {
         match value {
-            0x01 => Ok(SpdmOperationCodes::SpdmStorageDiscovery),
-            0x02 => Ok(SpdmOperationCodes::SpdmStoragePendingInfo),
-            0x05 => Ok(SpdmOperationCodes::SpdmStorageMessage),
-            0x06 => Ok(SpdmOperationCodes::SpdmStorageSecMessage),
+            0x01 => Ok(SpdmStorageOperationCodes::Discovery),
+            0x02 => Ok(SpdmStorageOperationCodes::PendingInfo),
+            0x05 => Ok(SpdmStorageOperationCodes::Message),
+            0x06 => Ok(SpdmStorageOperationCodes::SecMessage),
             _ => Err(()),
         }
     }
 }
 
-impl From<SpdmOperationCodes> for u8 {
-    fn from(op: SpdmOperationCodes) -> Self {
+impl From<SpdmStorageOperationCodes> for u8 {
+    fn from(op: SpdmStorageOperationCodes) -> Self {
         match op {
-            SpdmOperationCodes::SpdmStorageDiscovery => 0x01,
-            SpdmOperationCodes::SpdmStoragePendingInfo => 0x02,
-            SpdmOperationCodes::SpdmStorageMessage => 0x05,
-            SpdmOperationCodes::SpdmStorageSecMessage => 0x06,
+            SpdmStorageOperationCodes::Discovery => 0x01,
+            SpdmStorageOperationCodes::PendingInfo => 0x02,
+            SpdmStorageOperationCodes::Message => 0x05,
+            SpdmStorageOperationCodes::SecMessage => 0x06,
         }
     }
 }
@@ -89,4 +89,3 @@ impl TryFrom<u8> for SpcSecurityProtocols {
         }
     }
 }
-
