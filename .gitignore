@@ -9,7 +9,6 @@ certs/slot0/inter.*
 certs/slot0/param.pem
 
 manifest.cbor
-manifest/manifest.out.cbor
 manifest/*responder_manifest.cbor
 manifest/*.pretty
 
