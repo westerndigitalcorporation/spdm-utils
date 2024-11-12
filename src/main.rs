@@ -850,13 +850,12 @@ async fn main() -> Result<(), ()> {
                 }
             }
             // Check if version was specified
-            let ver = cli_helpers::parse_spdm_responder_version(spdm_ver);
-            if ver.is_none() {
-                // spdm_ver has a default value set, if None was returned, it means
-                // the user argument was invalid.
-                error!("Unsupported libspdm data spdm version");
-                return Err(());
-            }
+            let ver = Some(
+                cli_helpers::parse_spdm_responder_version(spdm_ver).ok_or_else(|| {
+                    error!("Unsupported/Invalid SPDM version");
+                    ()
+                })?,
+            );
             responder::setup_capabilities(
                 cntx_ptr,
                 0,
