@@ -342,7 +342,8 @@ impl std::str::FromStr for RequestCode {
         // options, or does not require any arguments.
         let (request_code, subargs) = if s.find('[').is_some() && s.find(']').is_some() {
             // This request has sub-arguments specified
-            let (req_code, subarg) = s.split_at(s.find('[').unwrap());
+            let (req_code, subarg) =
+                s.split_at(s.find('[').ok_or(format!("Invalid argument: {}", s))?);
             let subarg_len = subarg.len();
             (req_code, Some(&subarg[1..subarg_len - 1]))
         } else {
@@ -737,12 +738,11 @@ async fn main() -> Result<(), ()> {
             request::setup_capabilities(
                 cntx_ptr,
                 slot_id,
-                cli_helpers::parse_asym_algos(asym_algos).unwrap(),
-                cli_helpers::parse_hash_algos(hash_algos).unwrap(),
-                cli_helpers::parse_dhe_named_groups(dhe_named_groups).unwrap(),
-                cli_helpers::parse_aead_cipher_suite(aead_cipher_suites).unwrap(),
-            )
-            .unwrap();
+                cli_helpers::parse_asym_algos(asym_algos)?,
+                cli_helpers::parse_hash_algos(hash_algos)?,
+                cli_helpers::parse_dhe_named_groups(dhe_named_groups)?,
+                cli_helpers::parse_aead_cipher_suite(aead_cipher_suites)?,
+            )?;
 
             let mut session_info = if cli.no_session {
                 spdm::SpdmSessionInfo {
@@ -756,13 +756,25 @@ async fn main() -> Result<(), ()> {
                 }
             } else {
                 unsafe {
-                    spdm::initialise_connection(cntx_ptr, slot_id).unwrap();
-                    spdm::start_session(cntx_ptr, slot_id, use_psk_exchange).unwrap()
+                    spdm::initialise_connection(cntx_ptr, slot_id).map_err(|e| {
+                        error!("Failed to initialise an SPDM connection: 0x{:x}", e);
+                        ()
+                    })?;
+                    spdm::start_session(cntx_ptr, slot_id, use_psk_exchange).map_err(|e| {
+                        error!("Failed to start session: 0x{:x}", e);
+                        ()
+                    })?
                 }
             };
+
             // Print out the negotiated algorithms
             if !cli.no_session {
-                unsafe { spdm::get_negotiated_algos(cntx_ptr, slot_id).unwrap() }
+                unsafe {
+                    spdm::get_negotiated_algos(cntx_ptr, slot_id).map_err(|e| {
+                        error!("Failed to negotiate algorithms: 0x{:x}", e);
+                        ()
+                    })?
+                }
             };
 
             // Process one or more requests specified
