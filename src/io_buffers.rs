@@ -1,44 +1,57 @@
+use nix::errno::Errno;
 use once_cell::sync::Lazy;
+use std::alloc::dealloc;
+use std::alloc::{Layout, alloc_zeroed};
 use std::ffi::c_void;
+use std::ptr::NonNull;
 use std::sync::Mutex;
 
-static SEND_BUFFER: Lazy<Mutex<Option<Vec<u8>>>> = Lazy::new(|| Mutex::new(None));
-static RECEIVE_BUFFER: Lazy<Mutex<Option<Vec<u8>>>> = Lazy::new(|| Mutex::new(None));
+type IoBuffer = Option<(Vec<u8>, Layout)>;
+static SEND_BUFFER: Lazy<Mutex<IoBuffer>> = Lazy::new(|| Mutex::new(None));
+static RECEIVE_BUFFER: Lazy<Mutex<IoBuffer>> = Lazy::new(|| Mutex::new(None));
 
 pub fn libspdm_setup_io_buffers(
     context: *mut c_void,
-    send_len: usize,
-    recv_len: usize,
+    send_recv_len: usize,
+    libsdpm_buff_len: usize,
 ) -> Result<(), ()> {
-    let result = std::panic::catch_unwind(|| {
-        let buffer_send = vec![0; send_len];
-        let buffer_receive = vec![0; recv_len];
-        (buffer_send, buffer_receive)
-    });
-
-    match result {
-        Ok(buffers) => {
-            *(SEND_BUFFER.lock().unwrap()) = Some(buffers.0);
-            *(RECEIVE_BUFFER.lock().unwrap()) = Some(buffers.1);
-
-            unsafe {
-                libspdm::libspdm_rs::libspdm_register_device_buffer_func(
-                    context,
-                    send_len as u32,
-                    recv_len as u32,
-                    Some(acquire_sender_buffer),
-                    Some(release_sender_buffer),
-                    Some(acquire_receiver_buffer),
-                    Some(release_receiver_buffer),
-                )
-            }
-            Ok(())
-        }
-        Err(_) => {
-            error!("Failed to allocate transport buffers");
-            Err(())
-        }
+    // NVMe requires page aligned buffers
+    if !send_recv_len.is_multiple_of(page_size::get()) {
+        error!("Requested SEND/RECV buffer size is not system page size aligned");
+        return Err(());
     }
+
+    fn page_aligned_buffer(size: usize) -> Result<(Vec<u8>, Layout), Errno> {
+        let layout = Layout::from_size_align(size, page_size::get()).map_err(|_| Errno::EINVAL)?;
+        let ptr = unsafe { alloc_zeroed(layout) };
+        let ptr = NonNull::new(ptr).ok_or(Errno::ENOMEM)?;
+        let vec = unsafe { Vec::from_raw_parts(ptr.as_ptr(), 0, size) };
+        Ok((vec, layout))
+    }
+
+    let buffer_send = page_aligned_buffer(send_recv_len).map_err(|e| {
+        error!("Failed to allocate SEND buffer: {e}");
+    })?;
+    let buffer_recv = page_aligned_buffer(send_recv_len).map_err(|e| {
+        error!("Failed to allocate RECV buffer: {e}");
+    })?;
+
+    *(SEND_BUFFER.lock().unwrap()) = Some((buffer_send.0, buffer_send.1));
+    *(RECEIVE_BUFFER.lock().unwrap()) = Some((buffer_recv.0, buffer_recv.1));
+
+    unsafe {
+        libspdm::libspdm_rs::libspdm_register_device_buffer_func(
+            context,
+            libsdpm_buff_len as u32,
+            libsdpm_buff_len as u32,
+            Some(acquire_sender_buffer),
+            Some(release_sender_buffer),
+            Some(acquire_receiver_buffer),
+            Some(release_receiver_buffer),
+        )
+    };
+
+    Ok(())
 }
 
 /// # Summary
@@ -59,12 +72,11 @@ pub unsafe extern "C" fn acquire_sender_buffer(
     _context: *mut c_void,
     msg_buf_ptr: *mut *mut c_void,
 ) -> u32 {
-    if let Some(ref buf) = *SEND_BUFFER.lock().unwrap() {
-        let buf_ptr = buf.as_ptr() as *mut c_void;
+    if let Some(ref mem) = *SEND_BUFFER.lock().unwrap() {
+        let buf_ptr = mem.0.as_ptr() as *mut c_void;
         unsafe { *msg_buf_ptr = buf_ptr };
         return 0;
     }
-
     error!("Sender buffer is lost or not initialized");
     1
 }
@@ -87,8 +99,8 @@ pub unsafe extern "C" fn acquire_receiver_buffer(
     _context: *mut c_void,
     msg_buf_ptr: *mut *mut c_void,
 ) -> u32 {
-    if let Some(ref buf) = *RECEIVE_BUFFER.lock().unwrap() {
-        let buf_ptr = buf.as_ptr() as *mut c_void;
+    if let Some(ref mem) = *RECEIVE_BUFFER.lock().unwrap() {
+        let buf_ptr = mem.0.as_ptr() as *mut c_void;
         unsafe { *msg_buf_ptr = buf_ptr };
         return 0;
     }
@@ -114,17 +126,24 @@ pub unsafe extern "C" fn release_sender_buffer(_context: *mut c_void, _msg_buf_p
 /// Drop the IO buffers out of scope, this should release the underlying
 /// memory.
 pub unsafe fn libspdm_drop_io_buffers() {
-    let mut send_buf = SEND_BUFFER.lock().unwrap();
-    if send_buf.is_some() {
-        *send_buf = None;
-    } else {
-        warn!("Send buffer is lost or not initialized");
+    let free = |buf: &mut IoBuffer, err: &str| {
+        if let Some(mut mem) = buf.take() {
+            let ptr = mem.0.as_mut_ptr();
+            let layout = mem.1;
+            std::mem::forget(mem.0);
+            unsafe { dealloc(ptr, layout) };
+        } else {
+            error!("{}", err);
+        }
+    };
+
+    {
+        let mut send_buf = SEND_BUFFER.lock().unwrap();
+        free(&mut send_buf, "Send buffer is lost or not initialized");
     }
 
-    let mut recv_buf = RECEIVE_BUFFER.lock().unwrap();
-    if recv_buf.is_some() {
-        *recv_buf = None;
-    } else {
-        warn!("Receive buffer is lost or not initialized");
+    {
+        let mut recv_buf = RECEIVE_BUFFER.lock().unwrap();
+        free(&mut recv_buf, "Receive buffer is lost or not initialized");
     }
 }
