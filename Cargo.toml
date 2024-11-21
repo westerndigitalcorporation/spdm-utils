@@ -33,7 +33,9 @@ std = [
     "futures",
     "nix",
     "inquire",
+    "page_size",
 ]
+page_size = ["dep:page_size"]
 
 [lib]
 name = "libspdm"
@@ -61,6 +63,7 @@ colored = { version = "2.1", optional = true }
 which = { version = "6.0", optional = true }
 asn1-rs = { version = "0.6", optional = true }
 x509-parser = { version = "0.15", optional = true }
+page_size = { version = "0.6.0", optional = true }
 minicbor = { version = "0.25", features = [
     "half",
     "alloc",
