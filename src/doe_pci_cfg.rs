@@ -365,7 +365,9 @@ pub fn get_pcie_dev(dev_vid: u16, dev_id: u16) -> Result<(*mut pci_access, *mut 
 
         if unsafe { (*device).vendor_id == dev_vid && (*device).device_id == dev_id } {
             // Device found
-            break;
+            if let Ok(_doe_offset) = get_doe_offset(device) {
+                break;
+            }
         }
         unsafe { device = (*device).next };
     }
