@@ -470,6 +470,7 @@ const DOE_REQUEST_PROTOCOL_MASK: u32 = 0x00FF_0000;
 const DOE_REQUEST_LEN_MASK: u32 = 0x0001_FFFF;
 
 const DOE_VERSION: u8 = 2;
+const DOE_REQUEST_VERSION_MASK: u32 = 0x0000_FF00;
 const DOE_REQUEST_VERSION_SHIFT: u32 = 8;
 
 // Shifts for Discovery Request
@@ -545,8 +546,9 @@ impl fmt::Display for DoeDiscoveryPacket {
         )?;
         writeln!(
             f,
-            "\tDISC_REQ: [RSVD, INDEX:{}]",
-            self.dw0 & DOE_REQUEST_INDEX
+            "\tDISC_REQ: [RSVD, VERSION: {}, INDEX:{}]",
+            (self.dw0 & DOE_REQUEST_VERSION_MASK) >> DOE_REQUEST_VERSION_SHIFT,
+            self.dw0 & DOE_REQUEST_INDEX,
         )?;
         writeln!(f, "}}")
     }
