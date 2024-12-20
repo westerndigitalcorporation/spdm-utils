@@ -689,6 +689,13 @@ pub unsafe fn test_discovery_all() -> Result<(), ()> {
             discovery_packet.dw0 |= (DOE_VERSION as u32) << DOE_REQUEST_VERSION_SHIFT;
         }
 
+        doe_wait_not_busy(device, doe_offset).map_err(|e| match e {
+            DoeStatus::DoeStatusErr => {
+                doe_issue_abort(device, doe_offset, true);
+                ()
+            }
+        })?;
+
         info!("Discovery Request: {}", discovery_packet);
 
         for data in discovery_packet.as_array().iter() {
