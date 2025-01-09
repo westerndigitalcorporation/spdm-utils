@@ -4,7 +4,55 @@
 
 //! Contains helper functions used in parsing the CLI arguments
 
+use crate::doe_pci_cfg::PcieDevInfo;
 use crate::*;
+use std::io;
+
+/// # Summary
+///
+/// Print all of the devices in `doe_devices` and prompt the user to select a
+/// device by index (0's based). This index directly maps to an object in
+/// `doe_devices`
+///
+/// # Parameter
+///
+/// * `doe_devices`: A vector of PCIe devices that support DoE
+///
+/// # Returns
+///
+/// On success, OK(index) where the index maps to a device in `doe_device`
+/// On any failure, returns an error
+pub fn pcie_devices_user_select(doe_devices: &Vec<PcieDevInfo>) -> Result<usize, ()> {
+    let mut index = 0;
+    let num_devs = doe_devices.len();
+
+    info!("Listing devices with PCIe DoE Support on this system");
+    for dev in doe_devices {
+        info!("index:{} - {}", index, dev.name);
+        index += 1;
+    }
+    info!("Enter device index number to use");
+    let mut usr_in = String::new();
+    io::stdin().read_line(&mut usr_in).map_err(|e| {
+        error!("Failed to read index input: {e}");
+        ()
+    })?;
+    let usr_in = usr_in.trim();
+
+    match usr_in.parse::<usize>() {
+        Ok(index) => {
+            if index as usize >= num_devs {
+                error!("Invalid device index");
+                return Err(());
+            }
+            return Ok(index);
+        }
+        Err(_) => {
+            error!("Unexpected input: {}", usr_in);
+            return Err(());
+        }
+    }
+}
 
 /// # Summary
 ///
