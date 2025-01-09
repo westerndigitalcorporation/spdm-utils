@@ -45,7 +45,7 @@ struct Args {
 
     /// Use the Linux PCIe extended configuration backend
     /// This is generally run on the Linux host machine
-    #[arg(short, long, requires_ifs([("true", "pcie_vid"), ("true", "pcie_devid")]))]
+    #[arg(short, long)]
     doe_pci_cfg: bool,
 
     /// PCIe Identifier, Vendor ID of the SPDM supported device
@@ -668,11 +668,28 @@ async fn main() -> Result<(), ()> {
     }
 
     if cli.doe_pci_cfg {
-        // Check that a device exists with provided vid/devid
         unsafe {
-            let (vid, dev_id) = cli_helpers::parse_pcie_identifiers(cli.pcie_vid, cli.pcie_devid)?;
-            let (pacc, _, _) = doe_pci_cfg::get_pcie_dev(vid, dev_id)?;
-            pci_cleanup(pacc);
+            let (vid, dev_id) = if cli.pcie_vid == "" && cli.pcie_devid == "" {
+                // Try to detect and list devices with DoE support.
+                let doe_support_devs = doe_pci_cfg::get_doe_supported_devs();
+                if doe_support_devs.is_none() {
+                    error!("No DoE supported PCIe devices found");
+                    return Err(());
+                }
+                let doe_support_devs = doe_support_devs.unwrap();
+                let selected_dev_index = cli_helpers::pcie_devices_user_select(&doe_support_devs)?;
+                (
+                    doe_support_devs[selected_dev_index].vendor_id,
+                    doe_support_devs[selected_dev_index].device_id,
+                )
+            } else {
+                let (vid, dev_id) =
+                    cli_helpers::parse_pcie_identifiers(cli.pcie_vid, cli.pcie_devid)?;
+                // In an error case, `get_pcie_dev` will clean up
+                let (pacc, _, _) = doe_pci_cfg::get_pcie_dev(vid, dev_id)?;
+                pci_cleanup(pacc);
+                (vid, dev_id)
+            };
             doe_pci_cfg::register_device(cntx_ptr, vid, dev_id)?;
         }
     } else if cli.socket_server {

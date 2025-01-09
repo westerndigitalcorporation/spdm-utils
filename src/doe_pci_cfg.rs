@@ -19,6 +19,7 @@ use libspdm::libspdm_status_construct;
 use libspdm::spdm::LIBSPDM_MAX_SPDM_MSG_SIZE;
 use once_cell::sync::OnceCell;
 use std::fmt;
+use std::process::Command;
 use std::slice::{from_raw_parts, from_raw_parts_mut};
 
 const SEND_RECEIVE_BUFFER_LEN: usize = LIBSPDM_MAX_SPDM_MSG_SIZE as usize;
@@ -219,6 +220,98 @@ pub fn register_device(context: *mut c_void, pcie_vid: u16, pcie_devid: u16) -> 
     }
 
     Ok(())
+}
+
+#[derive(Debug)]
+pub struct PcieDevInfo {
+    pub name: String,
+    pub vendor_id: u16,
+    pub device_id: u16,
+}
+
+/// # Summary
+///
+/// Using `lspci` find user readable details of device specified by the
+/// device and vendor id.
+///
+/// # Returns
+///
+/// On success, the device details string
+/// None, if not found
+fn get_pcie_dev_name(vendor_id: u16, device_id: u16) -> Option<String> {
+    let res = Command::new("lspci")
+        .arg("-nnn")
+        .output()
+        .map_err(|e| {
+            error!("Failed to execute lspci: {}", e);
+        })
+        .ok()?;
+
+    let lspci_output = String::from_utf8(res.stdout).ok()?;
+    for line in lspci_output.lines() {
+        if line.contains(&format!("[{:04x}:{:04x}]", vendor_id, device_id)) {
+            debug!("Found device: {}", line);
+            return Some(line.to_string());
+        }
+    }
+    None
+}
+
+/// # Summary
+///
+/// Find devices on the PCIe bus that support DoE. Devices reported
+/// by this function may not be SPDM supported.
+///
+/// # Returns
+///
+/// On success a list of PCIe DoE supported devices and their names
+/// or None if no such devices exists
+pub unsafe fn get_doe_supported_devs() -> Option<Vec<PcieDevInfo>> {
+    let pacc = pci_alloc();
+    if pacc.is_null() {
+        error!("Failed to setup PCI access");
+        return None;
+    }
+
+    pci_init(pacc);
+    pci_scan_bus(pacc);
+
+    let mut device: *mut pci_dev = (*pacc).devices;
+    let mut doe_supported_dev: Vec<PcieDevInfo> = Vec::new();
+
+    while !device.is_null() {
+        pci_fill_info(
+            device,
+            (PCI_FILL_IDENT | PCI_FILL_BASES | PCI_FILL_CLASS | PCI_FILL_EXT_CAPS) as i32,
+        );
+
+        if let Ok(_) = get_doe_offset(device) {
+            // Behold, it has DoE support
+            let dev_name =
+                if let Some(name) = get_pcie_dev_name((*device).vendor_id, (*device).device_id) {
+                    name
+                } else {
+                    warn!(
+                        "Device name not found for [{:04x}:{:04x}]",
+                        (*device).vendor_id,
+                        (*device).device_id
+                    );
+                    "Unnamed".to_string()
+                };
+            doe_supported_dev.push(PcieDevInfo {
+                name: dev_name,
+                vendor_id: (*device).vendor_id,
+                device_id: (*device).device_id,
+            });
+        }
+        device = (*device).next;
+    }
+
+    pci_cleanup(pacc);
+    if doe_supported_dev.len() == 0 {
+        return None;
+    }
+    Some(doe_supported_dev)
 }
 
 /// # Summary
