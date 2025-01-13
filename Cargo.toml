@@ -44,6 +44,5 @@ minicbor = { git = "https://gitlab.com/twittner/minicbor.git", features = ["half
 minicbor-derive = { git = "https://gitlab.com/twittner/minicbor.git", features = ["alloc", "std"], optional = true }
 async-std = { version = "1.12", features = ["attributes"], optional = true }
 futures = { version = "0.3", optional = true }
-nix = {version = "0.29.0", features = ["user"], optional = true }
-
-libmctp = { git = "https://github.com/westerndigitalcorporation/libmctp.git" }
+nix = { version = "0.29.0", features = ["user"], optional = true }
+libmctp = { version = "0.2" }
