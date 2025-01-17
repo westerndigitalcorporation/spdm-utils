@@ -487,7 +487,8 @@ pub unsafe fn setup_transport_layer(
         TransportLayer::Doe => {
             libspdm_register_transport_layer_func(
                 context,
-                libspdm_max_spdm_msg_size,
+                libspdm_max_spdm_msg_size
+                    - (LIBSPDM_PCI_DOE_TRANSPORT_HEADER_SIZE + LIBSPDM_PCI_DOE_TRANSPORT_TAIL_SIZE),
                 LIBSPDM_PCI_DOE_TRANSPORT_HEADER_SIZE,
                 LIBSPDM_PCI_DOE_TRANSPORT_TAIL_SIZE,
                 Some(libspdm_transport_pci_doe_encode_message),
@@ -497,27 +498,14 @@ pub unsafe fn setup_transport_layer(
         TransportLayer::Mctp => {
             libspdm_register_transport_layer_func(
                 context,
-                libspdm_max_spdm_msg_size,
+                libspdm_max_spdm_msg_size
+                    - (LIBSPDM_MCTP_TRANSPORT_HEADER_SIZE + LIBSPDM_MCTP_TRANSPORT_TAIL_SIZE),
                 LIBSPDM_MCTP_TRANSPORT_HEADER_SIZE,
                 LIBSPDM_MCTP_TRANSPORT_TAIL_SIZE,
                 Some(libspdm_transport_mctp_encode_message),
                 Some(libspdm_transport_mctp_decode_message),
             );
         }
-    }
-
-    let parameter = libspdm_rs::libspdm_data_parameter_t::new_connection(0);
-    let mut data: u32 = libspdm_max_spdm_msg_size;
-    let data_ptr = &mut data as *mut _ as *mut c_void;
-    if LibspdmReturnStatus::libspdm_status_is_error(libspdm_set_data(
-        context,
-        libspdm_rs::libspdm_data_type_t_LIBSPDM_DATA_CAPABILITY_MAX_SPDM_MSG_SIZE,
-        &parameter as *const libspdm_rs::libspdm_data_parameter_t,
-        data_ptr,
-        core::mem::size_of::<u32>(),
-    )) {
-        error!("Unable to set data");
-        return Err(());
     }
 
     let libspdm_scratch_buffer_size = libspdm_get_sizeof_required_scratch_buffer(context);
