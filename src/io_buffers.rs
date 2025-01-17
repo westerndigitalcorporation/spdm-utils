@@ -6,12 +6,12 @@ static mut RECEIVE_BUFFER: OnceCell<Vec<u8>> = OnceCell::new();
 
 pub fn libspdm_setup_io_buffers(
     context: *mut c_void,
-    send_recv_len: usize,
-    libsdpm_buff_len: usize,
+    send_len: usize,
+    recv_len: usize,
 ) -> Result<(), ()> {
     let result = std::panic::catch_unwind(|| {
-        let buffer_send = vec![0; send_recv_len];
-        let buffer_receive = vec![0; send_recv_len];
+        let buffer_send = vec![0; send_len];
+        let buffer_receive = vec![0; recv_len];
         (buffer_send, buffer_receive)
     });
 
@@ -31,8 +31,8 @@ pub fn libspdm_setup_io_buffers(
             unsafe {
                 libspdm::libspdm_rs::libspdm_register_device_buffer_func(
                     context,
-                    libsdpm_buff_len as u32,
-                    libsdpm_buff_len as u32,
+                    send_len as u32,
+                    recv_len as u32,
                     Some(acquire_sender_buffer),
                     Some(release_sender_buffer),
                     Some(acquire_receiver_buffer),
