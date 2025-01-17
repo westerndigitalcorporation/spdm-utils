@@ -80,8 +80,7 @@ fn main() {
     }
 
     let bindings = builder
-        .parse_callbacks(Box::new(bindgen::CargoCallbacks))
-        .rustfmt_bindings(true)
+        .parse_callbacks(Box::new(bindgen::CargoCallbacks::new()))
         .use_core()
         .blocklist_item("max_align_t")
         .blocklist_function("qfcvt_r")
