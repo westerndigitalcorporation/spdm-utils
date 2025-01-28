@@ -17,10 +17,11 @@ use crate::*;
 use core::ffi::c_void;
 use libspdm::libspdm_status_construct;
 use libspdm::spdm::LIBSPDM_MAX_SPDM_MSG_SIZE;
-use once_cell::sync::OnceCell;
+use once_cell::sync::Lazy;
 use std::fmt;
 use std::process::Command;
 use std::slice::{from_raw_parts, from_raw_parts_mut};
+use std::sync::Mutex;
 
 const SEND_RECEIVE_BUFFER_LEN: usize = LIBSPDM_MAX_SPDM_MSG_SIZE as usize;
 const LIBSPDM_STATUS_ERROR_PEER: u32 =
@@ -38,8 +39,8 @@ const DOE_STATUS_ERR: u32 = 1 << 2;
 const DOE_WRITE_DATA_MAILBOX: i32 = 0x10;
 const DOE_READ_DATA_MAILBOX: i32 = 0x14;
 
-/// PCIE Identifiers
-static mut PCIE_IDENTIFIERS: OnceCell<PcieIdentifiers> = OnceCell::new();
+static PCIE_IDENTIFIERS: Lazy<Mutex<PcieIdentifiers>> =
+    Lazy::new(|| Mutex::new(PcieIdentifiers::new(0, 0)));
 
 #[derive(Debug)]
 struct PcieIdentifiers {
@@ -47,6 +48,11 @@ struct PcieIdentifiers {
     devid: u16,
 }
 
+impl PcieIdentifiers {
+    fn new(vid: u16, devid: u16) -> Self {
+        PcieIdentifiers { vid, devid }
+    }
+}
 /// # Summary
 ///
 /// Sends message using the PCIe DOE extended capability by writing the
@@ -78,7 +84,7 @@ unsafe extern "C" fn doe_pci_cfg_send_message(
     let msg_buf = unsafe { from_raw_parts(message, message_size) };
 
     info!("Sending message {msg_buf:x?}");
-    let pcie_ids = PCIE_IDENTIFIERS.get().unwrap();
+    let pcie_ids = PCIE_IDENTIFIERS.lock().unwrap();
     let (pacc, device, doe_offset) = get_pcie_dev(pcie_ids.vid, pcie_ids.devid).unwrap();
     if let Err(e) = doe_wait_not_busy(device, doe_offset) {
         match e {
@@ -144,7 +150,7 @@ unsafe extern "C" fn doe_pci_cfg_receive_message(
     let msg_buf = from_raw_parts_mut(message, SEND_RECEIVE_BUFFER_LEN);
 
     info!("Receiving message");
-    let pcie_ids = PCIE_IDENTIFIERS.get().unwrap();
+    let pcie_ids = PCIE_IDENTIFIERS.lock().unwrap();
     let (pacc, device, doe_offset) = get_pcie_dev(pcie_ids.vid, pcie_ids.devid).unwrap();
     if let Err(e) = doe_wait_status_dor(device, doe_offset) {
         match e {
@@ -197,15 +203,10 @@ unsafe extern "C" fn doe_pci_cfg_receive_message(
 ///
 /// Panics if `SEND_BUFFER/RECEIVE_BUFFER` is occupied
 pub fn register_device(context: *mut c_void, pcie_vid: u16, pcie_devid: u16) -> Result<(), ()> {
-    let pcie_ids = PcieIdentifiers {
-        vid: pcie_vid,
-        devid: pcie_devid,
-    };
     unsafe {
-        PCIE_IDENTIFIERS.set(pcie_ids).map_err(|e| {
-            error!("Failed to set device PCIe Identifiers: {e:?}");
-            ()
-        })?;
+        let mut pcie_ids = PCIE_IDENTIFIERS.lock().unwrap();
+        pcie_ids.vid = pcie_vid;
+        pcie_ids.devid = pcie_devid;
 
         libspdm_register_device_io_func(
             context,
@@ -661,7 +662,7 @@ impl fmt::Display for DoeDiscoveryPacket {
 /// Panics if the tests assertions fail
 pub unsafe fn test_discovery_basic() -> Result<(), ()> {
     info!("--- Testing Discovery: Basic ---");
-    let pcie_ids = PCIE_IDENTIFIERS.get().unwrap();
+    let pcie_ids = PCIE_IDENTIFIERS.lock().unwrap();
     let (pacc, device, doe_offset) = get_pcie_dev(pcie_ids.vid, pcie_ids.devid).unwrap();
     doe_wait_not_busy(device, doe_offset).map_err(|e| match e {
         DoeStatus::DoeStatusErr => {
@@ -754,7 +755,7 @@ pub unsafe fn test_discovery_basic() -> Result<(), ()> {
 /// Panics if the tests assertions fail
 pub unsafe fn test_discovery_all() -> Result<(), ()> {
     info!("--- Testing Discovery: All Discoverable objects ---");
-    let pcie_ids = PCIE_IDENTIFIERS.get().unwrap();
+    let pcie_ids = PCIE_IDENTIFIERS.lock().unwrap();
     let (pacc, device, doe_offset) = get_pcie_dev(pcie_ids.vid, pcie_ids.devid).unwrap();
     doe_wait_not_busy(device, doe_offset).map_err(|e| match e {
         DoeStatus::DoeStatusErr => {
@@ -884,7 +885,7 @@ pub unsafe fn test_discovery_all() -> Result<(), ()> {
 /// Panics if the tests assertions fail
 pub unsafe fn test_discovery_error() -> Result<(), ()> {
     info!("--- Testing Discovery: Error Cases ---");
-    let pcie_ids = PCIE_IDENTIFIERS.get().unwrap();
+    let pcie_ids = PCIE_IDENTIFIERS.lock().unwrap();
     let (pacc, device, doe_offset) = get_pcie_dev(pcie_ids.vid, pcie_ids.devid).unwrap();
 
     doe_wait_not_busy(device, doe_offset).map_err(|e| match e {
