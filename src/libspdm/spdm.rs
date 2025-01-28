@@ -41,6 +41,7 @@ use {
     alloc::alloc::{alloc, dealloc},
     alloc::ffi::CString,
     alloc::string::String,
+    alloc::vec::Vec,
     core::alloc::Layout,
     core::ffi::{c_uchar, c_uint},
 };
@@ -358,9 +359,10 @@ pub const LIBSPDM_MANIFEST_RAW_BITSTREAM_OFFSET: usize = 0x07;
 
 // This has to be valid during the life of the program due to the way
 // libspdm_set_data() utilizes this by pointer.
-pub static mut PSK_HINT: [u8; 11] = [0xff; 11];
+const PSK_HINT: [u8; 11] = [0xff; 11];
+const PSK_LEN: usize = 11;
 
-pub static mut M_LIBSPDM_BIN_STR0: [u8; 0x11] = [
+pub const M_LIBSPDM_BIN_STR0: [u8; 0x11] = [
     0x00, 0x00, /* length - to be filled*/
     /* SPDM_VERSION_1_1_BIN_CONCAT_LABEL */
     0x73, 0x70, 0x64, 0x6d, 0x31, 0x2e, 0x31, 0x20, /* SPDM_BIN_STR_0_LABEL */
@@ -1044,8 +1046,8 @@ pub unsafe fn start_session(
     let ret = libspdm_start_session(
         context,
         session_info.use_psk, // KeyExchange
-        PSK_HINT.as_mut_ptr() as *mut _ as *mut c_void,
-        u16::try_from(PSK_HINT.len()).unwrap(),
+        &PSK_HINT as *const _ as *const c_void,
+        PSK_LEN as u16,
         session_info.measurement_hash_type,
         session_info.slot_id,
         session_info.session_policy,
@@ -2363,7 +2365,7 @@ pub unsafe extern "C" fn libspdm_psk_handshake_secret_hkdf_expand(
 
     // If no psk-hint or if the psk-hint matches what we expect
     // use the `TestPskData` data. Otherwise return an error
-    if psk_hint_size == 0 || (psk_hint == PSK_HINT && psk_hint_size == PSK_HINT.len()) {
+    if psk_hint_size == 0 || (psk_hint == PSK_HINT && psk_hint_size == PSK_LEN) {
         psk = b"TestPskData\0".clone();
         psk_size = psk.len();
     } else {
@@ -2466,7 +2468,7 @@ pub unsafe extern "C" fn libspdm_psk_master_secret_hkdf_expand(
 
     // If no psk-hint or if the psk-hint matches what we expect
     // use the `TestPskData` data. Otherwise return an error
-    if psk_hint_size == 0 || (psk_hint == PSK_HINT && psk_hint_size == PSK_HINT.len()) {
+    if psk_hint_size == 0 || (psk_hint == PSK_HINT && psk_hint_size == PSK_LEN) {
         psk = b"TestPskData\0".clone();
         psk_size = psk.len();
     } else {
@@ -2496,14 +2498,20 @@ pub unsafe extern "C" fn libspdm_psk_master_secret_hkdf_expand(
         return ret;
     }
 
-    let slice: &mut [u8] = &mut M_LIBSPDM_BIN_STR0[..2];
+    // `M_LIBSPDM_BIN_STR0` changed from a static mut to a `const`, to
+    // comply with rust24 without using the stabilized `raw` symantics of
+    // rustc 1.82.
+    // TODO: Change `M_LIBSPDM_BIN_STR0` to use `raw` symantics when we have
+    // rustc 1.82
+    let mut m_libspdm_bin_str0: Vec<u8> = M_LIBSPDM_BIN_STR0.to_vec();
+    let hash_slice: &mut [u8] = &mut m_libspdm_bin_str0[..2];
     let hash_size_u16 = u16::try_from(hash_size).unwrap();
 
     // Set the first to bytes to be the hash size
-    slice.copy_from_slice(&hash_size_u16.to_le_bytes());
+    hash_slice.copy_from_slice(&hash_size_u16.to_le_bytes());
     // Patch the version used
-    M_LIBSPDM_BIN_STR0[6] = b'0' + ((spdm_version >> 12) & 0xF) as u8;
-    M_LIBSPDM_BIN_STR0[8] = b'0' + ((spdm_version >> 8) & 0xF) as u8;
+    m_libspdm_bin_str0[6] = b'0' + ((spdm_version >> 12) & 0xF) as u8;
+    m_libspdm_bin_str0[8] = b'0' + ((spdm_version >> 8) & 0xF) as u8;
 
     let mut salt1: [u8; 64] = [0; 64];
 
@@ -2511,7 +2519,7 @@ pub unsafe extern "C" fn libspdm_psk_master_secret_hkdf_expand(
         base_hash_algo,
         handshake_ptr,
         hash_size,
-        M_LIBSPDM_BIN_STR0.as_mut_ptr() as *const u8,
+        m_libspdm_bin_str0.as_ptr() as *const u8,
         core::mem::size_of::<[u8; 0x11]>(),
         salt1.as_mut_ptr(),
         hash_size,
