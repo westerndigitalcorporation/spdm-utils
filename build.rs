@@ -68,6 +68,7 @@ fn main() {
     }
 
     if let Ok(sysroot) = env::var("STAGING_DIR") {
+        // Append the `STAGING_DIR` information, used for buildroot
         let sysroot_arg = format!("--sysroot={sysroot}");
         builder = builder.clang_arg(sysroot_arg);
 
@@ -75,7 +76,11 @@ fn main() {
         builder = builder.clang_arg(include_arg);
 
         println!("cargo:rustc-link-search={sysroot}/usr/lib/");
+    } else if let Ok(staging_incdir) = env::var("STAGING_INCDIR") {
+        // Append the `STAGING_INCDIR` information, used for Open-Embedded/Yocto
+        builder = builder.clang_arg(format!("-I{staging_incdir}/libspdm"));
     } else {
+        // Append the local build and tests, used for local manual builds
         println!("cargo:rustc-link-search=third-party/libspdm/build/lib/");
         #[cfg(feature = "libspdm_tests")]
         {
