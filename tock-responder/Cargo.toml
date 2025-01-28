@@ -46,7 +46,7 @@ critical-section = { version = "1.0" }
 
 once_cell = { version = "1.16", default-features = false, features = ["critical-section"] }
 
-libmctp = { git = "https://github.com/westerndigitalcorporation/libmctp.git" }
+libmctp = { version = "0.2" }
 
 [build-dependencies]
 libtock_build_scripts = { path = "libtock-rs/build_scripts"}
