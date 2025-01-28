@@ -2,7 +2,9 @@
 // SPDX-License-Identifier: Apache-2.0 OR MIT
 // Copyright (C) 2022, Western Digital Corporation or its affiliates.
 
+#ifdef RUST_STD
 #include <pci/pci.h>
+#endif
 
 #include <library/spdm_common_lib.h>
 #include <library/spdm_crypt_lib.h>

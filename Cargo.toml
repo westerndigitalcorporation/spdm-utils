@@ -23,7 +23,7 @@ name = "spdm_utils"
 path = "src/main.rs"
 
 [build-dependencies]
-bindgen = "0.63"
+bindgen = "0.71"
 which = "6.0.0"
 
 [dependencies]
