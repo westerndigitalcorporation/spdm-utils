@@ -63,6 +63,10 @@ fn main() {
             .clang_arg("-Ithird-party/libspdm")
     };
 
+    if cfg!(feature = "std") {
+        builder = builder.clang_arg("-DRUST_STD");
+    }
+
     if let Ok(sysroot) = env::var("STAGING_DIR") {
         let sysroot_arg = format!("--sysroot={sysroot}");
         builder = builder.clang_arg(sysroot_arg);
@@ -80,9 +84,9 @@ fn main() {
     }
 
     let bindings = builder
-        .parse_callbacks(Box::new(bindgen::CargoCallbacks))
-        .rustfmt_bindings(true)
+        .parse_callbacks(Box::new(bindgen::CargoCallbacks::new()))
         .use_core()
+        .rust_target("1.81.0".parse().unwrap())
         .blocklist_item("max_align_t")
         .blocklist_function("qfcvt_r")
         .blocklist_function("qfcvt")
@@ -91,7 +95,6 @@ fn main() {
         .blocklist_function("qgcvt")
         .blocklist_function("strtold")
         .blocklist_type("_Float64x")
-        .clang_arg(format!("--target={}", env::var("HOST").unwrap()))
         .generate()
         .expect("Unable to generate bindings");
 
