@@ -1,8 +1,9 @@
-use once_cell::sync::OnceCell;
+use once_cell::sync::Lazy;
 use std::ffi::c_void;
+use std::sync::Mutex;
 
-static mut SEND_BUFFER: OnceCell<Vec<u8>> = OnceCell::new();
-static mut RECEIVE_BUFFER: OnceCell<Vec<u8>> = OnceCell::new();
+static SEND_BUFFER: Lazy<Mutex<Option<Vec<u8>>>> = Lazy::new(|| Mutex::new(None));
+static RECEIVE_BUFFER: Lazy<Mutex<Option<Vec<u8>>>> = Lazy::new(|| Mutex::new(None));
 
 pub fn libspdm_setup_io_buffers(
     context: *mut c_void,
@@ -17,16 +18,8 @@ pub fn libspdm_setup_io_buffers(
 
     match result {
         Ok(buffers) => {
-            unsafe {
-                SEND_BUFFER.set(buffers.0).map_err(|_| {
-                    error!("Failed to set send buffer");
-                    ()
-                })?;
-                RECEIVE_BUFFER.set(buffers.1).map_err(|_| {
-                    error!("Failed to set receive buffer");
-                    ()
-                })?;
-            }
+            *(SEND_BUFFER.lock().unwrap()) = Some(buffers.0);
+            *(RECEIVE_BUFFER.lock().unwrap()) = Some(buffers.1);
 
             unsafe {
                 libspdm::libspdm_rs::libspdm_register_device_buffer_func(
@@ -66,11 +59,15 @@ pub unsafe extern "C" fn acquire_sender_buffer(
     _context: *mut c_void,
     msg_buf_ptr: *mut *mut c_void,
 ) -> u32 {
-    if let Some(buffer) = SEND_BUFFER.get() {
-        let buf_ptr = buffer.as_ptr() as *mut c_void;
-        *msg_buf_ptr = buf_ptr;
-        return 0;
+    match *SEND_BUFFER.lock().unwrap() {
+        Some(ref buf) => {
+            let buf_ptr = buf.as_ptr() as *mut c_void;
+            *msg_buf_ptr = buf_ptr;
+            return 0;
+        }
+        None => {}
     }
+
     error!("Sender buffer is lost or not initialized");
     return 1;
 }
@@ -93,10 +90,13 @@ pub unsafe extern "C" fn acquire_receiver_buffer(
     _context: *mut c_void,
     msg_buf_ptr: *mut *mut c_void,
 ) -> u32 {
-    if let Some(buffer) = RECEIVE_BUFFER.get() {
-        let buf_ptr = buffer.as_ptr() as *mut c_void;
-        *msg_buf_ptr = buf_ptr;
-        return 0;
+    match *RECEIVE_BUFFER.lock().unwrap() {
+        Some(ref buf) => {
+            let buf_ptr = buf.as_ptr() as *mut c_void;
+            *msg_buf_ptr = buf_ptr;
+            return 0;
+        }
+        None => {}
     }
     error!("Receiver buffer is lost or not initialized");
     return 1;
@@ -117,9 +117,20 @@ pub unsafe extern "C" fn release_sender_buffer(_context: *mut c_void, _msg_buf_p
 
 /// # Summary
 ///
-/// Take ownership of the IO buffer and drop them out of context allowing the
-/// underlying memory to be freed.
+/// Drop the IO buffers out of scope, this should release the underlying
+/// memory.
 pub unsafe fn libspdm_drop_io_buffers() {
-    if let Some(_) = SEND_BUFFER.take() {}
-    if let Some(_) = RECEIVE_BUFFER.take() {}
+    let mut send_buf = SEND_BUFFER.lock().unwrap();
+    if send_buf.is_some() {
+        *send_buf = None;
+    } else {
+        warn!("Send buffer is lost or not initialized");
+    }
+
+    let mut recv_buf = RECEIVE_BUFFER.lock().unwrap();
+    if recv_buf.is_some() {
+        *recv_buf = None;
+    } else {
+        warn!("Receive buffer is lost or not initialized");
+    }
 }

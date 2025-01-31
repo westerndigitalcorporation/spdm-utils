@@ -12,15 +12,16 @@
 use crate::*;
 use core::ffi::c_void;
 use libspdm::spdm::LIBSPDM_MAX_SPDM_MSG_SIZE;
-use once_cell::sync::OnceCell;
+use once_cell::sync::Lazy;
 use std::io::{Read, Write};
 use std::os::unix::net::UnixStream;
 use std::path::Path;
 use std::slice::{from_raw_parts, from_raw_parts_mut};
+use std::sync::Mutex;
 use std::time::Duration;
 
 const SEND_RECEIVE_BUFFER_LEN: usize = LIBSPDM_MAX_SPDM_MSG_SIZE as usize;
-static mut CLIENT_CONNECTION: OnceCell<UnixStream> = OnceCell::new();
+static CLIENT_CONNECTION: Lazy<Mutex<Option<UnixStream>>> = Lazy::new(|| Mutex::new(None));
 
 /// # Summary
 ///
@@ -50,24 +51,28 @@ unsafe extern "C" fn sclient_send_message(
     message_ptr: *const c_void,
     timeout: u64,
 ) -> u32 {
-    let mut stream = CLIENT_CONNECTION.take().unwrap();
-    let message = message_ptr as *const u8;
-    let msg_buf = unsafe { from_raw_parts(message, message_size) };
+    match &mut *CLIENT_CONNECTION.lock().unwrap() {
+        Some(stream) => {
+            let message = message_ptr as *const u8;
+            let msg_buf = unsafe { from_raw_parts(message, message_size) };
 
-    if timeout == 0 {
-        stream
-            .set_write_timeout(None)
-            .expect("Couldn't set write timeout");
-    } else {
-        stream
-            .set_write_timeout(Some(Duration::from_micros(timeout)))
-            .expect("Couldn't set write timeout");
+            if timeout == 0 {
+                stream
+                    .set_write_timeout(None)
+                    .expect("Couldn't set write timeout");
+            } else {
+                stream
+                    .set_write_timeout(Some(Duration::from_micros(timeout)))
+                    .expect("Couldn't set write timeout");
+            }
+
+            stream.write_all(msg_buf).unwrap();
+            stream.flush().unwrap();
+        }
+        None => {
+            unreachable!("Socket stream lost")
+        }
     }
-
-    stream.write_all(msg_buf).unwrap();
-    stream.flush().unwrap();
-    CLIENT_CONNECTION.set(stream).unwrap();
-
     0
 }
 
@@ -99,37 +104,42 @@ unsafe extern "C" fn sclient_receive_message(
     msg_buf_ptr: *mut *mut c_void,
     timeout: u64,
 ) -> u32 {
-    let mut stream = CLIENT_CONNECTION.take().unwrap();
-    let message = *msg_buf_ptr as *mut u8;
-    let msg_buf = from_raw_parts_mut(message, SEND_RECEIVE_BUFFER_LEN);
+    match &mut *CLIENT_CONNECTION.lock().unwrap() {
+        Some(stream) => {
+            let message = *msg_buf_ptr as *mut u8;
+            let msg_buf = from_raw_parts_mut(message, SEND_RECEIVE_BUFFER_LEN);
 
-    if timeout == 0 {
-        stream
-            .set_read_timeout(None)
-            .expect("Couldn't set read timeout");
-    } else {
-        stream
-            .set_read_timeout(Some(Duration::from_micros(timeout)))
-            .expect("Couldn't set read timeout");
+            if timeout == 0 {
+                stream
+                    .set_read_timeout(None)
+                    .expect("Couldn't set read timeout");
+            } else {
+                stream
+                    .set_read_timeout(Some(Duration::from_micros(timeout)))
+                    .expect("Couldn't set read timeout");
+            }
+
+            let mut read_len = stream.read(msg_buf);
+            while read_len.is_err() {
+                read_len = stream.read(msg_buf);
+            }
+            let read_len = read_len.unwrap();
+
+            if read_len == 0 {
+                // when read() return 0, the two likely cases are:
+                // 1. socket shut down correctly
+                // 2. reader has reached its “end of file” and will likely no longer be
+                //    able to produce bytes
+                warn!("Connection dropped to server, exiting...");
+                std::process::exit(0);
+            }
+
+            *message_size = read_len;
+        }
+        None => {
+            unreachable!("Socket stream lost")
+        }
     }
-
-    let mut read_len = stream.read(msg_buf);
-    while read_len.is_err() {
-        read_len = stream.read(msg_buf);
-    }
-    let read_len = read_len.unwrap();
-    CLIENT_CONNECTION.set(stream).unwrap();
-
-    if read_len == 0 {
-        // when read() return 0, the two likely cases are:
-        // 1. socket shut down correctly
-        // 2. reader has reached its “end of file” and will likely no longer be
-        //    able to produce bytes
-        warn!("Connection dropped to server, exiting...");
-        std::process::exit(0);
-    }
-
-    *message_size = read_len;
 
     0
 }
@@ -159,11 +169,7 @@ pub fn register_device(context: *mut c_void) -> Result<(), ()> {
             return Err(());
         }
         Ok(stream) => {
-            unsafe {
-                // TODO: It would be nice to somehow save this in libspdm
-                // context
-                CLIENT_CONNECTION.set(stream).unwrap();
-            }
+            *(CLIENT_CONNECTION.lock().unwrap()) = Some(stream);
         }
     };
 
