@@ -607,7 +607,7 @@ fn parse_request_codes(s: &str) -> Result<Vec<RequestCode>, String> {
 /// Default to always log style if LOG_STYLE environment variable is not set
 fn init_logger() {
     let env = Env::default()
-        .filter_or("LOG_LEVEL", "trace")
+        .filter_or("LOG_LEVEL", "debug")
         .write_style_or("LOG_STYLE", "always");
 
     env_logger::init_from_env(env);

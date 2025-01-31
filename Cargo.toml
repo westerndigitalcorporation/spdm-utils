@@ -32,6 +32,7 @@ std = [
     "async-std",
     "futures",
     "nix",
+    "inquire",
 ]
 
 [lib]
@@ -73,4 +74,4 @@ async-std = { version = "1.12", features = ["attributes"], optional = true }
 futures = { version = "0.3", optional = true }
 nix = { version = "0.29.0", features = ["user"], optional = true }
 libmctp = { version = "0.2" }
-inquire = "0.7.5"
+inquire = { version = "0.7.5", optional = true}
