@@ -223,11 +223,17 @@ pub fn register_device(context: *mut c_void, pcie_vid: u16, pcie_devid: u16) -> 
     Ok(())
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct PcieDevInfo {
     pub name: String,
     pub vendor_id: u16,
     pub device_id: u16,
+}
+
+impl fmt::Display for PcieDevInfo {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "{}", self.name)
+    }
 }
 
 /// # Summary
