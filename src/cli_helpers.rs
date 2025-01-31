@@ -22,7 +22,7 @@ use inquire::Select;
 /// On success, OK(index) where the index maps to a device in `doe_device`
 /// On any failure, returns an error
 pub fn pcie_devices_user_select(doe_devices: &Vec<PcieDevInfo>) -> Result<usize, ()> {
-    let choice = Select::new("Select a device to use:\n", doe_devices.to_vec()).prompt();
+    let choice = Select::new("Select a PCIe DoE compatible device:", doe_devices.to_vec()).prompt();
     match choice {
         Ok(choice) => {
             if let Some(index) = doe_devices.iter().position(|x| *x == choice) {
