@@ -60,7 +60,7 @@ $ sudo dnf install cmake clang-libs clang-devel pciutils-devel openssl openssl-d
 
 or
 
-$ sudo apt install cmake clang libclang-dev pciutils libpci-dev openssl libssl-dev libsystemd-dev python3-dev
+$ sudo apt install cmake clang libclang-dev pciutils libpci-dev openssl libssl-dev libsystemd-dev python3-dev pkg-config
 ```
 
 ### Ruby
