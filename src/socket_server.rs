@@ -160,7 +160,6 @@ fn setup_socket_and_listen() -> Result<(), ()> {
     if socket.exists() {
         fs::remove_file(socket).map_err(|e| {
             error!("Failed to remove out socket file {:?}", e);
-            ()
         })?;
     }
 

@@ -24,7 +24,6 @@
 use crate::*;
 use core::ffi::c_void;
 use lazy_static::lazy_static;
-use libmctp;
 use libmctp::mctp_traits::SMBusMCTPRequestResponse;
 use libmctp::vendor_packets::VendorIDFormat;
 use once_cell::sync::Lazy;
@@ -101,11 +100,11 @@ unsafe extern "C" fn usb_i2c_send_message(
 ) -> u32 {
     match &mut *MCTPCONTEXT.lock().unwrap() {
         Some(mctp_ctx) => {
-            assert!(message_size < SEND_RECEIVE_BUFFER_LEN as usize);
+            assert!(message_size < SEND_RECEIVE_BUFFER_LEN);
             let message = message_ptr as *const u8;
             let msg_buf = unsafe { from_raw_parts(message, message_size) };
-            let mut send_buf: [u8; (SEND_RECEIVE_BUFFER_LEN + HEADER_LEN) as usize] =
-                [0; (SEND_RECEIVE_BUFFER_LEN + HEADER_LEN) as usize];
+            let mut send_buf: [u8; SEND_RECEIVE_BUFFER_LEN + HEADER_LEN] =
+                [0; (SEND_RECEIVE_BUFFER_LEN + HEADER_LEN)];
 
             let libspdm_msg_header_type = match libmctp::MessageType::from(msg_buf[0]) {
                 libmctp::MessageType::SpdmOverMctp => libmctp::MessageType::SpdmOverMctp,
@@ -128,7 +127,7 @@ unsafe extern "C" fn usb_i2c_send_message(
 
             // We drop the first byte, which is the target address
             send_buf.copy_within(0..len, HEADER_LEN - 1);
-            len = len - 1;
+            len -= 1;
 
             send_buf[0] = 0xAA; // Preamble
             send_buf[1] = TARGET_ID; // Target Address
@@ -195,7 +194,7 @@ unsafe extern "C" fn usb_i2c_receive_message(
 
             let mut port = SERIAL_PORT.lock().unwrap().take().unwrap();
             let mut header: Vec<u8> = vec![0; HEADER_LEN];
-            _ = port.read_exact(&mut header).unwrap();
+            port.read_exact(&mut header).unwrap();
 
             // Assert the header first
             debug!("packet_header: {:x?}", header);
@@ -216,7 +215,7 @@ unsafe extern "C" fn usb_i2c_receive_message(
             // Amend our address to create a valid MCTP packet
             spdm_msg_buf.copy_within(0..message_len, 1);
             spdm_msg_buf[0] = SOURCE_ID << 1;
-            message_len = message_len + 1;
+            message_len += 1;
 
             // Get the total length from the MCTP packet
             let mctp_len = spdm_msg_buf[MCTP_BYTE_COUNT] as usize + 4;
@@ -266,7 +265,6 @@ pub fn register_device(
 ) -> Result<(), ()> {
     let udev = usb_dev.ok_or_else(|| {
         error!("USB device path not specified");
-        ()
     })?;
 
     let port = serialport::new(&udev, usb_baud)
@@ -274,25 +272,21 @@ pub fn register_device(
         .open()
         .map_err(|e| {
             error!("Failed to open port {:?}", e);
-            ()
         })?;
 
     // Clear I/O buffers to drop any misc/lingering data
     port.clear(serialport::ClearBuffer::All).map_err(|e| {
         error!("Failed to clear buffer for {udev}: {e:?}");
-        ()
     })?;
     assert_eq!(
         port.bytes_to_read().map_err(|e| {
             error!("Failed to read bytes: {:?}", e);
-            ()
         })?,
         0
     );
     assert_eq!(
         port.bytes_to_write().map_err(|e| {
             error!("Failed to read bytes: {:?}", e);
-            ()
         })?,
         0
     );
@@ -303,7 +297,6 @@ pub fn register_device(
         .lock()
         .map_err(|e| {
             error!("Failed to lock serial port: {e:?}");
-            ()
         })?
         .replace(port);
 

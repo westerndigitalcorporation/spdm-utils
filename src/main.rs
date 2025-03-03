@@ -354,19 +354,19 @@ impl std::str::FromStr for RequestCode {
             "GET_DIGESTS" | "get-digests" => {
                 if subargs.is_some() {
                     error!("Unexpected subargument");
-                    return Err(format!("{}", s));
+                    return Err(s.to_string());
                 }
                 Ok(RequestCode::GetDigests {})
             }
             "GET_CERTIFICATE" | "get-certificate" => {
                 if let Some(args) = subargs {
                     if args.contains("tcg-dice-evidence-binding-checks") {
-                        return Ok(RequestCode::GetCertificate {
+                        Ok(RequestCode::GetCertificate {
                             tcg_dice_evidence_binding_checks: true,
-                        });
+                        })
                     } else {
                         error!("Invalid request option : {args}");
-                        Err(format!("{}", s))
+                        Err(s.to_string())
                     }
                 } else {
                     Ok(RequestCode::GetCertificate {
@@ -388,7 +388,7 @@ impl std::str::FromStr for RequestCode {
             "GET_VERSION" | "get-version" => {
                 if subargs.is_some() {
                     error!("Unexpected subargument");
-                    return Err(format!("{}", s));
+                    return Err(s.to_string());
                 }
                 Ok(RequestCode::GetVersion {})
             }
@@ -396,7 +396,7 @@ impl std::str::FromStr for RequestCode {
                 if let Some(args) = subargs {
                     if !args.contains("index=") {
                         error!("Index not specified for {request_code}");
-                        return Err(format!("{}", s));
+                        return Err(s.to_string());
                     }
 
                     let meas_index: u8 = args
@@ -406,56 +406,56 @@ impl std::str::FromStr for RequestCode {
                         .and_then(|index_str| index_str.parse().ok())
                         .ok_or_else(|| {
                             error!("Failed to parse index");
-                            format!("{}", s)
+                            s.to_string()
                         })?;
 
                     let raw_bitstream = args.contains("raw-bitstream");
                     Ok(RequestCode::GetMeasurement {
                         index: meas_index,
-                        raw_bitstream: raw_bitstream,
+                        raw_bitstream,
                     })
                 } else {
                     error!("Index not specified for {request_code}");
-                    Err(format!("{}", s))
+                    Err(s.to_string())
                 }
             }
             "GET_MEASUREMENTS" | "get-measurements" => {
                 if subargs.is_some() {
                     error!("Unexpected subargument");
-                    return Err(format!("{}", s));
+                    return Err(s.to_string());
                 }
                 Ok(RequestCode::GetMeasurements {})
             }
             "GET_CAPABILITIES" | "get-capabilities" => {
                 if subargs.is_some() {
                     error!("Unexpected subargument");
-                    return Err(format!("{}", s));
+                    return Err(s.to_string());
                 }
                 Ok(RequestCode::GetCapabilities {})
             }
             "NEGOTIATE_ALGORITHMS" | "negotiate-algorithms" => {
                 if subargs.is_some() {
                     error!("Unexpected subargument");
-                    return Err(format!("{}", s));
+                    return Err(s.to_string());
                 }
                 Ok(RequestCode::NegotiateAlgorithms {})
             }
             "HEARTBEAT" | "heartbeat" => {
                 if subargs.is_some() {
                     error!("Unexpected subargument");
-                    return Err(format!("{}", s));
+                    return Err(s.to_string());
                 }
                 Ok(RequestCode::Heartbeat {})
             }
             "KEY_UPDATE" | "key-update" => {
                 if let Some(args) = subargs {
                     if args.contains("single-direction") {
-                        return Ok(RequestCode::KeyUpdate {
+                        Ok(RequestCode::KeyUpdate {
                             single_direction: true,
-                        });
+                        })
                     } else {
                         error!("Invalid sub-argument specified");
-                        Err(format!("{}", s))
+                        Err(s.to_string())
                     }
                 } else {
                     Ok(RequestCode::KeyUpdate {
@@ -469,7 +469,7 @@ impl std::str::FromStr for RequestCode {
                         return Ok(RequestCode::EncapsulatedSendReceive { secure_msg: true });
                     } else {
                         error!("Invalid sub-argument specified");
-                        return Err(format!("{}", s));
+                        return Err(s.to_string());
                     }
                 }
                 Ok(RequestCode::EncapsulatedSendReceive { secure_msg: false })
@@ -477,28 +477,28 @@ impl std::str::FromStr for RequestCode {
             "END_SESSION" | "end-session" => {
                 if subargs.is_some() {
                     error!("Unexpected subargument");
-                    return Err(format!("{}", s));
+                    return Err(s.to_string());
                 }
                 Ok(RequestCode::EndSession {})
             }
             "GET_CSR" | "get-csr" => {
                 if subargs.is_some() {
                     error!("Unexpected subargument");
-                    return Err(format!("{}", s));
+                    return Err(s.to_string());
                 }
                 Ok(RequestCode::GetCsr {})
             }
             "SET_CERTIFICATE" | "set-certificate" => {
                 if subargs.is_some() {
                     error!("Unexpected subargument");
-                    return Err(format!("{}", s));
+                    return Err(s.to_string());
                 }
                 Ok(RequestCode::SetCertificate {})
             }
             "RESPOND_IF_READY" | "respond-if-ready" => {
                 if subargs.is_some() {
                     error!("Unexpected subargument");
-                    return Err(format!("{}", s));
+                    return Err(s.to_string());
                 }
                 Ok(RequestCode::RespondIfReady {})
             }
@@ -510,12 +510,12 @@ impl std::str::FromStr for RequestCode {
                     Ok(RequestCode::Custom { value: val })
                 } else {
                     error!("Invalid sub-argument specified");
-                    return Err(format!("{}", s));
+                    Err(s.to_string())
                 }
             }
             _ => {
                 error!("Unsupported request code: {}", s);
-                Err(format!("{}", s))
+                Err(s.to_string())
             }
         }
     }
@@ -537,7 +537,7 @@ fn parse_request_codes(s: &str) -> Result<Vec<RequestCode>, String> {
                 "Invalid request argument formatting, unexpected {c} at {:?}X",
                 &s[..i]
             );
-            return Err(format!("Failed to parse requests"));
+            return Err("Failed to parse requests".to_string());
         } else if c != ']' && subarg_start {
             continue;
         }
@@ -553,16 +553,16 @@ fn parse_request_codes(s: &str) -> Result<Vec<RequestCode>, String> {
             if let Some(delim) = s.chars().nth(i + 1) {
                 if delim != ',' {
                     error!("Expected ',' after ']'");
-                    return Err(format!("Failed to parse requests"));
+                    return Err("Failed to parse requests".to_string());
                 }
-                if let Some(_) = s.chars().nth(i + 2) {
+                if s.chars().nth(i + 2).is_some() {
                     prev_req_start_at = i + 2;
                     // We want to ignore the next ',' because it denotes the
                     // beginning of a new request and not the end of one.
                     skip_next_delim = true;
                 } else {
                     error!("Request expected after ','");
-                    return Err(format!("Failed to parse requests"));
+                    return Err("Failed to parse requests".to_string());
                 }
             }
 
@@ -669,7 +669,7 @@ async fn main() -> Result<(), ()> {
 
     if cli.doe_pci_cfg {
         unsafe {
-            let (vid, dev_id) = if cli.pcie_vid == "" && cli.pcie_devid == "" {
+            let (vid, dev_id) = if cli.pcie_vid.is_empty() && cli.pcie_devid.is_empty() {
                 // Try to detect and list devices with DoE support.
                 let doe_support_devs = doe_pci_cfg::get_doe_supported_devs();
                 if doe_support_devs.is_none() {
@@ -723,20 +723,18 @@ async fn main() -> Result<(), ()> {
     unsafe {
         if let Some(proto) = cli.spdm_transport_protocol {
             spdm::setup_transport_layer(cntx_ptr, proto, spdm::LIBSPDM_MAX_SPDM_MSG_SIZE)?;
+        } else if cli.usb_i2c {
+            spdm::setup_transport_layer(
+                cntx_ptr,
+                spdm::TransportLayer::Mctp,
+                spdm::LIBSPDM_MAX_SPDM_MSG_SIZE,
+            )?;
         } else {
-            if cli.usb_i2c {
-                spdm::setup_transport_layer(
-                    cntx_ptr,
-                    spdm::TransportLayer::Mctp,
-                    spdm::LIBSPDM_MAX_SPDM_MSG_SIZE,
-                )?;
-            } else {
-                spdm::setup_transport_layer(
-                    cntx_ptr,
-                    spdm::TransportLayer::Doe,
-                    spdm::LIBSPDM_MAX_SPDM_MSG_SIZE,
-                )?;
-            }
+            spdm::setup_transport_layer(
+                cntx_ptr,
+                spdm::TransportLayer::Doe,
+                spdm::LIBSPDM_MAX_SPDM_MSG_SIZE,
+            )?;
         }
     }
 
@@ -775,11 +773,9 @@ async fn main() -> Result<(), ()> {
                 unsafe {
                     spdm::initialise_connection(cntx_ptr, slot_id).map_err(|e| {
                         error!("Failed to initialise an SPDM connection: 0x{:x}", e);
-                        ()
                     })?;
                     spdm::start_session(cntx_ptr, slot_id, use_psk_exchange).map_err(|e| {
                         error!("Failed to start session: 0x{:x}", e);
-                        ()
                     })?
                 }
             };
@@ -789,7 +785,6 @@ async fn main() -> Result<(), ()> {
                 unsafe {
                     spdm::get_negotiated_algos(cntx_ptr, slot_id).map_err(|e| {
                         error!("Failed to negotiate algorithms: 0x{:x}", e);
-                        ()
                     })?
                 }
             };
@@ -805,7 +800,6 @@ async fn main() -> Result<(), ()> {
                 )
                 .map_err(|e| {
                     error!("Failed to do {:?} - 0x{e:x}", req);
-                    ()
                 })?;
             }
         }
@@ -870,7 +864,6 @@ async fn main() -> Result<(), ()> {
             let ver = Some(
                 cli_helpers::parse_spdm_responder_version(spdm_ver).ok_or_else(|| {
                     error!("Unsupported/Invalid SPDM version");
-                    ()
                 })?,
             );
             responder::setup_capabilities(
@@ -887,7 +880,6 @@ async fn main() -> Result<(), ()> {
             responder::set_supported_slots_mask(num_provisioned_slots, ver, cntx_ptr).map_err(
                 |_| {
                     error!("failed to set supported slot mask");
-                    ()
                 },
             )?;
 
@@ -896,7 +888,7 @@ async fn main() -> Result<(), ()> {
             if let Some(t) = tasks {
                 let results = join_all(t).await;
 
-                if results.iter().find(|&res| res.is_err()).is_some() {
+                if results.iter().any(|res| res.is_err()) {
                     error!("Error generating image measurements");
                     return Err(());
                 }

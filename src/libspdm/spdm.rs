@@ -94,7 +94,7 @@ impl Default for DynamicImageMeasurements {
 
 #[cfg(not(feature = "no_std"))]
 pub static DYN_IMAGE_MEASURE: RwLock<Lazy<DynamicImageMeasurements>> =
-    RwLock::new(Lazy::new(|| DynamicImageMeasurements::default()));
+    RwLock::new(Lazy::new(DynamicImageMeasurements::default));
 
 pub struct LibspdmReturnStatus;
 pub struct SpdmVersionNumber(pub u16);
@@ -629,7 +629,7 @@ pub fn process_cbor_measurement_manifest(
     print_measurement_manifest(measurement_manifest, false)?;
 
     let spdm_toc =
-        manifest::generate_direct_manifest(context, slot_id, &measurement_manifest).unwrap();
+        manifest::generate_direct_manifest(context, slot_id, measurement_manifest).unwrap();
 
     let mut direct_manifest = [0u8; 1024];
     let original_len = measurement_manifest.len();
@@ -661,7 +661,7 @@ fn print_measurement_manifest(measurement_manifest: &[u8], direct: bool) -> Resu
     );
 
     // Save the manifest in CBOR diagnostic format
-    match manifest::decode_cbor_manifest(&measurement_manifest, false) {
+    match manifest::decode_cbor_manifest(measurement_manifest, false) {
         Ok(decoded_bytes) => {
             let path = if direct {
                 Path::new("manifest/responder_manifest.cbor")
@@ -689,7 +689,7 @@ fn print_measurement_manifest(measurement_manifest: &[u8], direct: bool) -> Resu
     }
 
     // Save the manifest in pretty format
-    match manifest::decode_cbor_manifest(&measurement_manifest, true) {
+    match manifest::decode_cbor_manifest(measurement_manifest, true) {
         Ok(decoded_bytes) => {
             let path = if direct {
                 Path::new("manifest/responder_manifest.pretty")
@@ -940,7 +940,7 @@ pub unsafe fn get_measurement(
     let measurement_record_ptr: *mut c_void = measurement_record as *mut _ as *mut c_void;
     let mut decode_measurement_manifest = true;
 
-    if measurement_index as u32 == SPDM_MEASUREMENT_BLOCK_MEASUREMENT_INDEX_MEASUREMENT_MANIFEST
+    if measurement_index == SPDM_MEASUREMENT_BLOCK_MEASUREMENT_INDEX_MEASUREMENT_MANIFEST
         && !raw_bitstream
     {
         warn!("The measurement manifest will not be decoded unless fetched as raw-bitstream!");
@@ -2359,7 +2359,7 @@ pub unsafe extern "C" fn libspdm_psk_handshake_secret_hkdf_expand(
     // If no psk-hint or if the psk-hint matches what we expect
     // use the `TestPskData` data. Otherwise return an error
     if psk_hint_size == 0 || (psk_hint == PSK_HINT && psk_hint_size == PSK_LEN) {
-        psk = b"TestPskData\0".clone();
+        psk = *b"TestPskData\0";
         psk_size = psk.len();
     } else {
         return false;
@@ -2462,7 +2462,7 @@ pub unsafe extern "C" fn libspdm_psk_master_secret_hkdf_expand(
     // If no psk-hint or if the psk-hint matches what we expect
     // use the `TestPskData` data. Otherwise return an error
     if psk_hint_size == 0 || (psk_hint == PSK_HINT && psk_hint_size == PSK_LEN) {
-        psk = b"TestPskData\0".clone();
+        psk = *b"TestPskData\0";
         psk_size = psk.len();
     } else {
         return false;
@@ -2747,14 +2747,8 @@ pub unsafe extern "C" fn libspdm_gen_csr_ex(
     assert!(*csr_tracking_tag == 0);
     // TODO: Overwrite is not supported
     assert!(!overwrite);
-    let is_device_cert_model = {
-        if req_cert_model == 1 {
-            true
-        } else {
-            false
-        }
-    };
-    return libspdm_gen_csr(
+    let is_device_cert_model = { req_cert_model == 1 };
+    libspdm_gen_csr(
         spdm_context,
         base_hash_algo,
         base_asym_algo,
@@ -2768,7 +2762,7 @@ pub unsafe extern "C" fn libspdm_gen_csr_ex(
         csr_len,
         csr_pointer,
         is_device_cert_model,
-    );
+    )
 }
 
 #[cfg(test)]
@@ -3137,7 +3131,7 @@ pub unsafe fn requester_respond_if_ready(
         return Err(LIBSPDM_STATUS_INVALID_MSG_FIELD);
     }
 
-    if u32::try_from((*spdm_response).request_response_code).unwrap() == libspdm_rs::SPDM_ERROR {
+    if u32::from((*spdm_response).request_response_code) == libspdm_rs::SPDM_ERROR {
         // TODO: This request will typically fail here, as
         // SPDM-Utils responder is not expecting a RespondIfReady.
         let ret =

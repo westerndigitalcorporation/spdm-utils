@@ -380,7 +380,6 @@ pub fn register_device(
                     "New connection: {}",
                     client_conn.peer_addr().map_err(|e| {
                         error!("Failed to get socket address: {e:?}");
-                        ()
                     })?
                 );
                 *(CLIENT_CONNECTION.lock().unwrap()) = Some(client_conn);

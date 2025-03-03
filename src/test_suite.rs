@@ -475,13 +475,10 @@ pub fn test_set_certificate(cntx: *mut c_void, cert_slot_id: u8) -> Result<(), (
     ];
 
     for artifact in csr_artifacts {
-        match std::fs::remove_file(artifact) {
-            Err(e) => {
-                if e.kind() == std::io::ErrorKind::NotFound {
-                    warn!("{:?}: does not exist", artifact)
-                }
+        if let Err(e) = std::fs::remove_file(artifact) {
+            if e.kind() == std::io::ErrorKind::NotFound {
+                warn!("{:?}: does not exist", artifact)
             }
-            _ => {}
         }
     }
 

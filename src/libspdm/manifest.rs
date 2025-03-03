@@ -77,7 +77,7 @@ impl Manifest {
 ///
 /// Panics on any errors related to failed file I/Os
 pub fn fetch_local_manifest(buffer: &mut [u8], path: &Path) -> Result<usize, ()> {
-    let len = Manifest::read_manifest_from_file(buffer, &path).expect("failed to read manifest");
+    let len = Manifest::read_manifest_from_file(buffer, path).expect("failed to read manifest");
     Ok(len)
 }
 
@@ -96,7 +96,7 @@ pub fn fetch_local_manifest(buffer: &mut [u8], path: &Path) -> Result<usize, ()>
 /// Ok(()) on success, panics on file IO errors
 pub fn save_manifest_to_file(buffer: &[u8], path: &Path) -> Result<(), ()> {
     let mut file = File::create(path).expect("failed to create output manifest file");
-    file.write_all(&buffer)
+    file.write_all(buffer)
         .expect("failed to write manifest to file");
     Ok(())
 }
@@ -153,11 +153,11 @@ pub fn decode_cbor_manifest(buffer: &[u8], use_pretty: bool) -> Result<Vec<u8>, 
 
             _ = child.wait().unwrap();
 
-            return Ok(decoded_cbor);
+            Ok(decoded_cbor)
         }
         Err(e) => {
             error!("Ruby script {script} not found : error {}", e);
-            return Err(());
+            Err(())
         }
     }
 }
@@ -284,7 +284,7 @@ pub fn generate_direct_manifest(
     slot_id: u8,
     measurement_manifest: &[u8],
 ) -> Result<SpdmToc, minicbor::decode::Error> {
-    let mut spdm_toc: SpdmToc<'_> = minicbor::decode(&measurement_manifest)?;
+    let mut spdm_toc: SpdmToc<'_> = minicbor::decode(measurement_manifest)?;
     let ce_ev_triples = &mut spdm_toc
         .value_mut()
         .tagged_evidence
@@ -352,10 +352,10 @@ pub fn generate_direct_manifest(
                     measurement_map.mval.version = Some(std::str::from_utf8(msg_buf).unwrap());
                 }
                 SVN => {
-                    let value = measurement_record[measurement_offset + 0] as i64
-                        | (measurement_record[measurement_offset + 1] as i64) << 8
-                        | (measurement_record[measurement_offset + 2] as i64) << 16
-                        | (measurement_record[measurement_offset + 3] as i64) << 24;
+                    let value = measurement_record[measurement_offset] as i64
+                        | ((measurement_record[measurement_offset + 1] as i64) << 8)
+                        | ((measurement_record[measurement_offset + 2] as i64) << 16)
+                        | ((measurement_record[measurement_offset + 3] as i64) << 24);
 
                     measurement_map.mval.svn = Some(Tagged::<552, i64>::new(value));
                 }

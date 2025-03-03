@@ -59,17 +59,14 @@ pub unsafe extern "C" fn acquire_sender_buffer(
     _context: *mut c_void,
     msg_buf_ptr: *mut *mut c_void,
 ) -> u32 {
-    match *SEND_BUFFER.lock().unwrap() {
-        Some(ref buf) => {
-            let buf_ptr = buf.as_ptr() as *mut c_void;
-            *msg_buf_ptr = buf_ptr;
-            return 0;
-        }
-        None => {}
+    if let Some(ref buf) = *SEND_BUFFER.lock().unwrap() {
+        let buf_ptr = buf.as_ptr() as *mut c_void;
+        *msg_buf_ptr = buf_ptr;
+        return 0;
     }
 
     error!("Sender buffer is lost or not initialized");
-    return 1;
+    1
 }
 
 /// # Summary
@@ -90,16 +87,13 @@ pub unsafe extern "C" fn acquire_receiver_buffer(
     _context: *mut c_void,
     msg_buf_ptr: *mut *mut c_void,
 ) -> u32 {
-    match *RECEIVE_BUFFER.lock().unwrap() {
-        Some(ref buf) => {
-            let buf_ptr = buf.as_ptr() as *mut c_void;
-            *msg_buf_ptr = buf_ptr;
-            return 0;
-        }
-        None => {}
+    if let Some(ref buf) = *RECEIVE_BUFFER.lock().unwrap() {
+        let buf_ptr = buf.as_ptr() as *mut c_void;
+        *msg_buf_ptr = buf_ptr;
+        return 0;
     }
     error!("Receiver buffer is lost or not initialized");
-    return 1;
+    1
 }
 
 /// We are only passing a reference to heap allocated memory, no-op required
