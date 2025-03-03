@@ -56,7 +56,7 @@ pub struct CertificateUsage {
 // TODO: Handle multiple entries
 fn spdm_cert_oids_parser(i: &[u8]) -> ParseResult<Oid> {
     Sequence::from_der_and_then(i, |i| {
-        return Ok((i, Oid::new(std::borrow::Cow::Borrowed(&i[4..]))));
+        Ok((i, Oid::new(std::borrow::Cow::Borrowed(&i[4..]))))
     })
 }
 
@@ -217,28 +217,27 @@ pub fn check_tcg_dice_evidence_binding(cert_slot_id: u8) -> Result<CertificateUs
                                 let next_x509 =
                                     next_pem.parse_x509().expect("X.509: decoding DER failed");
 
-                                match next_x509.get_extension_unique(&ID_SPDM_CERT_OIDS) {
-                                    Ok(Some(extension)) => {
-                                        // This contains id-spdm-cert-oids
-                                        let seq = spdm_cert_oids_parser(extension.value).unwrap();
+                                if let Ok(Some(extension)) =
+                                    next_x509.get_extension_unique(&ID_SPDM_CERT_OIDS)
+                                {
+                                    // This contains id-spdm-cert-oids
+                                    let seq = spdm_cert_oids_parser(extension.value).unwrap();
 
-                                        // TODO: Support multiple entries in id-spdm-cert-oids
-                                        if seq.1 != ID_DMTF_HARDWARE_IDENTITY {
-                                            cert_type = SPDMCertificateType::AlisasCertCA;
+                                    // TODO: Support multiple entries in id-spdm-cert-oids
+                                    if seq.1 != ID_DMTF_HARDWARE_IDENTITY {
+                                        cert_type = SPDMCertificateType::AlisasCertCA;
 
-                                            // As the next certificate is an Alias Intermediate
-                                            // Certificate, then this certificate is used to issue
-                                            // Intermediate CA certificates.
-                                            info!("    Used to sign ECA");
-                                            check_for_extended_key_usage(
-                                                &x509,
-                                                "tcg-dice-kp-eca",
-                                                &TCG_DICE_KP_ECA,
-                                            )?;
-                                            check_for_basic_contraints_ca(&x509, true)?;
-                                        }
+                                        // As the next certificate is an Alias Intermediate
+                                        // Certificate, then this certificate is used to issue
+                                        // Intermediate CA certificates.
+                                        info!("    Used to sign ECA");
+                                        check_for_extended_key_usage(
+                                            &x509,
+                                            "tcg-dice-kp-eca",
+                                            &TCG_DICE_KP_ECA,
+                                        )?;
+                                        check_for_basic_contraints_ca(&x509, true)?;
                                     }
-                                    _ => {}
                                 }
                             }
                         } else {
@@ -280,10 +279,8 @@ pub fn check_tcg_dice_evidence_binding(cert_slot_id: u8) -> Result<CertificateUs
                     // This chain is used to sign evidence
                     info!("    Used to sign Evidence");
                     usage.sign_evidence = true;
-                } else {
-                    if usage.sign_evidence {
-                        return Err(());
-                    }
+                } else if usage.sign_evidence {
+                    return Err(());
                 }
 
                 if let Ok(_extension) = check_for_extended_key_usage(
@@ -294,10 +291,8 @@ pub fn check_tcg_dice_evidence_binding(cert_slot_id: u8) -> Result<CertificateUs
                     // This chain is used to sign evidence
                     info!("    Used to sign Evidence");
                     usage.sign_evidence = true;
-                } else {
-                    if usage.sign_evidence {
-                        return Err(());
-                    }
+                } else if usage.sign_evidence {
+                    return Err(());
                 }
 
                 if let Ok(_extension) = check_for_extended_key_usage(
@@ -308,10 +303,8 @@ pub fn check_tcg_dice_evidence_binding(cert_slot_id: u8) -> Result<CertificateUs
                     // This chain is used to sign attestation
                     info!("    Used to sign Attestation");
                     usage.sign_attestation = true;
-                } else {
-                    if usage.sign_attestation {
-                        return Err(());
-                    }
+                } else if usage.sign_attestation {
+                    return Err(());
                 }
             }
 
@@ -373,10 +366,8 @@ pub fn check_tcg_dice_evidence_binding(cert_slot_id: u8) -> Result<CertificateUs
                     if !usage.sign_evidence {
                         return Err(());
                     }
-                } else {
-                    if usage.sign_evidence {
-                        return Err(());
-                    }
+                } else if usage.sign_evidence {
+                    return Err(());
                 }
 
                 if let Ok(_extension) = check_for_extended_key_usage(
@@ -389,10 +380,8 @@ pub fn check_tcg_dice_evidence_binding(cert_slot_id: u8) -> Result<CertificateUs
                     if !usage.sign_attestation {
                         return Err(());
                     }
-                } else {
-                    if usage.sign_attestation {
-                        return Err(());
-                    }
+                } else if usage.sign_attestation {
+                    return Err(());
                 }
             }
             SPDMCertificateType::LeafCert => {
@@ -404,8 +393,7 @@ pub fn check_tcg_dice_evidence_binding(cert_slot_id: u8) -> Result<CertificateUs
 
                         if other_key_usage
                             .iter()
-                            .find(|eku| **eku == ID_DMTF_EKU_RESPONDER_AUTH)
-                            .is_some()
+                            .any(|eku| *eku == ID_DMTF_EKU_RESPONDER_AUTH)
                         {
                             info!("    Used as a responder");
                             usage.sign_responses = true;
@@ -413,8 +401,7 @@ pub fn check_tcg_dice_evidence_binding(cert_slot_id: u8) -> Result<CertificateUs
 
                         if other_key_usage
                             .iter()
-                            .find(|eku| **eku == ID_DMTF_EKU_REQUESTER_AUTH)
-                            .is_some()
+                            .any(|eku| *eku == ID_DMTF_EKU_REQUESTER_AUTH)
                         {
                             info!("    Used as a requester");
                             usage.sign_requests = true;
@@ -464,10 +451,8 @@ pub fn check_tcg_dice_evidence_binding(cert_slot_id: u8) -> Result<CertificateUs
                     if !usage.sign_identity_challenge {
                         return Err(());
                     }
-                } else {
-                    if usage.sign_identity_challenge {
-                        return Err(());
-                    }
+                } else if usage.sign_identity_challenge {
+                    return Err(());
                 }
 
                 if let Ok(_extension) = check_for_extended_key_usage(
@@ -481,10 +466,8 @@ pub fn check_tcg_dice_evidence_binding(cert_slot_id: u8) -> Result<CertificateUs
                     if !usage.sign_evidence {
                         return Err(());
                     }
-                } else {
-                    if usage.sign_evidence {
-                        return Err(());
-                    }
+                } else if usage.sign_evidence {
+                    return Err(());
                 }
 
                 if let Ok(_extension) = check_for_extended_key_usage(
@@ -497,10 +480,8 @@ pub fn check_tcg_dice_evidence_binding(cert_slot_id: u8) -> Result<CertificateUs
                     if !usage.sign_attestation {
                         return Err(());
                     }
-                } else {
-                    if usage.sign_attestation {
-                        return Err(());
-                    }
+                } else if usage.sign_attestation {
+                    return Err(());
                 }
             }
         }

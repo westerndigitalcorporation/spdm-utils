@@ -292,7 +292,7 @@ pub unsafe fn get_doe_supported_devs() -> Option<Vec<PcieDevInfo>> {
             (PCI_FILL_IDENT | PCI_FILL_BASES | PCI_FILL_CLASS | PCI_FILL_EXT_CAPS) as i32,
         );
 
-        if let Ok(_) = get_doe_offset(device) {
+        if get_doe_offset(device).is_ok() {
             // Behold, it has DoE support
             let dev_name =
                 if let Some(name) = get_pcie_dev_name((*device).vendor_id, (*device).device_id) {
@@ -315,7 +315,7 @@ pub unsafe fn get_doe_supported_devs() -> Option<Vec<PcieDevInfo>> {
     }
 
     pci_cleanup(pacc);
-    if doe_supported_dev.len() == 0 {
+    if doe_supported_dev.is_empty() {
         return None;
     }
     Some(doe_supported_dev)
@@ -673,7 +673,6 @@ pub unsafe fn test_discovery_basic() -> Result<(), ()> {
     doe_wait_not_busy(device, doe_offset).map_err(|e| match e {
         DoeStatus::DoeStatusErr => {
             doe_issue_abort(device, doe_offset, true);
-            ()
         }
     })?;
 
@@ -686,8 +685,8 @@ pub unsafe fn test_discovery_basic() -> Result<(), ()> {
                 | (PCI_VENDOR_ID_PCI_SIG << DOE_HEADER1_OFST_VID),
             // We are sending 3DWs (inc 2 for header)
             header2: 3 << DOE_HEADER2_OFST_LEN,
-            dw0: doe_discovery_index << DOE_DISC_OFST_SHIFT
-                | (DOE_VERSION as u32) << DOE_REQUEST_VERSION_SHIFT,
+            dw0: (doe_discovery_index << DOE_DISC_OFST_SHIFT)
+                | ((DOE_VERSION as u32) << DOE_REQUEST_VERSION_SHIFT),
         }
     } else {
         DoeDiscoveryPacket {
@@ -715,7 +714,6 @@ pub unsafe fn test_discovery_basic() -> Result<(), ()> {
     doe_wait_status_dor(device, doe_offset).map_err(|e| match e {
         DoeStatus::DoeStatusErr => {
             doe_issue_abort(device, doe_offset, true);
-            ()
         }
     })?;
 
@@ -766,7 +764,6 @@ pub unsafe fn test_discovery_all() -> Result<(), ()> {
     doe_wait_not_busy(device, doe_offset).map_err(|e| match e {
         DoeStatus::DoeStatusErr => {
             doe_issue_abort(device, doe_offset, true);
-            ()
         }
     })?;
 
@@ -792,7 +789,6 @@ pub unsafe fn test_discovery_all() -> Result<(), ()> {
         doe_wait_not_busy(device, doe_offset).map_err(|e| match e {
             DoeStatus::DoeStatusErr => {
                 doe_issue_abort(device, doe_offset, true);
-                ()
             }
         })?;
 
@@ -897,7 +893,6 @@ pub unsafe fn test_discovery_error() -> Result<(), ()> {
     doe_wait_not_busy(device, doe_offset).map_err(|e| match e {
         DoeStatus::DoeStatusErr => {
             doe_issue_abort(device, doe_offset, true);
-            ()
         }
     })?;
 
@@ -911,8 +906,8 @@ pub unsafe fn test_discovery_error() -> Result<(), ()> {
                 | (PCI_VENDOR_ID_PCI_SIG << DOE_HEADER1_OFST_VID),
             // We are sending 3DWs (inc 2 for header)
             header2: 3 << DOE_HEADER2_OFST_LEN,
-            dw0: doe_discovery_index << DOE_DISC_OFST_SHIFT
-                | (DOE_VERSION as u32) << DOE_REQUEST_VERSION_SHIFT,
+            dw0: (doe_discovery_index << DOE_DISC_OFST_SHIFT)
+                | ((DOE_VERSION as u32) << DOE_REQUEST_VERSION_SHIFT),
         }
     } else {
         DoeDiscoveryPacket {
@@ -942,7 +937,6 @@ pub unsafe fn test_discovery_error() -> Result<(), ()> {
     doe_wait_status_dor(device, doe_offset).map_err(|e| match e {
         DoeStatus::DoeStatusErr => {
             doe_issue_abort(device, doe_offset, true);
-            ()
         }
     })?;
 

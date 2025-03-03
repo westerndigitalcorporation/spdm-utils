@@ -59,7 +59,6 @@ pub fn parse_pcie_identifiers(vid: String, dev_id: String) -> Result<(u16, u16),
 
         u16::from_str_radix(id, base).map_err(|e| {
             error!("Invalid PCIe {id_type}: {:} - err {:?}", id, e);
-            ()
         })
     }
 
@@ -122,14 +121,12 @@ pub fn parse_aead_cipher_suite(aead_cipher_suites: Option<String>) -> Result<u16
                 libspdm_aead_cipher_suites |=
                     u16::try_from(SPDM_ALGORITHMS_AEAD_CIPHER_SUITE_AES_128_GCM).map_err(|e| {
                         error!("AEAD type conversion error: {e}");
-                        ()
                     })?;
             }
             "AES_256_GCM" => {
                 libspdm_aead_cipher_suites |=
                     u16::try_from(SPDM_ALGORITHMS_AEAD_CIPHER_SUITE_AES_256_GCM).map_err(|e| {
                         error!("AEAD type conversion error: {e}");
-                        ()
                     })?;
             }
             "CHACHA20_POLY1305" => {
@@ -138,14 +135,12 @@ pub fn parse_aead_cipher_suite(aead_cipher_suites: Option<String>) -> Result<u16
                 )
                 .map_err(|e| {
                     error!("AEAD type conversion error: {e}");
-                    ()
                 })?;
             }
             "AEAD_SM4_GCM" => {
                 libspdm_aead_cipher_suites |=
                     u16::try_from(SPDM_ALGORITHMS_AEAD_CIPHER_SUITE_AEAD_SM4_GCM).map_err(|e| {
                         error!("AEAD type conversion error: {e}");
-                        ()
                     })?;
             }
             _ => {
@@ -197,49 +192,42 @@ pub fn parse_dhe_named_groups(dhe_groups: Option<String>) -> Result<u16, ()> {
                 libspdm_dhe_groups |= u16::try_from(SPDM_ALGORITHMS_DHE_NAMED_GROUP_FFDHE_2048)
                     .map_err(|e| {
                         error!("DHE type conversion error: {e}");
-                        ()
                     })?;
             }
             "FFDHE_3072" => {
                 libspdm_dhe_groups |= u16::try_from(SPDM_ALGORITHMS_DHE_NAMED_GROUP_FFDHE_3072)
                     .map_err(|e| {
                         error!("DHE type conversion error: {e}");
-                        ()
                     })?;
             }
             "FFDHE_4096" => {
                 libspdm_dhe_groups |= u16::try_from(SPDM_ALGORITHMS_DHE_NAMED_GROUP_FFDHE_4096)
                     .map_err(|e| {
                         error!("DHE type conversion error: {e}");
-                        ()
                     })?;
             }
             "SECP_256_R1" => {
                 libspdm_dhe_groups |= u16::try_from(SPDM_ALGORITHMS_DHE_NAMED_GROUP_SECP_256_R1)
                     .map_err(|e| {
                         error!("DHE type conversion error: {e}");
-                        ()
                     })?;
             }
             "SECP_384_R1" => {
                 libspdm_dhe_groups |= u16::try_from(SPDM_ALGORITHMS_DHE_NAMED_GROUP_SECP_384_R1)
                     .map_err(|e| {
                         error!("DHE type conversion error: {e}");
-                        ()
                     })?;
             }
             "SECP_521_R1" => {
                 libspdm_dhe_groups |= u16::try_from(SPDM_ALGORITHMS_DHE_NAMED_GROUP_SECP_521_R1)
                     .map_err(|e| {
                         error!("DHE type conversion error: {e}");
-                        ()
                     })?;
             }
             "SM2_P256" => {
                 libspdm_dhe_groups |= u16::try_from(SPDM_ALGORITHMS_DHE_NAMED_GROUP_SM2_P256)
                     .map_err(|e| {
                         error!("DHE type conversion error: {e}");
-                        ()
                     })?;
             }
             _ => {
