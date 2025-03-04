@@ -808,7 +808,6 @@ pub unsafe fn test_discovery_all() -> Result<(), ()> {
         doe_wait_status_dor(device, doe_offset).map_err(|e| match e {
             DoeStatus::DoeStatusErr => {
                 doe_issue_abort(device, doe_offset, true);
-                ();
             }
         })?;
         // Read and Print Response
