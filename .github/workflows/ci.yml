@@ -71,11 +71,10 @@ jobs:
           sleep 1; \
           ./target/debug/spdm_utils --socket-client tests;
 
-      # TODO: Fixup clippy failures and enable this
-      # - name: Clippy
-      #   uses: actions-rs/cargo@v1
-      #   with:
-      #     command: clippy
+      - name: Clippy
+        uses: actions-rs/cargo@v1
+        with:
+          command: clippy
 
       - name: Format Tock Responder
         run: pushd tock-responder && cargo fmt --all -- --check && popd
