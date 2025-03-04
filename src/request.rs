@@ -349,6 +349,7 @@ pub fn prepare_request(
                     .read(true)
                     .write(true)
                     .create(true)
+                    .truncate(true)
                     .open(path)
                 {
                     Err(why) => {
@@ -605,6 +606,7 @@ pub fn prepare_request(
                     .read(true)
                     .write(true)
                     .create(true)
+                    .truncate(true)
                     .open(path)
                 {
                     Err(why) => {

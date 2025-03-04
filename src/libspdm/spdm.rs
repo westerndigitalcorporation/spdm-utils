@@ -1265,6 +1265,7 @@ pub unsafe extern "C" fn libspdm_write_certificate_to_nvm(
             .read(true)
             .write(true)
             .create(true)
+            .truncate(true)
             .open(path)
         {
             Err(why) => panic!("couldn't open {}: {}", path.display(), why),
@@ -2509,7 +2510,7 @@ pub unsafe extern "C" fn libspdm_psk_master_secret_hkdf_expand(
         base_hash_algo,
         handshake_ptr,
         hash_size,
-        m_libspdm_bin_str0.as_ptr() as *const u8,
+        m_libspdm_bin_str0.as_ptr(),
         m_libspdm_bin_str0_len,
         salt1.as_mut_ptr(),
         hash_size,
@@ -2832,7 +2833,7 @@ pub unsafe fn get_local_certchain(
     let cert_chain_layout = Layout::from_size_align(cert_chain_size, 8).unwrap();
     let cert_chain_buffer = alloc(cert_chain_layout);
 
-    assert!(cert_chain_buffer != ptr::null_mut());
+    assert!(!cert_chain_buffer.is_null());
 
     let cert_chain = cert_chain_buffer as *mut libspdm_rs::spdm_cert_chain_t;
 
@@ -3051,7 +3052,7 @@ pub unsafe fn requester_respond_if_ready(
 
     let ret = libspdm_rs::libspdm_acquire_sender_buffer(
         cntx_ptr as *mut libspdm_rs::libspdm_context_t,
-        &mut msg_size as *mut _ as *mut usize,
+        &mut msg_size,
         msg_ptr_ptr,
     );
     if LibspdmReturnStatus::libspdm_status_is_error(ret) {
@@ -3100,7 +3101,7 @@ pub unsafe fn requester_respond_if_ready(
 
     let ret = libspdm_rs::libspdm_acquire_receiver_buffer(
         cntx_ptr as *mut libspdm_rs::libspdm_context_t,
-        &mut response_size as *mut _ as *mut usize,
+        &mut response_size,
         response_ptr_ptr,
     );
     if LibspdmReturnStatus::libspdm_status_is_error(ret) {

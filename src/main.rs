@@ -117,7 +117,7 @@ enum Commands {
         ///
         ///  - [GET_VERSION or get-version]
         ///
-        ///  - [GET_MEASUREMENT or get-measurement]:
+        ///  - [GET_MEASUREMENT or get-measurement]
         ///     `get-measurement[index=<measurement-index>,raw-bitstream]`
         ///
         ///     This request takes an index argument to specify

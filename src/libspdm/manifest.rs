@@ -120,13 +120,11 @@ pub fn save_manifest_to_file(buffer: &[u8], path: &Path) -> Result<(), ()> {
 ///
 /// Panics on any errors related invoking `cbor-diag`
 pub fn decode_cbor_manifest(buffer: &[u8], use_pretty: bool) -> Result<Vec<u8>, ()> {
-    let script;
-
-    if use_pretty {
-        script = "cbor2pretty.rb";
+    let script = if use_pretty {
+        "cbor2pretty.rb"
     } else {
-        script = "cbor2diag.rb";
-    }
+        "cbor2diag.rb"
+    };
 
     match which(script) {
         Ok(_) => {
@@ -139,6 +137,7 @@ pub fn decode_cbor_manifest(buffer: &[u8], use_pretty: bool) -> Result<Vec<u8>, 
             if let Some(mut stdin) = child.stdin.take() {
                 stdin.write_all(buffer).unwrap();
             } else {
+                child.wait().unwrap();
                 return Err(());
             }
 
@@ -148,6 +147,7 @@ pub fn decode_cbor_manifest(buffer: &[u8], use_pretty: bool) -> Result<Vec<u8>, 
                     .read_to_end(&mut decoded_cbor)
                     .expect("failed to read stdout");
             } else {
+                child.wait().unwrap();
                 return Err(());
             }
 

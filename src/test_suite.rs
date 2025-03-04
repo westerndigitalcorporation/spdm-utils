@@ -272,7 +272,7 @@ pub fn request_all_measurements(cntx: *mut c_void) -> Result<(), u32> {
                     if raw_bitstream && (measurement_value_type & libspdm::libspdm_rs::SPDM_MEASUREMENT_BLOCK_MEASUREMENT_TYPE_RAW_BIT_STREAM == 0) {
                         // Bit [7] not set -> Responder returned a hash
                         warn!("Requested {format} for index {measurement_index}, responder returned hash only!");
-                    } else if !raw_bitstream && (measurement_value_type & libspdm::libspdm_rs::SPDM_MEASUREMENT_BLOCK_MEASUREMENT_TYPE_RAW_BIT_STREAM == 1) {
+                    } else if !raw_bitstream && (measurement_value_type & libspdm::libspdm_rs::SPDM_MEASUREMENT_BLOCK_MEASUREMENT_TYPE_RAW_BIT_STREAM == libspdm::libspdm_rs::SPDM_MEASUREMENT_BLOCK_MEASUREMENT_TYPE_RAW_BIT_STREAM) {
                         // Bit [7] set -> Responder returned a Raw-bitstream
                         warn!("Requested {format} for index {measurement_index}, responder returned raw-bitstream!");
                     }
@@ -449,8 +449,7 @@ pub fn test_set_certificate(cntx: *mut c_void, cert_slot_id: u8) -> Result<(), (
     ) {
         // This cannot be the `reset-required` error case, as it is checked by
         // 'prepare_request()` and treated as success.
-        error!("Failed to set certificate with libspdm error: 0x{:x}", rc);
-        assert!(false);
+        panic!("Failed to set certificate with libspdm error: 0x{:x}", rc);
     }
 
     info!("Device Certificate successfully set for slot {cert_slot_id}");

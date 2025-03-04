@@ -145,7 +145,7 @@ unsafe extern "C" fn usb_i2c_send_message(
 
             // Write out the data buffer
             let mut port = SERIAL_PORT.lock().unwrap().take().unwrap();
-            port.write(&send_buf).expect("Write failed!");
+            port.write_all(&send_buf).expect("Write failed!");
             info!("Sent!");
 
             *SERIAL_PORT.lock().unwrap() = Some(port);
