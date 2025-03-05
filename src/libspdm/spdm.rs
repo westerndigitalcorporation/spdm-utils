@@ -480,30 +480,36 @@ pub unsafe fn setup_transport_layer(
 ) -> Result<(), ()> {
     match trans {
         TransportLayer::Doe => {
-            libspdm_register_transport_layer_func(
-                context,
-                libspdm_max_spdm_msg_size
-                    - (LIBSPDM_PCI_DOE_TRANSPORT_HEADER_SIZE + LIBSPDM_PCI_DOE_TRANSPORT_TAIL_SIZE),
-                LIBSPDM_PCI_DOE_TRANSPORT_HEADER_SIZE,
-                LIBSPDM_PCI_DOE_TRANSPORT_TAIL_SIZE,
-                Some(libspdm_transport_pci_doe_encode_message),
-                Some(libspdm_transport_pci_doe_decode_message),
-            );
+            unsafe {
+                libspdm_register_transport_layer_func(
+                    context,
+                    libspdm_max_spdm_msg_size
+                        - (LIBSPDM_PCI_DOE_TRANSPORT_HEADER_SIZE
+                            + LIBSPDM_PCI_DOE_TRANSPORT_TAIL_SIZE),
+                    LIBSPDM_PCI_DOE_TRANSPORT_HEADER_SIZE,
+                    LIBSPDM_PCI_DOE_TRANSPORT_TAIL_SIZE,
+                    Some(libspdm_transport_pci_doe_encode_message),
+                    Some(libspdm_transport_pci_doe_decode_message),
+                )
+            };
         }
         TransportLayer::Mctp => {
-            libspdm_register_transport_layer_func(
-                context,
-                libspdm_max_spdm_msg_size
-                    - (LIBSPDM_MCTP_TRANSPORT_HEADER_SIZE + LIBSPDM_MCTP_TRANSPORT_TAIL_SIZE),
-                LIBSPDM_MCTP_TRANSPORT_HEADER_SIZE,
-                LIBSPDM_MCTP_TRANSPORT_TAIL_SIZE,
-                Some(libspdm_transport_mctp_encode_message),
-                Some(libspdm_transport_mctp_decode_message),
-            );
+            unsafe {
+                libspdm_register_transport_layer_func(
+                    context,
+                    libspdm_max_spdm_msg_size
+                        - (LIBSPDM_MCTP_TRANSPORT_HEADER_SIZE + LIBSPDM_MCTP_TRANSPORT_TAIL_SIZE),
+                    LIBSPDM_MCTP_TRANSPORT_HEADER_SIZE,
+                    LIBSPDM_MCTP_TRANSPORT_TAIL_SIZE,
+                    Some(libspdm_transport_mctp_encode_message),
+                    Some(libspdm_transport_mctp_decode_message),
+                )
+            };
         }
     }
 
-    let libspdm_scratch_buffer_size = libspdm_get_sizeof_required_scratch_buffer(context);
+    let libspdm_scratch_buffer_size =
+        unsafe { libspdm_get_sizeof_required_scratch_buffer(context) };
     let libspdm_scratch_buffer_layout =
         match Layout::from_size_align(libspdm_scratch_buffer_size, 8) {
             Ok(layout) => layout,
@@ -512,7 +518,7 @@ pub unsafe fn setup_transport_layer(
                 return Err(());
             }
         };
-    let libspdm_scratch_buffer = alloc(libspdm_scratch_buffer_layout);
+    let libspdm_scratch_buffer = unsafe { alloc(libspdm_scratch_buffer_layout) };
 
     if libspdm_scratch_buffer.is_null() {
         error!("Unable to allocate libspdm scratch buffer");
@@ -521,11 +527,13 @@ pub unsafe fn setup_transport_layer(
 
     let libspdm_scratch_buffer_ptr: *mut c_void = libspdm_scratch_buffer as *mut _ as *mut c_void;
 
-    libspdm_set_scratch_buffer(
-        context,
-        libspdm_scratch_buffer_ptr,
-        libspdm_scratch_buffer_size,
-    );
+    unsafe {
+        libspdm_set_scratch_buffer(
+            context,
+            libspdm_scratch_buffer_ptr,
+            libspdm_scratch_buffer_size,
+        )
+    };
 
     Ok(())
 }
@@ -544,7 +552,7 @@ pub unsafe fn setup_transport_layer(
 /// Ok(()) on success
 /// Err(ret), where ret is a libspdm return status indicating an error.
 pub unsafe fn initialise_connection(context: *mut c_void, slot_id: u8) -> Result<(), u32> {
-    let ret = libspdm_init_connection(context, false);
+    let ret = unsafe { libspdm_init_connection(context, false) };
 
     if LibspdmReturnStatus::libspdm_status_is_error(ret) {
         error!("libspdm_init_connection: failed with {:x?}", ret);
@@ -556,12 +564,14 @@ pub unsafe fn initialise_connection(context: *mut c_void, slot_id: u8) -> Result
         [0; (LIBSPDM_MAX_HASH_SIZE * SPDM_MAX_SLOT_COUNT) as usize];
     let total_digest_buffer_ptr: *mut c_void = &mut total_digest_buffer as *mut _ as *mut c_void;
 
-    let ret = libspdm_get_digest(
-        context,
-        ptr::null_mut(),
-        &mut slot_mask,
-        total_digest_buffer_ptr,
-    );
+    let ret = unsafe {
+        libspdm_get_digest(
+            context,
+            ptr::null_mut(),
+            &mut slot_mask,
+            total_digest_buffer_ptr,
+        )
+    };
 
     if LibspdmReturnStatus::libspdm_status_is_error(ret) {
         error!("libspdm_get_digest(): failed with {:x?}", ret);
@@ -573,13 +583,15 @@ pub unsafe fn initialise_connection(context: *mut c_void, slot_id: u8) -> Result
         [0; LIBSPDM_MAX_CERT_CHAIN_SIZE as usize];
     let cert_chain_ptr: *mut c_void = &mut cert_chain as *mut _ as *mut c_void;
 
-    let ret = libspdm_get_certificate(
-        context,
-        ptr::null_mut(),
-        slot_id,
-        &mut cert_chain_size,
-        cert_chain_ptr,
-    );
+    let ret = unsafe {
+        libspdm_get_certificate(
+            context,
+            ptr::null_mut(),
+            slot_id,
+            &mut cert_chain_size,
+            cert_chain_ptr,
+        )
+    };
 
     if LibspdmReturnStatus::libspdm_status_is_error(ret) {
         error!("libspdm_get_certificate(): failed with {:x?}", ret);
@@ -590,14 +602,16 @@ pub unsafe fn initialise_connection(context: *mut c_void, slot_id: u8) -> Result
         [0; LIBSPDM_MAX_HASH_SIZE as usize];
     let measurement_hash_ptr: *mut c_void = &mut measurement_hash as *mut _ as *mut c_void;
 
-    let ret = libspdm_challenge(
-        context,
-        ptr::null_mut(),
-        slot_id,
-        SPDM_CHALLENGE_REQUEST_TCB_COMPONENT_MEASUREMENT_HASH as u8,
-        measurement_hash_ptr,
-        ptr::null_mut(),
-    );
+    let ret = unsafe {
+        libspdm_challenge(
+            context,
+            ptr::null_mut(),
+            slot_id,
+            SPDM_CHALLENGE_REQUEST_TCB_COMPONENT_MEASUREMENT_HASH as u8,
+            measurement_hash_ptr,
+            ptr::null_mut(),
+        )
+    };
 
     if LibspdmReturnStatus::libspdm_status_is_error(ret) {
         error!("libspdm_challenge(): failed with {:x?}", ret);
@@ -740,17 +754,19 @@ pub unsafe fn get_measurements(context: *mut c_void, slot_id: u8) -> Result<(), 
     let mut num_measures: u8 = 0;
 
     // Get the total number of measurements
-    let ret = libspdm_get_measurement(
-        context,
-        ptr::null_mut(),
-        request_attribute,
-        SPDM_GET_MEASUREMENTS_REQUEST_MEASUREMENT_OPERATION_TOTAL_NUMBER_OF_MEASUREMENTS as u8,
-        slot_id,
-        ptr::null_mut(),
-        &mut num_measures,
-        ptr::null_mut(),
-        ptr::null_mut(),
-    );
+    let ret = unsafe {
+        libspdm_get_measurement(
+            context,
+            ptr::null_mut(),
+            request_attribute,
+            SPDM_GET_MEASUREMENTS_REQUEST_MEASUREMENT_OPERATION_TOTAL_NUMBER_OF_MEASUREMENTS as u8,
+            slot_id,
+            ptr::null_mut(),
+            &mut num_measures,
+            ptr::null_mut(),
+            ptr::null_mut(),
+        )
+    };
 
     if LibspdmReturnStatus::libspdm_status_is_error(ret) {
         return Err(ret);
@@ -775,17 +791,19 @@ pub unsafe fn get_measurements(context: *mut c_void, slot_id: u8) -> Result<(), 
                 libspdm_rs::SPDM_GET_MEASUREMENTS_REQUEST_ATTRIBUTES_GENERATE_SIGNATURE as u8;
         }
 
-        let ret = libspdm_get_measurement(
-            context,
-            ptr::null_mut(),
-            request_attribute,
-            measurement_index as u8,
-            slot_id,
-            ptr::null_mut(),
-            &mut number_of_blocks,
-            &mut measurement_record_length,
-            measurement_record_ptr,
-        );
+        let ret = unsafe {
+            libspdm_get_measurement(
+                context,
+                ptr::null_mut(),
+                request_attribute,
+                measurement_index as u8,
+                slot_id,
+                ptr::null_mut(),
+                &mut number_of_blocks,
+                &mut measurement_record_length,
+                measurement_record_ptr,
+            )
+        };
 
         if LibspdmReturnStatus::libspdm_status_is_success(ret) {
             // If it was a success, reduce the number of measures
@@ -847,17 +865,19 @@ pub unsafe fn get_measurements(context: *mut c_void, slot_id: u8) -> Result<(), 
                 libspdm_rs::SPDM_GET_MEASUREMENTS_REQUEST_ATTRIBUTES_GENERATE_SIGNATURE as u8;
         }
 
-        let ret = libspdm_get_measurement(
-            context,
-            ptr::null_mut(),
-            request_attribute,
-            SPDM_GET_MEASUREMENTS_REQUEST_MEASUREMENT_OPERATION_ALL_MEASUREMENTS as u8,
-            slot_id,
-            ptr::null_mut(),
-            &mut number_of_blocks,
-            &mut measurement_record_length,
-            measurement_record_ptr,
-        );
+        let ret = unsafe {
+            libspdm_get_measurement(
+                context,
+                ptr::null_mut(),
+                request_attribute,
+                SPDM_GET_MEASUREMENTS_REQUEST_MEASUREMENT_OPERATION_ALL_MEASUREMENTS as u8,
+                slot_id,
+                ptr::null_mut(),
+                &mut number_of_blocks,
+                &mut measurement_record_length,
+                measurement_record_ptr,
+            )
+        };
 
         if LibspdmReturnStatus::libspdm_status_is_error(ret) {
             return Err(ret);
@@ -893,17 +913,19 @@ pub unsafe fn get_num_meas_blocks(
     let request_attribute =
         libspdm_rs::SPDM_GET_MEASUREMENTS_REQUEST_ATTRIBUTES_GENERATE_SIGNATURE as u8;
 
-    let ret = libspdm_get_measurement(
-        context,
-        ptr::null_mut(),
-        request_attribute,
-        SPDM_GET_MEASUREMENTS_REQUEST_MEASUREMENT_OPERATION_TOTAL_NUMBER_OF_MEASUREMENTS as u8,
-        slot_id,
-        ptr::null_mut(),
-        &mut number_of_blocks,
-        &mut measurement_record_length,
-        measurement_record_ptr,
-    );
+    let ret = unsafe {
+        libspdm_get_measurement(
+            context,
+            ptr::null_mut(),
+            request_attribute,
+            SPDM_GET_MEASUREMENTS_REQUEST_MEASUREMENT_OPERATION_TOTAL_NUMBER_OF_MEASUREMENTS as u8,
+            slot_id,
+            ptr::null_mut(),
+            &mut number_of_blocks,
+            &mut measurement_record_length,
+            measurement_record_ptr,
+        )
+    };
 
     if LibspdmReturnStatus::libspdm_status_is_error(ret) {
         return Err(ret);
@@ -953,17 +975,19 @@ pub unsafe fn get_measurement(
         libspdm_rs::SPDM_GET_MEASUREMENTS_REQUEST_ATTRIBUTES_GENERATE_SIGNATURE as u8
     };
 
-    let ret = libspdm_get_measurement(
-        context,
-        ptr::null_mut(),
-        request_attribute,
-        measurement_index as u8,
-        slot_id,
-        ptr::null_mut(),
-        &mut number_of_blocks,
-        &mut measurement_record_length,
-        measurement_record_ptr,
-    );
+    let ret = unsafe {
+        libspdm_get_measurement(
+            context,
+            ptr::null_mut(),
+            request_attribute,
+            measurement_index as u8,
+            slot_id,
+            ptr::null_mut(),
+            &mut number_of_blocks,
+            &mut measurement_record_length,
+            measurement_record_ptr,
+        )
+    };
 
     if LibspdmReturnStatus::libspdm_status_is_error(ret) {
         return Err(ret);
@@ -1036,18 +1060,20 @@ pub unsafe fn start_session(
         [0; LIBSPDM_MAX_HASH_SIZE as usize];
     let measurement_hash_ptr: *mut c_void = &mut measurement_hash as *mut _ as *mut c_void;
 
-    let ret = libspdm_start_session(
-        context,
-        session_info.use_psk, // KeyExchange
-        &PSK_HINT as *const _ as *const c_void,
-        PSK_LEN as u16,
-        session_info.measurement_hash_type,
-        session_info.slot_id,
-        session_info.session_policy,
-        &mut session_info.session_id,
-        &mut session_info.heartbeat_period,
-        measurement_hash_ptr,
-    );
+    let ret = unsafe {
+        libspdm_start_session(
+            context,
+            session_info.use_psk, // KeyExchange
+            &PSK_HINT as *const _ as *const c_void,
+            PSK_LEN as u16,
+            session_info.measurement_hash_type,
+            session_info.slot_id,
+            session_info.session_policy,
+            &mut session_info.session_id,
+            &mut session_info.heartbeat_period,
+            measurement_hash_ptr,
+        )
+    };
 
     if LibspdmReturnStatus::libspdm_status_is_error(ret) {
         // Gracefully handle an unsupported capability error from a responder
@@ -1154,51 +1180,57 @@ pub unsafe extern "C" fn libspdm_responder_data_sign(
     let buffer_len = buffer.len();
 
     let key_buffer_layout = Layout::from_size_align(buffer_len, 8).unwrap();
-    let key_buffer = alloc(key_buffer_layout);
+    let key_buffer = unsafe { alloc(key_buffer_layout) };
 
-    key_buffer.copy_from(buffer.as_ptr(), buffer_len);
+    unsafe { key_buffer.copy_from(buffer.as_ptr(), buffer_len) };
 
-    let result = libspdm_asym_get_private_key_from_pem(
-        base_asym_algo,
-        key_buffer,
-        buffer_len,
-        ptr::null_mut(),
-        &mut context,
-    );
+    let result = unsafe {
+        libspdm_asym_get_private_key_from_pem(
+            base_asym_algo,
+            key_buffer,
+            buffer_len,
+            ptr::null_mut(),
+            &mut context,
+        )
+    };
     if !result {
-        key_buffer.write_bytes(0, buffer_len);
-        dealloc(key_buffer, key_buffer_layout);
+        unsafe { key_buffer.write_bytes(0, buffer_len) };
+        unsafe { dealloc(key_buffer, key_buffer_layout) };
         return false;
     }
 
     let result = if is_data_hash {
-        libspdm_asym_sign_hash(
-            spdm_version,
-            op_code,
-            base_asym_algo,
-            base_hash_algo,
-            context,
-            message,
-            message_size,
-            signature,
-            sig_size,
-        )
+        unsafe {
+            libspdm_asym_sign_hash(
+                spdm_version,
+                op_code,
+                base_asym_algo,
+                base_hash_algo,
+                context,
+                message,
+                message_size,
+                signature,
+                sig_size,
+            )
+        }
     } else {
-        libspdm_asym_sign(
-            spdm_version,
-            op_code,
-            base_asym_algo,
-            base_hash_algo,
-            context,
-            message,
-            message_size,
-            signature,
-            sig_size,
-        )
+        unsafe {
+            libspdm_asym_sign(
+                spdm_version,
+                op_code,
+                base_asym_algo,
+                base_hash_algo,
+                context,
+                message,
+                message_size,
+                signature,
+                sig_size,
+            )
+        }
     };
-    libspdm_asym_free(base_asym_algo, context);
-    key_buffer.write_bytes(0, buffer_len);
-    dealloc(key_buffer, key_buffer_layout);
+    unsafe { libspdm_asym_free(base_asym_algo, context) };
+    unsafe { key_buffer.write_bytes(0, buffer_len) };
+    unsafe { dealloc(key_buffer, key_buffer_layout) };
 
     result
 }
@@ -1273,7 +1305,7 @@ pub unsafe extern "C" fn libspdm_write_certificate_to_nvm(
         };
 
         let mut writer = BufWriter::new(file);
-        let slice = from_raw_parts(cert_chain as *const u8, cert_chain_size);
+        let slice = unsafe { from_raw_parts(cert_chain as *const u8, cert_chain_size) };
 
         writer.write_all(slice).unwrap();
 
@@ -1326,10 +1358,10 @@ pub unsafe extern "C" fn libspdm_gen_csr(
     is_device_cert_model: bool,
 ) -> bool {
     let mut ec_context: *mut c_void = ptr::null_mut();
-    let csr_buffer_size: usize = *csr_len;
+    let csr_buffer_size: usize = unsafe { *csr_len };
     let key_buffer;
 
-    *need_reset = false;
+    unsafe { *need_reset = false };
 
     #[cfg(feature = "no_std")]
     {
@@ -1361,20 +1393,22 @@ pub unsafe extern "C" fn libspdm_gen_csr(
     let key_buffer_len = key_buffer.len();
 
     let key_buffer_layout = Layout::from_size_align(key_buffer_len, 8).unwrap();
-    let alloc_key_buffer = alloc(key_buffer_layout);
+    let alloc_key_buffer = unsafe { alloc(key_buffer_layout) };
 
-    alloc_key_buffer.copy_from(key_buffer.as_ptr(), key_buffer_len);
+    unsafe { alloc_key_buffer.copy_from(key_buffer.as_ptr(), key_buffer_len) };
 
-    let result = libspdm_asym_get_private_key_from_pem(
-        base_asym_algo,
-        alloc_key_buffer,
-        key_buffer_len,
-        ptr::null_mut(),
-        &mut ec_context,
-    );
+    let result = unsafe {
+        libspdm_asym_get_private_key_from_pem(
+            base_asym_algo,
+            alloc_key_buffer,
+            key_buffer_len,
+            ptr::null_mut(),
+            &mut ec_context,
+        )
+    };
     if !result {
-        alloc_key_buffer.write_bytes(0, key_buffer_len);
-        dealloc(alloc_key_buffer, key_buffer_layout);
+        unsafe { alloc_key_buffer.write_bytes(0, key_buffer_len) };
+        unsafe { dealloc(alloc_key_buffer, key_buffer_layout) };
         return false;
     }
 
@@ -1410,38 +1444,42 @@ pub unsafe extern "C" fn libspdm_gen_csr(
     let cert_buffer_len = cert_buffer.len();
 
     let cert_buffer_layout = Layout::from_size_align(cert_buffer_len, 8).unwrap();
-    let mut alloc_cert_buffer = alloc(cert_buffer_layout);
+    let mut alloc_cert_buffer = unsafe { alloc(cert_buffer_layout) };
 
-    libspdm_x509_construct_certificate(
-        cert_buffer.as_ptr(),
-        cert_buffer_len,
-        &mut alloc_cert_buffer,
-    );
+    unsafe {
+        libspdm_x509_construct_certificate(
+            cert_buffer.as_ptr(),
+            cert_buffer_len,
+            &mut alloc_cert_buffer,
+        )
+    };
 
-    let hash_nid = libspdm_get_hash_nid(base_hash_algo);
-    let asym_nid = libspdm_get_aysm_nid(base_asym_algo);
+    let hash_nid = unsafe { libspdm_get_hash_nid(base_hash_algo) };
+    let asym_nid = unsafe { libspdm_get_aysm_nid(base_asym_algo) };
 
     let subject_name =
         CString::new("C=AU,O=Western Digital Test,CN=Western Digital AN300 Test CSR").unwrap();
 
-    let result = libspdm_gen_x509_csr(
-        hash_nid,
-        asym_nid,
-        requester_info,
-        requester_info_length,
-        !is_device_cert_model,
-        ec_context,
-        subject_name.into_raw(),
-        csr_len,
-        csr_pointer,
-        alloc_cert_buffer as *mut c_void,
-    );
+    let result = unsafe {
+        libspdm_gen_x509_csr(
+            hash_nid,
+            asym_nid,
+            requester_info,
+            requester_info_length,
+            !is_device_cert_model,
+            ec_context,
+            subject_name.into_raw(),
+            csr_len,
+            csr_pointer,
+            alloc_cert_buffer as *mut c_void,
+        )
+    };
 
-    libspdm_asym_free(base_asym_algo, ec_context);
-    alloc_key_buffer.write_bytes(0, key_buffer_len);
-    dealloc(alloc_key_buffer, key_buffer_layout);
+    unsafe { libspdm_asym_free(base_asym_algo, ec_context) };
+    unsafe { alloc_key_buffer.write_bytes(0, key_buffer_len) };
+    unsafe { dealloc(alloc_key_buffer, key_buffer_layout) };
 
-    if csr_buffer_size < *csr_len {
+    if csr_buffer_size < unsafe { *csr_len } {
         return false;
     }
 
@@ -1519,18 +1557,20 @@ pub unsafe extern "C" fn libspdm_generate_measurement_summary_hash(
             let mut device_measurement_size = LIBSPDM_MAX_MEASUREMENT_RECORD_SIZE as usize;
             let mut device_measurement_count = 0;
 
-            let ret = libspdm_measurement_collection(
-                spdm_context,
-                spdm_version,
-                measurement_specification,
-                measurement_hash_algo,
-                0xFF, /* Get all measurements*/
-                0,
-                ptr::null_mut(),
-                &mut device_measurement_count,
-                device_measurement_ptr,
-                &mut device_measurement_size,
-            );
+            let ret = unsafe {
+                libspdm_measurement_collection(
+                    spdm_context,
+                    spdm_version,
+                    measurement_specification,
+                    measurement_hash_algo,
+                    0xFF, /* Get all measurements*/
+                    0,
+                    ptr::null_mut(),
+                    &mut device_measurement_count,
+                    device_measurement_ptr,
+                    &mut device_measurement_size,
+                )
+            };
             if LibspdmReturnStatus::libspdm_status_is_error(ret) {
                 return false;
             }
@@ -1598,12 +1638,14 @@ pub unsafe extern "C" fn libspdm_generate_measurement_summary_hash(
 
             let measurement_data_ptr: *mut c_void = &mut measurement_data as *mut _ as *mut c_void;
 
-            let result = libspdm_rs::libspdm_hash_all(
-                base_hash_algo,
-                measurement_data_ptr,
-                measurement_data_size,
-                measurement_summary_hash,
-            );
+            let result = unsafe {
+                libspdm_rs::libspdm_hash_all(
+                    base_hash_algo,
+                    measurement_data_ptr,
+                    measurement_data_size,
+                    measurement_summary_hash,
+                )
+            };
             if !result {
                 return false;
             }
@@ -1656,23 +1698,19 @@ fn libspdm_fill_measurement_image_hash_block(
         // Check if the values for dyn_image_measure have been initalised.
         // If they have let's use them, otherwise they won't be created
         if Lazy::get(dyn_image_measure).is_some() {
-            unsafe {
-                fill_dynamic_measurement_image_hash_block(
-                    use_bit_stream,
-                    measurement_hash_algo,
-                    measurements_index,
-                    measurement_block,
-                )
-            }
+            fill_dynamic_measurement_image_hash_block(
+                use_bit_stream,
+                measurement_hash_algo,
+                measurements_index,
+                measurement_block,
+            )
         } else {
-            unsafe {
-                fill_static_measurement_image_hash_block(
-                    use_bit_stream,
-                    measurement_hash_algo,
-                    measurements_index,
-                    measurement_block,
-                )
-            }
+            fill_static_measurement_image_hash_block(
+                use_bit_stream,
+                measurement_hash_algo,
+                measurements_index,
+                measurement_block,
+            )
         }
     }
 
@@ -1701,58 +1739,66 @@ fn libspdm_fill_measurement_image_hash_block(
 /// # Returns
 ///
 /// The measurement block size
-unsafe fn fill_static_measurement_image_hash_block(
+fn fill_static_measurement_image_hash_block(
     use_bit_stream: bool,
     measurement_hash_algo: u32,
     measurements_index: u8,
     measurement_block: *mut libspdm_rs::spdm_measurement_block_dmtf_t,
 ) -> usize {
     let data = [measurements_index; LIBSPDM_MEASUREMENT_RAW_DATA_SIZE as usize];
-    let hash_size = libspdm_rs::libspdm_get_measurement_hash_size(measurement_hash_algo) as usize;
+    let hash_size =
+        unsafe { libspdm_rs::libspdm_get_measurement_hash_size(measurement_hash_algo) as usize };
 
-    (*measurement_block).measurement_block_common_header.index = measurements_index;
-    (*measurement_block)
-        .measurement_block_common_header
-        .measurement_specification = libspdm_rs::SPDM_MEASUREMENT_SPECIFICATION_DMTF as u8;
-
-    if !use_bit_stream {
-        (*measurement_block)
-            .measurement_block_dmtf_header
-            .dmtf_spec_measurement_value_type = measurements_index - 1;
-        (*measurement_block)
-            .measurement_block_dmtf_header
-            .dmtf_spec_measurement_value_size = hash_size as u16;
-
+    unsafe {
+        (*measurement_block).measurement_block_common_header.index = measurements_index;
         (*measurement_block)
             .measurement_block_common_header
-            .measurement_size =
-            (core::mem::size_of::<spdm_measurement_block_dmtf_header_t>() + hash_size) as u16;
+            .measurement_specification = libspdm_rs::SPDM_MEASUREMENT_SPECIFICATION_DMTF as u8;
+    }
 
-        if !libspdm_measurement_hash_all(
-            measurement_hash_algo,
-            data.as_ptr() as *mut c_void,
-            data.len(),
-            measurement_block.add(1) as *mut u8,
-        ) {
-            return 0;
+    if !use_bit_stream {
+        unsafe {
+            (*measurement_block)
+                .measurement_block_dmtf_header
+                .dmtf_spec_measurement_value_type = measurements_index - 1;
+            (*measurement_block)
+                .measurement_block_dmtf_header
+                .dmtf_spec_measurement_value_size = hash_size as u16;
+
+            (*measurement_block)
+                .measurement_block_common_header
+                .measurement_size =
+                (core::mem::size_of::<spdm_measurement_block_dmtf_header_t>() + hash_size) as u16;
+
+            if !libspdm_measurement_hash_all(
+                measurement_hash_algo,
+                data.as_ptr() as *mut c_void,
+                data.len(),
+                measurement_block.add(1) as *mut u8,
+            ) {
+                return 0;
+            }
         }
 
         core::mem::size_of::<libspdm_rs::spdm_measurement_block_dmtf_t>() + hash_size
     } else {
-        (*measurement_block)
-            .measurement_block_dmtf_header
-            .dmtf_spec_measurement_value_type =
-            (measurements_index - 1) | SPDM_MEASUREMENT_BLOCK_MEASUREMENT_TYPE_RAW_BIT_STREAM as u8;
-        (*measurement_block)
-            .measurement_block_dmtf_header
-            .dmtf_spec_measurement_value_size = data.len() as u16;
+        unsafe {
+            (*measurement_block)
+                .measurement_block_dmtf_header
+                .dmtf_spec_measurement_value_type = (measurements_index - 1)
+                | SPDM_MEASUREMENT_BLOCK_MEASUREMENT_TYPE_RAW_BIT_STREAM as u8;
+            (*measurement_block)
+                .measurement_block_dmtf_header
+                .dmtf_spec_measurement_value_size = data.len() as u16;
 
-        (*measurement_block)
-            .measurement_block_common_header
-            .measurement_size =
-            core::mem::size_of::<spdm_measurement_block_dmtf_header_t>() as u16 + data.len() as u16;
+            (*measurement_block)
+                .measurement_block_common_header
+                .measurement_size = core::mem::size_of::<spdm_measurement_block_dmtf_header_t>()
+                as u16
+                + data.len() as u16;
 
-        (measurement_block.add(1) as *mut u8).copy_from(data.as_ptr(), data.len());
+            (measurement_block.add(1) as *mut u8).copy_from(data.as_ptr(), data.len());
+        }
 
         core::mem::size_of::<libspdm_rs::spdm_measurement_block_dmtf_t>() + data.len()
     }
@@ -1774,32 +1820,35 @@ unsafe fn fill_static_measurement_image_hash_block(
 ///
 /// The measurement block size
 #[cfg(not(feature = "no_std"))]
-unsafe fn fill_dynamic_measurement_image_hash_block(
+fn fill_dynamic_measurement_image_hash_block(
     _use_bit_stream: bool,
     measurement_hash_algo: u32,
     measurements_index: u8,
     measurement_block: *mut libspdm_rs::spdm_measurement_block_dmtf_t,
 ) -> usize {
-    let hash_size = libspdm_rs::libspdm_get_measurement_hash_size(measurement_hash_algo) as usize;
+    let hash_size =
+        unsafe { libspdm_rs::libspdm_get_measurement_hash_size(measurement_hash_algo) as usize };
 
-    (*measurement_block).measurement_block_common_header.index = measurements_index;
+    unsafe {
+        (*measurement_block).measurement_block_common_header.index = measurements_index;
 
-    (*measurement_block)
-        .measurement_block_common_header
-        .measurement_specification = libspdm_rs::SPDM_MEASUREMENT_SPECIFICATION_DMTF as u8;
+        (*measurement_block)
+            .measurement_block_common_header
+            .measurement_specification = libspdm_rs::SPDM_MEASUREMENT_SPECIFICATION_DMTF as u8;
 
-    (*measurement_block)
-        .measurement_block_dmtf_header
-        .dmtf_spec_measurement_value_type = measurements_index - 1;
+        (*measurement_block)
+            .measurement_block_dmtf_header
+            .dmtf_spec_measurement_value_type = measurements_index - 1;
 
-    (*measurement_block)
-        .measurement_block_dmtf_header
-        .dmtf_spec_measurement_value_size = hash_size as u16;
+        (*measurement_block)
+            .measurement_block_dmtf_header
+            .dmtf_spec_measurement_value_size = hash_size as u16;
 
-    (*measurement_block)
-        .measurement_block_common_header
-        .measurement_size =
-        (core::mem::size_of::<spdm_measurement_block_dmtf_header_t>() + hash_size) as u16;
+        (*measurement_block)
+            .measurement_block_common_header
+            .measurement_size =
+            (core::mem::size_of::<spdm_measurement_block_dmtf_header_t>() + hash_size) as u16;
+    }
 
     match measurements_index {
         1 => {
@@ -1824,7 +1873,9 @@ unsafe fn fill_dynamic_measurement_image_hash_block(
                 }
             };
 
-            (measurement_block.add(1) as *mut u8).copy_from(hash_bytes.as_ptr(), hash_size);
+            unsafe {
+                (measurement_block.add(1) as *mut u8).copy_from(hash_bytes.as_ptr(), hash_size)
+            };
 
             core::mem::size_of::<spdm_measurement_block_dmtf_t>() + hash_size
         }
@@ -1847,7 +1898,9 @@ unsafe fn fill_dynamic_measurement_image_hash_block(
                 }
             };
 
-            (measurement_block.add(1) as *mut u8).copy_from(hash_bytes.as_ptr(), hash_size);
+            unsafe {
+                (measurement_block.add(1) as *mut u8).copy_from(hash_bytes.as_ptr(), hash_size)
+            };
 
             core::mem::size_of::<libspdm_rs::spdm_measurement_block_dmtf_t>() + hash_size
         }
@@ -1866,36 +1919,38 @@ unsafe fn fill_dynamic_measurement_image_hash_block(
 /// # Returns
 ///
 /// The measurement block size
-unsafe fn libspdm_fill_measurement_svn_block(
+fn libspdm_fill_measurement_svn_block(
     measurement_block: *mut libspdm_rs::spdm_measurement_block_dmtf_t,
 ) -> usize {
     let svn: libspdm_rs::spdm_measurements_secure_version_number_t = 0x7;
 
-    (*measurement_block).measurement_block_common_header.index =
-        LIBSPDM_MEASUREMENT_INDEX_SVN as u8;
-    (*measurement_block)
-        .measurement_block_common_header
-        .measurement_specification = libspdm_rs::SPDM_MEASUREMENT_SPECIFICATION_DMTF as u8;
+    unsafe {
+        (*measurement_block).measurement_block_common_header.index =
+            LIBSPDM_MEASUREMENT_INDEX_SVN as u8;
+        (*measurement_block)
+            .measurement_block_common_header
+            .measurement_specification = libspdm_rs::SPDM_MEASUREMENT_SPECIFICATION_DMTF as u8;
 
-    (*measurement_block)
-        .measurement_block_dmtf_header
-        .dmtf_spec_measurement_value_type =
-        SPDM_MEASUREMENT_BLOCK_MEASUREMENT_TYPE_SECURE_VERSION_NUMBER as u8
-            | SPDM_MEASUREMENT_BLOCK_MEASUREMENT_TYPE_RAW_BIT_STREAM as u8;
-    (*measurement_block)
-        .measurement_block_dmtf_header
-        .dmtf_spec_measurement_value_size =
-        core::mem::size_of::<libspdm_rs::spdm_measurements_secure_version_number_t>() as u16;
+        (*measurement_block)
+            .measurement_block_dmtf_header
+            .dmtf_spec_measurement_value_type =
+            SPDM_MEASUREMENT_BLOCK_MEASUREMENT_TYPE_SECURE_VERSION_NUMBER as u8
+                | SPDM_MEASUREMENT_BLOCK_MEASUREMENT_TYPE_RAW_BIT_STREAM as u8;
+        (*measurement_block)
+            .measurement_block_dmtf_header
+            .dmtf_spec_measurement_value_size =
+            core::mem::size_of::<libspdm_rs::spdm_measurements_secure_version_number_t>() as u16;
 
-    (*measurement_block)
-        .measurement_block_common_header
-        .measurement_size = core::mem::size_of::<spdm_measurement_block_dmtf_header_t>() as u16
-        + core::mem::size_of::<libspdm_rs::spdm_measurements_secure_version_number_t>() as u16;
+        (*measurement_block)
+            .measurement_block_common_header
+            .measurement_size = core::mem::size_of::<spdm_measurement_block_dmtf_header_t>() as u16
+            + core::mem::size_of::<libspdm_rs::spdm_measurements_secure_version_number_t>() as u16;
 
-    (measurement_block.add(1) as *mut u8).copy_from(
-        &svn as *const _ as *const u8,
-        core::mem::size_of::<libspdm_rs::spdm_measurements_secure_version_number_t>(),
-    );
+        (measurement_block.add(1) as *mut u8).copy_from(
+            &svn as *const _ as *const u8,
+            core::mem::size_of::<libspdm_rs::spdm_measurements_secure_version_number_t>(),
+        )
+    };
 
     core::mem::size_of::<libspdm_rs::spdm_measurement_block_dmtf_t>()
         + core::mem::size_of::<libspdm_rs::spdm_measurements_secure_version_number_t>()
@@ -1912,13 +1967,14 @@ unsafe fn libspdm_fill_measurement_svn_block(
 /// # Returns
 ///
 /// The measurement block size
-unsafe fn libspdm_fill_measurement_manifest_block(
+fn libspdm_fill_measurement_manifest_block(
     measurement_block: *mut libspdm_rs::spdm_measurement_block_dmtf_t,
     use_bit_stream: bool,
     measurement_hash_algo: u32,
 ) -> usize {
     let data;
-    let hash_size = libspdm_rs::libspdm_get_measurement_hash_size(measurement_hash_algo) as usize;
+    let hash_size =
+        unsafe { libspdm_rs::libspdm_get_measurement_hash_size(measurement_hash_algo) as usize };
     // Fetch an already generated manifest.
     let size;
     #[cfg(feature = "no_std")]
@@ -1936,51 +1992,57 @@ unsafe fn libspdm_fill_measurement_manifest_block(
         data = buffer;
     }
 
-    (*measurement_block).measurement_block_common_header.index =
-        SPDM_MEASUREMENT_BLOCK_MEASUREMENT_INDEX_MEASUREMENT_MANIFEST as u8;
-    (*measurement_block)
-        .measurement_block_common_header
-        .measurement_specification = libspdm_rs::SPDM_MEASUREMENT_SPECIFICATION_DMTF as u8;
-
-    if use_bit_stream {
-        (*measurement_block)
-            .measurement_block_dmtf_header
-            .dmtf_spec_measurement_value_type =
-            SPDM_MEASUREMENT_BLOCK_MEASUREMENT_TYPE_MEASUREMENT_MANIFEST as u8
-                | SPDM_MEASUREMENT_BLOCK_MEASUREMENT_TYPE_RAW_BIT_STREAM as u8;
-        (*measurement_block)
-            .measurement_block_dmtf_header
-            .dmtf_spec_measurement_value_size = size as u16;
-
+    unsafe {
+        (*measurement_block).measurement_block_common_header.index =
+            SPDM_MEASUREMENT_BLOCK_MEASUREMENT_INDEX_MEASUREMENT_MANIFEST as u8;
         (*measurement_block)
             .measurement_block_common_header
-            .measurement_size =
-            (core::mem::size_of::<spdm_measurement_block_dmtf_header_t>() + size) as u16;
+            .measurement_specification = libspdm_rs::SPDM_MEASUREMENT_SPECIFICATION_DMTF as u8;
+    }
 
-        (measurement_block.add(1) as *mut u8).copy_from(data.as_ptr(), size);
+    if use_bit_stream {
+        unsafe {
+            (*measurement_block)
+                .measurement_block_dmtf_header
+                .dmtf_spec_measurement_value_type =
+                SPDM_MEASUREMENT_BLOCK_MEASUREMENT_TYPE_MEASUREMENT_MANIFEST as u8
+                    | SPDM_MEASUREMENT_BLOCK_MEASUREMENT_TYPE_RAW_BIT_STREAM as u8;
+            (*measurement_block)
+                .measurement_block_dmtf_header
+                .dmtf_spec_measurement_value_size = size as u16;
+
+            (*measurement_block)
+                .measurement_block_common_header
+                .measurement_size =
+                (core::mem::size_of::<spdm_measurement_block_dmtf_header_t>() + size) as u16;
+
+            (measurement_block.add(1) as *mut u8).copy_from(data.as_ptr(), size);
+        }
 
         core::mem::size_of::<libspdm_rs::spdm_measurement_block_dmtf_t>() + size
     } else {
-        (*measurement_block)
-            .measurement_block_dmtf_header
-            .dmtf_spec_measurement_value_type =
-            SPDM_MEASUREMENT_BLOCK_MEASUREMENT_TYPE_MEASUREMENT_MANIFEST as u8;
-        (*measurement_block)
-            .measurement_block_dmtf_header
-            .dmtf_spec_measurement_value_size = hash_size as u16;
+        unsafe {
+            (*measurement_block)
+                .measurement_block_dmtf_header
+                .dmtf_spec_measurement_value_type =
+                SPDM_MEASUREMENT_BLOCK_MEASUREMENT_TYPE_MEASUREMENT_MANIFEST as u8;
+            (*measurement_block)
+                .measurement_block_dmtf_header
+                .dmtf_spec_measurement_value_size = hash_size as u16;
 
-        (*measurement_block)
-            .measurement_block_common_header
-            .measurement_size =
-            (core::mem::size_of::<spdm_measurement_block_dmtf_header_t>() + hash_size) as u16;
+            (*measurement_block)
+                .measurement_block_common_header
+                .measurement_size =
+                (core::mem::size_of::<spdm_measurement_block_dmtf_header_t>() + hash_size) as u16;
 
-        if !libspdm_measurement_hash_all(
-            measurement_hash_algo,
-            data.as_ptr() as *mut c_void,
-            data.len(),
-            measurement_block.add(1) as *mut u8,
-        ) {
-            return 0;
+            if !libspdm_measurement_hash_all(
+                measurement_hash_algo,
+                data.as_ptr() as *mut c_void,
+                data.len(),
+                measurement_block.add(1) as *mut u8,
+            ) {
+                return 0;
+            }
         }
 
         core::mem::size_of::<libspdm_rs::spdm_measurement_block_dmtf_t>() + hash_size
@@ -1998,7 +2060,7 @@ unsafe fn libspdm_fill_measurement_manifest_block(
 /// # Returns
 ///
 /// The measurement block size
-unsafe fn libspdm_fill_measurement_device_mode_block(
+fn libspdm_fill_measurement_device_mode_block(
     measurement_block: *mut libspdm_rs::spdm_measurement_block_dmtf_t,
 ) -> usize {
     let device_mode = libspdm_rs::spdm_measurements_device_mode_t {
@@ -2018,32 +2080,34 @@ unsafe fn libspdm_fill_measurement_device_mode_block(
             | SPDM_MEASUREMENT_DEVICE_MODE_INVASIVE_DEBUG_MODE_HAS_BEEN_ACTIVE_AFTER_MFG,
     };
 
-    (*measurement_block).measurement_block_common_header.index =
-        SPDM_MEASUREMENT_BLOCK_MEASUREMENT_INDEX_DEVICE_MODE as u8;
-    (*measurement_block)
-        .measurement_block_common_header
-        .measurement_specification = libspdm_rs::SPDM_MEASUREMENT_SPECIFICATION_DMTF as u8;
+    unsafe {
+        (*measurement_block).measurement_block_common_header.index =
+            SPDM_MEASUREMENT_BLOCK_MEASUREMENT_INDEX_DEVICE_MODE as u8;
+        (*measurement_block)
+            .measurement_block_common_header
+            .measurement_specification = libspdm_rs::SPDM_MEASUREMENT_SPECIFICATION_DMTF as u8;
 
-    (*measurement_block)
-        .measurement_block_dmtf_header
-        .dmtf_spec_measurement_value_type = (SPDM_MEASUREMENT_BLOCK_MEASUREMENT_TYPE_DEVICE_MODE
-        | SPDM_MEASUREMENT_BLOCK_MEASUREMENT_TYPE_RAW_BIT_STREAM)
-        as u8;
-    (*measurement_block)
-        .measurement_block_dmtf_header
-        .dmtf_spec_measurement_value_size =
-        core::mem::size_of::<libspdm_rs::spdm_measurements_device_mode_t>() as u16;
+        (*measurement_block)
+            .measurement_block_dmtf_header
+            .dmtf_spec_measurement_value_type = (SPDM_MEASUREMENT_BLOCK_MEASUREMENT_TYPE_DEVICE_MODE
+            | SPDM_MEASUREMENT_BLOCK_MEASUREMENT_TYPE_RAW_BIT_STREAM)
+            as u8;
+        (*measurement_block)
+            .measurement_block_dmtf_header
+            .dmtf_spec_measurement_value_size =
+            core::mem::size_of::<libspdm_rs::spdm_measurements_device_mode_t>() as u16;
 
-    (*measurement_block)
-        .measurement_block_common_header
-        .measurement_size = (core::mem::size_of::<spdm_measurement_block_dmtf_header_t>()
-        + core::mem::size_of::<libspdm_rs::spdm_measurements_device_mode_t>())
-        as u16;
+        (*measurement_block)
+            .measurement_block_common_header
+            .measurement_size = (core::mem::size_of::<spdm_measurement_block_dmtf_header_t>()
+            + core::mem::size_of::<libspdm_rs::spdm_measurements_device_mode_t>())
+            as u16;
 
-    (measurement_block.add(1) as *mut u8).copy_from(
-        &device_mode as *const _ as *const u8,
-        core::mem::size_of::<libspdm_rs::spdm_measurements_device_mode_t>(),
-    );
+        (measurement_block.add(1) as *mut u8).copy_from(
+            &device_mode as *const _ as *const u8,
+            core::mem::size_of::<libspdm_rs::spdm_measurements_device_mode_t>(),
+        );
+    }
 
     core::mem::size_of::<libspdm_rs::spdm_measurement_block_dmtf_t>()
         + core::mem::size_of::<libspdm_rs::spdm_measurements_device_mode_t>()
@@ -2106,7 +2170,7 @@ pub unsafe extern "C" fn libspdm_measurement_collection(
     content_changed: *mut u8,
     measurements_count: *mut u8,
     measurements: *mut c_void,
-    measurements_size: *mut usize,
+    measurements_size_ptr: *mut usize,
 ) -> u32 {
     if u32::from(measurement_specification) != libspdm_rs::SPDM_MEASUREMENT_SPECIFICATION_DMTF
         || measurement_hash_algo == 0
@@ -2114,7 +2178,7 @@ pub unsafe extern "C" fn libspdm_measurement_collection(
         return libspdm_status_construct!(LIBSPDM_SEVERITY_ERROR, LIBSPDM_SOURCE_CORE, 0x0002);
     }
 
-    let hash_size = libspdm_rs::libspdm_get_measurement_hash_size(measurement_hash_algo);
+    let hash_size = unsafe { libspdm_rs::libspdm_get_measurement_hash_size(measurement_hash_algo) };
     let mut measurement_ptr = measurements as *mut u8;
 
     let use_bit_stream = measurement_hash_algo
@@ -2122,10 +2186,11 @@ pub unsafe extern "C" fn libspdm_measurement_collection(
         || (u32::from(request_attribute)
             & libspdm_rs::SPDM_GET_MEASUREMENTS_REQUEST_ATTRIBUTES_RAW_BIT_STREAM_REQUESTED)
             != 0;
+    let measurements_size = unsafe { *measurements_size_ptr } as u32;
 
     match u32::from(measurements_index) {
         SPDM_GET_MEASUREMENTS_REQUEST_MEASUREMENT_OPERATION_TOTAL_NUMBER_OF_MEASUREMENTS => {
-            *measurements_count = LIBSPDM_MEASUREMENT_BLOCK_NUMBER;
+            unsafe { *measurements_count = LIBSPDM_MEASUREMENT_BLOCK_NUMBER };
         }
         SPDM_GET_MEASUREMENTS_REQUEST_MEASUREMENT_OPERATION_ALL_MEASUREMENTS => {
             /* The first HASH_NUMBER blocks may be hash values or raw bitstream*/
@@ -2145,13 +2210,13 @@ pub unsafe extern "C" fn libspdm_measurement_collection(
                         0x0001
                     );
                 }
-                measurement_ptr = measurement_ptr.add(measurement_block_size);
+                measurement_ptr = unsafe { measurement_ptr.add(measurement_block_size) };
             }
             /* Next one - SVN is always raw bitstream data.*/
             let measurement_block =
                 measurement_ptr as *mut libspdm_rs::spdm_measurement_block_dmtf_t;
             let measurement_block_size = libspdm_fill_measurement_svn_block(measurement_block);
-            measurement_ptr = measurement_ptr.add(measurement_block_size);
+            measurement_ptr = unsafe { measurement_ptr.add(measurement_block_size) };
 
             /* Next one - manifest is always raw bitstream data.*/
             let measurement_block =
@@ -2161,7 +2226,7 @@ pub unsafe extern "C" fn libspdm_measurement_collection(
                 use_bit_stream,
                 measurement_hash_algo,
             ) as u32;
-            measurement_ptr = measurement_ptr.add(measurement_block_size as usize);
+            measurement_ptr = unsafe { measurement_ptr.add(measurement_block_size as usize) };
 
             /* Next one - device_mode is always raw bitstream data.*/
             let measurement_block =
@@ -2211,7 +2276,7 @@ pub unsafe extern "C" fn libspdm_measurement_collection(
                 as u32
                 + core::mem::size_of::<libspdm_rs::spdm_measurements_device_mode_t>() as u32;
 
-            if total_size_needed > (*measurements_size).try_into().unwrap() {
+            if total_size_needed > measurements_size {
                 return libspdm_status_construct!(
                     LIBSPDM_SEVERITY_ERROR,
                     LIBSPDM_SOURCE_CORE,
@@ -2219,8 +2284,10 @@ pub unsafe extern "C" fn libspdm_measurement_collection(
                 );
             }
 
-            *measurements_size = total_size_needed as usize;
-            *measurements_count = LIBSPDM_MEASUREMENT_BLOCK_NUMBER;
+            unsafe {
+                *measurements_size_ptr = total_size_needed as usize;
+                *measurements_count = LIBSPDM_MEASUREMENT_BLOCK_NUMBER;
+            }
         }
         _ => {
             let measurement_block =
@@ -2248,7 +2315,7 @@ pub unsafe extern "C" fn libspdm_measurement_collection(
                     libspdm_fill_measurement_device_mode_block(measurement_block)
                 }
                 _ => {
-                    *measurements_count = 0;
+                    unsafe { *measurements_count = 0 };
                     return libspdm_status_construct!(
                         LIBSPDM_SEVERITY_ERROR,
                         LIBSPDM_SOURCE_MEAS_COLLECT,
@@ -2265,7 +2332,7 @@ pub unsafe extern "C" fn libspdm_measurement_collection(
                 );
             }
 
-            if total_size_needed > (*measurements_size).try_into().unwrap() {
+            if total_size_needed > measurements_size {
                 return libspdm_status_construct!(
                     LIBSPDM_SEVERITY_ERROR,
                     LIBSPDM_SOURCE_CORE,
@@ -2273,8 +2340,10 @@ pub unsafe extern "C" fn libspdm_measurement_collection(
                 );
             }
 
-            *measurements_count = 1;
-            *measurements_size = total_size_needed as usize;
+            unsafe {
+                *measurements_size_ptr = total_size_needed as usize;
+                *measurements_count = 1;
+            }
         }
     }
 
@@ -2287,11 +2356,17 @@ pub unsafe extern "C" fn libspdm_measurement_collection(
             & libspdm_rs::SPDM_GET_MEASUREMENTS_REQUEST_ATTRIBUTES_GENERATE_SIGNATURE)
             != 0
         {
-            *content_changed =
-                libspdm_rs::SPDM_MEASUREMENTS_RESPONSE_CONTENT_NO_CHANGE_DETECTED as u8;
+            // SAFETY: `content_changed` is a non-null array of bytes
+            unsafe {
+                *content_changed =
+                    libspdm_rs::SPDM_MEASUREMENTS_RESPONSE_CONTENT_NO_CHANGE_DETECTED as u8
+            };
         } else {
-            *content_changed =
-                libspdm_rs::SPDM_MEASUREMENTS_RESPONSE_CONTENT_CHANGE_NO_DETECTION as u8;
+            // SAFETY: `content_changed` is a non-null array of bytes
+            unsafe {
+                *content_changed =
+                    libspdm_rs::SPDM_MEASUREMENTS_RESPONSE_CONTENT_CHANGE_NO_DETECTION as u8
+            };
         }
     }
 
@@ -2350,7 +2425,7 @@ pub unsafe extern "C" fn libspdm_psk_handshake_secret_hkdf_expand(
         return false;
     }
 
-    let psk_hint = from_raw_parts(psk_hint, psk_hint_size);
+    let psk_hint = unsafe { from_raw_parts(psk_hint, psk_hint_size) };
 
     debug!("[PSK_HINT]: {:?} || SIZE {}", psk_hint, psk_hint_size);
 
@@ -2374,32 +2449,38 @@ pub unsafe extern "C" fn libspdm_psk_handshake_secret_hkdf_expand(
     let buffer_ptr = m_libspdm_my_zero_filled_buffer.as_mut_ptr() as *const u8;
     let handshake_ptr = handshake_secret.as_mut_ptr();
 
-    let hash_size = libspdm_rs::libspdm_get_hash_size(base_hash_algo) as usize;
-    let ret = libspdm_rs::libspdm_hkdf_extract(
-        base_hash_algo,
-        psk.as_mut_ptr() as *const u8,
-        psk_size,
-        buffer_ptr,
-        hash_size,
-        handshake_ptr,
-        hash_size,
-    );
+    let hash_size = unsafe { libspdm_rs::libspdm_get_hash_size(base_hash_algo) as usize };
+    let ret = unsafe {
+        libspdm_rs::libspdm_hkdf_extract(
+            base_hash_algo,
+            psk.as_mut_ptr() as *const u8,
+            psk_size,
+            buffer_ptr,
+            hash_size,
+            handshake_ptr,
+            hash_size,
+        )
+    };
 
     if !ret {
         return ret;
     }
 
-    let ret = libspdm_rs::libspdm_hkdf_expand(
-        base_hash_algo,
-        handshake_ptr,
-        hash_size,
-        info,
-        info_size,
-        out,
-        out_size,
-    );
+    let ret = unsafe {
+        libspdm_rs::libspdm_hkdf_expand(
+            base_hash_algo,
+            handshake_ptr,
+            hash_size,
+            info,
+            info_size,
+            out,
+            out_size,
+        )
+    };
 
-    libspdm_rs::libspdm_zero_mem(&mut handshake_secret as *mut _ as *mut c_void, hash_size);
+    unsafe {
+        libspdm_rs::libspdm_zero_mem(&mut handshake_secret as *mut _ as *mut c_void, hash_size)
+    };
 
     ret
 }
@@ -2453,7 +2534,7 @@ pub unsafe extern "C" fn libspdm_psk_master_secret_hkdf_expand(
         return false;
     }
 
-    let psk_hint = from_raw_parts(psk_hint, psk_hint_size);
+    let psk_hint = unsafe { from_raw_parts(psk_hint, psk_hint_size) };
 
     debug!("[PSK_HINT]: {:?}", psk_hint);
 
@@ -2477,16 +2558,18 @@ pub unsafe extern "C" fn libspdm_psk_master_secret_hkdf_expand(
     let buffer_ptr = m_libspdm_my_zero_filled_buffer.as_mut_ptr() as *const u8;
     let handshake_ptr = handshake_secret.as_mut_ptr();
 
-    let hash_size = libspdm_rs::libspdm_get_hash_size(base_hash_algo) as usize;
-    let ret = libspdm_rs::libspdm_hkdf_extract(
-        base_hash_algo,
-        psk.as_mut_ptr() as *const u8,
-        psk_size,
-        buffer_ptr,
-        hash_size,
-        handshake_ptr,
-        hash_size,
-    );
+    let hash_size = unsafe { libspdm_rs::libspdm_get_hash_size(base_hash_algo) as usize };
+    let ret = unsafe {
+        libspdm_rs::libspdm_hkdf_extract(
+            base_hash_algo,
+            psk.as_mut_ptr() as *const u8,
+            psk_size,
+            buffer_ptr,
+            hash_size,
+            handshake_ptr,
+            hash_size,
+        )
+    };
 
     if !ret {
         return ret;
@@ -2506,17 +2589,21 @@ pub unsafe extern "C" fn libspdm_psk_master_secret_hkdf_expand(
 
     let mut salt1: [u8; 64] = [0; 64];
 
-    let ret = libspdm_rs::libspdm_hkdf_expand(
-        base_hash_algo,
-        handshake_ptr,
-        hash_size,
-        m_libspdm_bin_str0.as_ptr(),
-        m_libspdm_bin_str0_len,
-        salt1.as_mut_ptr(),
-        hash_size,
-    );
+    let ret = unsafe {
+        libspdm_rs::libspdm_hkdf_expand(
+            base_hash_algo,
+            handshake_ptr,
+            hash_size,
+            m_libspdm_bin_str0.as_ptr(),
+            m_libspdm_bin_str0_len,
+            salt1.as_mut_ptr(),
+            hash_size,
+        )
+    };
 
-    libspdm_rs::libspdm_zero_mem(handshake_secret.as_mut_ptr() as *mut c_void, hash_size);
+    unsafe {
+        libspdm_rs::libspdm_zero_mem(handshake_secret.as_mut_ptr() as *mut c_void, hash_size)
+    };
 
     if !ret {
         return ret;
@@ -2524,33 +2611,37 @@ pub unsafe extern "C" fn libspdm_psk_master_secret_hkdf_expand(
 
     let mut master_secret: [u8; 64] = [0; 64];
 
-    let ret = libspdm_rs::libspdm_hkdf_extract(
-        base_hash_algo,
-        buffer_ptr,
-        hash_size,
-        salt1.as_mut_ptr(),
-        hash_size,
-        master_secret.as_mut_ptr(),
-        hash_size,
-    );
+    let ret = unsafe {
+        libspdm_rs::libspdm_hkdf_extract(
+            base_hash_algo,
+            buffer_ptr,
+            hash_size,
+            salt1.as_mut_ptr(),
+            hash_size,
+            master_secret.as_mut_ptr(),
+            hash_size,
+        )
+    };
 
-    libspdm_rs::libspdm_zero_mem(salt1.as_mut_ptr() as *mut c_void, hash_size);
+    unsafe { libspdm_rs::libspdm_zero_mem(salt1.as_mut_ptr() as *mut c_void, hash_size) };
 
     if !ret {
         return ret;
     }
 
-    let ret = libspdm_rs::libspdm_hkdf_expand(
-        base_hash_algo,
-        master_secret.as_mut_ptr(),
-        hash_size,
-        info,
-        info_size,
-        out,
-        out_size,
-    );
+    let ret = unsafe {
+        libspdm_rs::libspdm_hkdf_expand(
+            base_hash_algo,
+            master_secret.as_mut_ptr(),
+            hash_size,
+            info,
+            info_size,
+            out,
+            out_size,
+        )
+    };
 
-    libspdm_rs::libspdm_zero_mem(master_secret.as_mut_ptr() as *mut c_void, hash_size);
+    unsafe { libspdm_rs::libspdm_zero_mem(master_secret.as_mut_ptr() as *mut c_void, hash_size) };
     ret
 }
 
@@ -2583,11 +2674,11 @@ pub unsafe extern "C" fn libspdm_measurement_opaque_data(
     opaque_data: *mut c_void,
     opaque_data_size: *mut usize,
 ) -> bool {
-    let opaque_len = OPAQUE_SIZE.min(*opaque_data_size);
+    let opaque_len = unsafe { OPAQUE_SIZE.min(*opaque_data_size) };
     let opaque_buf = opaque_data as *mut u8;
     let opaque = unsafe { from_raw_parts_mut(opaque_buf, opaque_len) };
 
-    *opaque_data_size = opaque_len;
+    unsafe { *opaque_data_size = opaque_len };
 
     for (i, b) in opaque.iter_mut().enumerate() {
         *b = i as u8;
@@ -2620,11 +2711,11 @@ pub unsafe extern "C" fn libspdm_challenge_opaque_data(
     opaque_data: *mut c_void,
     opaque_data_size: *mut usize,
 ) -> bool {
-    let opaque_len = OPAQUE_SIZE.min(*opaque_data_size);
+    let opaque_len = unsafe { OPAQUE_SIZE.min(*opaque_data_size) };
     let opaque_buf = opaque_data as *mut u8;
     let opaque = unsafe { from_raw_parts_mut(opaque_buf, opaque_len) };
 
-    *opaque_data_size = opaque_len;
+    unsafe { *opaque_data_size = opaque_len };
 
     for (i, b) in opaque.iter_mut().enumerate() {
         *b = i as u8;
@@ -2656,11 +2747,11 @@ pub unsafe extern "C" fn libspdm_encap_challenge_opaque_data(
     opaque_data: *mut c_void,
     opaque_data_size: *mut usize,
 ) -> bool {
-    let opaque_len = OPAQUE_SIZE.min(*opaque_data_size);
+    let opaque_len = unsafe { OPAQUE_SIZE.min(*opaque_data_size) };
     let opaque_buf = opaque_data as *mut u8;
     let opaque = unsafe { from_raw_parts_mut(opaque_buf, opaque_len) };
 
-    *opaque_data_size = opaque_len;
+    unsafe { *opaque_data_size = opaque_len };
 
     for (i, b) in opaque.iter_mut().enumerate() {
         *b = i as u8;
@@ -2745,25 +2836,29 @@ pub unsafe extern "C" fn libspdm_gen_csr_ex(
     //
     //       so an spdm-utils requester should never request to see a cached
     //       CSR using a csr_tracking_tag value of [1, 7].
-    assert!(*csr_tracking_tag == 0);
+    unsafe {
+        assert!(*csr_tracking_tag == 0);
+    }
     // TODO: Overwrite is not supported
     assert!(!overwrite);
     let is_device_cert_model = { req_cert_model == 1 };
-    libspdm_gen_csr(
-        spdm_context,
-        base_hash_algo,
-        base_asym_algo,
-        need_reset,
-        request,
-        request_size,
-        requester_info,
-        requester_info_length,
-        opaque_data,
-        opaque_data_length,
-        csr_len,
-        csr_pointer,
-        is_device_cert_model,
-    )
+    unsafe {
+        libspdm_gen_csr(
+            spdm_context,
+            base_hash_algo,
+            base_asym_algo,
+            need_reset,
+            request,
+            request_size,
+            requester_info,
+            requester_info_length,
+            opaque_data,
+            opaque_data_length,
+            csr_len,
+            csr_pointer,
+            is_device_cert_model,
+        )
+    }
 }
 
 #[cfg(test)]
@@ -2816,22 +2911,24 @@ pub unsafe fn get_local_certchain(
 
     let buffer_len = buffer.len();
 
-    if !libspdm_rs::libspdm_x509_get_cert_from_cert_chain(
-        buffer.as_ptr(),
-        buffer_len,
-        0,
-        &mut root_cert_buffer,
-        &mut root_cert_size,
-    ) {
+    if unsafe {
+        !libspdm_rs::libspdm_x509_get_cert_from_cert_chain(
+            buffer.as_ptr(),
+            buffer_len,
+            0,
+            &mut root_cert_buffer,
+            &mut root_cert_size,
+        )
+    } {
         panic!("Unable to get cert from x509");
     }
 
-    let digest_size = libspdm_rs::libspdm_get_hash_size(hash_algo) as usize;
+    let digest_size = unsafe { libspdm_rs::libspdm_get_hash_size(hash_algo) as usize };
 
     let cert_chain_size =
         core::mem::size_of::<libspdm_rs::spdm_cert_chain_t>() + digest_size + buffer_len;
     let cert_chain_layout = Layout::from_size_align(cert_chain_size, 8).unwrap();
-    let cert_chain_buffer = alloc(cert_chain_layout);
+    let cert_chain_buffer = unsafe { alloc(cert_chain_layout) };
 
     assert!(!cert_chain_buffer.is_null());
 
@@ -2840,18 +2937,21 @@ pub unsafe fn get_local_certchain(
     (*cert_chain).length = cert_chain_size as u16;
     (*cert_chain).reserved = 0;
 
-    if !libspdm_rs::libspdm_hash_all(
-        hash_algo,
-        root_cert_buffer as *const _ as *const c_void,
-        root_cert_size,
-        cert_chain_buffer.add(core::mem::size_of::<libspdm_rs::spdm_cert_chain_t>()),
-    ) {
-        panic!("Unable to hash data");
+    unsafe {
+        if !libspdm_rs::libspdm_hash_all(
+            hash_algo,
+            root_cert_buffer as *const _ as *const c_void,
+            root_cert_size,
+            cert_chain_buffer.add(core::mem::size_of::<libspdm_rs::spdm_cert_chain_t>()),
+        ) {
+            panic!("Unable to hash data");
+        }
     }
 
-    let cert_buffer_location =
-        cert_chain_buffer.add(core::mem::size_of::<libspdm_rs::spdm_cert_chain_t>() + digest_size);
-    cert_buffer_location.copy_from(buffer.as_ptr(), buffer_len);
+    let cert_buffer_location = unsafe {
+        cert_chain_buffer.add(core::mem::size_of::<libspdm_rs::spdm_cert_chain_t>() + digest_size)
+    };
+    unsafe { cert_buffer_location.copy_from(buffer.as_ptr(), buffer_len) };
 
     (cert_chain_buffer as *mut c_void, cert_chain_size)
 }
@@ -2877,13 +2977,15 @@ pub unsafe fn get_base_asym_algo(
     let hash_dptr = &mut spdm_algo_asym_hash.0 as *mut _ as *mut c_void;
     let mut data_size: usize = core::mem::size_of::<u32>();
 
-    let ret = libspdm_rs::libspdm_get_data(
-        cntx_ptr,
-        libspdm_rs::libspdm_data_type_t_LIBSPDM_DATA_BASE_HASH_ALGO,
-        &parameter as *const libspdm_rs::libspdm_data_parameter_t,
-        hash_dptr,
-        &mut data_size,
-    );
+    let ret = unsafe {
+        libspdm_rs::libspdm_get_data(
+            cntx_ptr,
+            libspdm_rs::libspdm_data_type_t_LIBSPDM_DATA_BASE_HASH_ALGO,
+            &parameter as *const libspdm_rs::libspdm_data_parameter_t,
+            hash_dptr,
+            &mut data_size,
+        )
+    };
 
     if LibspdmReturnStatus::libspdm_status_is_error(ret) {
         return Err(ret);
@@ -2913,13 +3015,15 @@ pub unsafe fn get_base_hash_algo(
     let hash_dptr = &mut spdm_algo_base_hash.0 as *mut _ as *mut c_void;
     let mut data_size: usize = core::mem::size_of::<u32>();
 
-    let ret = libspdm_rs::libspdm_get_data(
-        cntx_ptr,
-        libspdm_rs::libspdm_data_type_t_LIBSPDM_DATA_BASE_HASH_ALGO,
-        &parameter as *const libspdm_rs::libspdm_data_parameter_t,
-        hash_dptr,
-        &mut data_size,
-    );
+    let ret = unsafe {
+        libspdm_rs::libspdm_get_data(
+            cntx_ptr,
+            libspdm_rs::libspdm_data_type_t_LIBSPDM_DATA_BASE_HASH_ALGO,
+            &parameter as *const libspdm_rs::libspdm_data_parameter_t,
+            hash_dptr,
+            &mut data_size,
+        )
+    };
 
     if LibspdmReturnStatus::libspdm_status_is_error(ret) {
         return Err(ret);
@@ -2961,64 +3065,74 @@ pub unsafe fn get_negotiated_algos(cntx_ptr: *mut c_void, slot_id: u8) -> Result
 
     let mut data_size: usize = core::mem::size_of::<u32>();
 
-    let ret = libspdm_rs::libspdm_get_data(
-        cntx_ptr,
-        libspdm_rs::libspdm_data_type_t_LIBSPDM_DATA_BASE_ASYM_ALGO,
-        &parameter as *const libspdm_rs::libspdm_data_parameter_t,
-        asym_dptr,
-        &mut data_size,
-    );
+    let ret = unsafe {
+        libspdm_rs::libspdm_get_data(
+            cntx_ptr,
+            libspdm_rs::libspdm_data_type_t_LIBSPDM_DATA_BASE_ASYM_ALGO,
+            &parameter as *const libspdm_rs::libspdm_data_parameter_t,
+            asym_dptr,
+            &mut data_size,
+        )
+    };
 
     if LibspdmReturnStatus::libspdm_status_is_error(ret) {
         return Err(ret);
     }
     debug!("{}", spdm_algo_base_asym);
-    let ret = libspdm_rs::libspdm_get_data(
-        cntx_ptr,
-        libspdm_rs::libspdm_data_type_t_LIBSPDM_DATA_BASE_HASH_ALGO,
-        &parameter as *const libspdm_rs::libspdm_data_parameter_t,
-        hash_dptr,
-        &mut data_size,
-    );
+    let ret = unsafe {
+        libspdm_rs::libspdm_get_data(
+            cntx_ptr,
+            libspdm_rs::libspdm_data_type_t_LIBSPDM_DATA_BASE_HASH_ALGO,
+            &parameter as *const libspdm_rs::libspdm_data_parameter_t,
+            hash_dptr,
+            &mut data_size,
+        )
+    };
 
     if LibspdmReturnStatus::libspdm_status_is_error(ret) {
         return Err(ret);
     }
     debug!("{}", spdm_algo_base_hash);
 
-    let ret = libspdm_rs::libspdm_get_data(
-        cntx_ptr,
-        libspdm_rs::libspdm_data_type_t_LIBSPDM_DATA_DHE_NAME_GROUP,
-        &parameter as *const libspdm_rs::libspdm_data_parameter_t,
-        dhe_dptr,
-        &mut data_size,
-    );
+    let ret = unsafe {
+        libspdm_rs::libspdm_get_data(
+            cntx_ptr,
+            libspdm_rs::libspdm_data_type_t_LIBSPDM_DATA_DHE_NAME_GROUP,
+            &parameter as *const libspdm_rs::libspdm_data_parameter_t,
+            dhe_dptr,
+            &mut data_size,
+        )
+    };
 
     if LibspdmReturnStatus::libspdm_status_is_error(ret) {
         return Err(ret);
     }
     debug!("{}", spdm_dhe);
 
-    let ret = libspdm_rs::libspdm_get_data(
-        cntx_ptr,
-        libspdm_rs::libspdm_data_type_t_LIBSPDM_DATA_AEAD_CIPHER_SUITE,
-        &parameter as *const libspdm_rs::libspdm_data_parameter_t,
-        aead_dptr,
-        &mut data_size,
-    );
+    let ret = unsafe {
+        libspdm_rs::libspdm_get_data(
+            cntx_ptr,
+            libspdm_rs::libspdm_data_type_t_LIBSPDM_DATA_AEAD_CIPHER_SUITE,
+            &parameter as *const libspdm_rs::libspdm_data_parameter_t,
+            aead_dptr,
+            &mut data_size,
+        )
+    };
 
     if LibspdmReturnStatus::libspdm_status_is_error(ret) {
         return Err(ret);
     }
     debug!("{}", spdm_aead_cipher);
 
-    let ret = libspdm_rs::libspdm_get_data(
-        cntx_ptr,
-        libspdm_rs::libspdm_data_type_t_LIBSPDM_DATA_KEY_SCHEDULE,
-        &parameter as *const libspdm_rs::libspdm_data_parameter_t,
-        key_sched_dptr,
-        &mut data_size,
-    );
+    let ret = unsafe {
+        libspdm_rs::libspdm_get_data(
+            cntx_ptr,
+            libspdm_rs::libspdm_data_type_t_LIBSPDM_DATA_KEY_SCHEDULE,
+            &parameter as *const libspdm_rs::libspdm_data_parameter_t,
+            key_sched_dptr,
+            &mut data_size,
+        )
+    };
 
     if LibspdmReturnStatus::libspdm_status_is_error(ret) {
         return Err(ret);
@@ -3044,103 +3158,118 @@ pub unsafe fn requester_respond_if_ready(
     session_info: &mut SpdmSessionInfo,
     expected_response_code: u8,
 ) -> Result<(), u32> {
-    let context = cntx_ptr as *mut libspdm_rs::libspdm_context_t;
+    let context_ptr = cntx_ptr as *mut libspdm_rs::libspdm_context_t;
     let session_id_ptr = &mut session_info.session_id as *mut u32;
     let mut msg_size: usize = 0;
     let mut msg: u8 = 0x00;
     let msg_ptr_ptr = &mut (&mut msg as *mut _) as *mut *mut _ as *mut *mut c_void;
 
-    let ret = libspdm_rs::libspdm_acquire_sender_buffer(
-        cntx_ptr as *mut libspdm_rs::libspdm_context_t,
-        &mut msg_size,
-        msg_ptr_ptr,
-    );
+    let ret = unsafe {
+        libspdm_rs::libspdm_acquire_sender_buffer(
+            cntx_ptr as *mut libspdm_rs::libspdm_context_t,
+            &mut msg_size,
+            msg_ptr_ptr,
+        )
+    };
     if LibspdmReturnStatus::libspdm_status_is_error(ret) {
         return Err(ret);
     }
 
+    // SAFETY: `context_ptr` is provided by libspdm and is `libspdm_context_t`
+    let context = unsafe { *context_ptr };
+
     let transport_header_size: usize =
-        (*context).local_context.capability.transport_header_size as usize;
+        context.local_context.capability.transport_header_size as usize;
 
     assert!(
         msg_size
             >= (transport_header_size
-                + (*context).local_context.capability.transport_tail_size as usize)
+                + context.local_context.capability.transport_tail_size as usize)
     );
 
-    let spdm_version: u8 = libspdm_rs::libspdm_get_connection_version(context);
+    let spdm_version: u8 = unsafe { libspdm_rs::libspdm_get_connection_version(context_ptr) };
 
-    let spdm_req = (*msg_ptr_ptr).add(transport_header_size);
-    let spdm_req_ptr = spdm_req as *mut libspdm_rs::spdm_response_if_ready_request_t;
-    (*spdm_req_ptr).header.spdm_version = spdm_version;
-    (*spdm_req_ptr).header.request_response_code =
-        u8::try_from(libspdm_rs::SPDM_RESPOND_IF_READY).unwrap();
-    // Since there wasn't an error (NOT_READY), this will
-    // default to zero. Spec states that this should be "The original
-    // request code that triggered the ResponseNotReady error code
-    // response"
-    (*spdm_req_ptr).header.param1 = (*context).error_data.request_code;
-    (*spdm_req_ptr).header.param2 = (*context).error_data.token;
+    unsafe {
+        let spdm_req = (*msg_ptr_ptr).add(transport_header_size);
+        let spdm_req_ptr = spdm_req as *mut libspdm_rs::spdm_response_if_ready_request_t;
+        (*spdm_req_ptr).header.spdm_version = spdm_version;
+        (*spdm_req_ptr).header.request_response_code =
+            u8::try_from(libspdm_rs::SPDM_RESPOND_IF_READY).unwrap();
+        // Since there wasn't an error (NOT_READY), this will
+        // default to zero. Spec states that this should be "The original
+        // request code that triggered the ResponseNotReady error code
+        // response"
+        (*spdm_req_ptr).header.param1 = context.error_data.request_code;
+        (*spdm_req_ptr).header.param2 = context.error_data.token;
 
-    let spdm_request_size = core::mem::size_of::<libspdm_rs::spdm_response_if_ready_request_t>();
+        let spdm_request_size =
+            core::mem::size_of::<libspdm_rs::spdm_response_if_ready_request_t>();
 
-    let ret = libspdm_rs::libspdm_send_spdm_request(
-        cntx_ptr as *mut libspdm_rs::libspdm_context_t,
-        session_id_ptr,
-        spdm_request_size,
-        spdm_req_ptr as *mut _ as *mut c_void,
-    );
-    libspdm_rs::libspdm_release_sender_buffer(cntx_ptr as *mut libspdm_rs::libspdm_context_t);
-    if LibspdmReturnStatus::libspdm_status_is_error(ret) {
-        return Err(ret);
+        let ret = libspdm_rs::libspdm_send_spdm_request(
+            cntx_ptr as *mut libspdm_rs::libspdm_context_t,
+            session_id_ptr,
+            spdm_request_size,
+            spdm_req_ptr as *mut _ as *mut c_void,
+        );
+        libspdm_rs::libspdm_release_sender_buffer(cntx_ptr as *mut libspdm_rs::libspdm_context_t);
+
+        if LibspdmReturnStatus::libspdm_status_is_error(ret) {
+            return Err(ret);
+        }
     }
 
     let mut response_size: usize = 0;
     let mut response: u8 = 0x00;
     let response_ptr_ptr = &mut (&mut response as *mut _) as *mut *mut _ as *mut *mut c_void;
 
-    let ret = libspdm_rs::libspdm_acquire_receiver_buffer(
-        cntx_ptr as *mut libspdm_rs::libspdm_context_t,
-        &mut response_size,
-        response_ptr_ptr,
-    );
-    if LibspdmReturnStatus::libspdm_status_is_error(ret) {
-        return Err(ret);
+    unsafe {
+        let ret = libspdm_rs::libspdm_acquire_receiver_buffer(
+            cntx_ptr as *mut libspdm_rs::libspdm_context_t,
+            &mut response_size,
+            response_ptr_ptr,
+        );
+        if LibspdmReturnStatus::libspdm_status_is_error(ret) {
+            return Err(ret);
+        }
+
+        assert!(response_size >= transport_header_size);
+
+        libspdm_rs::libspdm_zero_mem(*response_ptr_ptr, response_size);
+
+        let ret = libspdm_rs::libspdm_receive_spdm_response(
+            cntx_ptr as *mut libspdm_rs::libspdm_context_t,
+            session_id_ptr,
+            &mut response_size as *mut usize,
+            response_ptr_ptr,
+        );
+        if LibspdmReturnStatus::libspdm_status_is_error(ret) {
+            return Err(ret);
+        }
     }
 
-    assert!(response_size >= transport_header_size);
-
-    libspdm_rs::libspdm_zero_mem(*response_ptr_ptr, response_size);
-
-    let ret = libspdm_rs::libspdm_receive_spdm_response(
-        cntx_ptr as *mut libspdm_rs::libspdm_context_t,
-        session_id_ptr,
-        &mut response_size as *mut usize,
-        response_ptr_ptr,
-    );
-    if LibspdmReturnStatus::libspdm_status_is_error(ret) {
-        return Err(ret);
-    }
-
-    let spdm_response = (*response_ptr_ptr) as *mut libspdm_rs::spdm_message_header_t;
+    let spdm_response_ptr =
+        unsafe { (*response_ptr_ptr) as *mut libspdm_rs::spdm_message_header_t };
+    // SAFETY: `spdm_response_ptr` is cast from `response_ptr_ptr` which is an u8 buffer
+    let spdm_response = unsafe { *spdm_response_ptr };
 
     if response_size < core::mem::size_of::<libspdm_rs::spdm_message_header_t>() {
         return Err(LIBSPDM_STATUS_INVALID_MSG_SIZE);
     }
 
-    if (*spdm_response).spdm_version != spdm_version {
+    if spdm_response.spdm_version != spdm_version {
         return Err(LIBSPDM_STATUS_INVALID_MSG_FIELD);
     }
 
-    if u32::from((*spdm_response).request_response_code) == libspdm_rs::SPDM_ERROR {
+    if u32::from(spdm_response.request_response_code) == libspdm_rs::SPDM_ERROR {
         // TODO: This request will typically fail here, as
         // SPDM-Utils responder is not expecting a RespondIfReady.
-        let ret =
-            libspdm_rs::libspdm_handle_simple_error_response(context, (*spdm_response).param1);
+        let ret = unsafe {
+            libspdm_rs::libspdm_handle_simple_error_response(context_ptr, spdm_response.param1)
+        };
         return Err(ret);
     }
 
-    if (*spdm_response).request_response_code != expected_response_code {
+    if spdm_response.request_response_code != expected_response_code {
         return Err(LIBSPDM_STATUS_INVALID_MSG_FIELD);
     }
 
