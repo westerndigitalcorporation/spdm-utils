@@ -23,7 +23,7 @@ use std::time::Duration;
 
 const SEND_RECEIVE_BUFFER_LEN: usize = LIBSPDM_MAX_SPDM_MSG_SIZE as usize;
 static CLIENT_CONNECTION: Lazy<Mutex<Option<UnixStream>>> = Lazy::new(|| Mutex::new(None));
-static mut SERVER_PERSIST: bool = false;
+static SERVER_PERSIST: Lazy<Mutex<bool>> = Lazy::new(|| Mutex::new(false));
 
 /// # Summary
 ///
@@ -109,8 +109,8 @@ unsafe extern "C" fn sserver_receive_message(
     let mut server_reset = false;
     match &mut *CLIENT_CONNECTION.lock().unwrap() {
         Some(stream) => {
-            let message = *msg_buf_ptr as *mut u8;
-            let msg_buf = from_raw_parts_mut(message, SEND_RECEIVE_BUFFER_LEN);
+            let message = unsafe { *msg_buf_ptr as *mut u8 };
+            let msg_buf = unsafe { from_raw_parts_mut(message, SEND_RECEIVE_BUFFER_LEN) };
 
             if timeout == 0 {
                 stream
@@ -134,13 +134,13 @@ unsafe extern "C" fn sserver_receive_message(
                 // 2. reader has reached its “end of file” and will likely no longer be
                 //    able to produce bytes
                 warn!("Connection dropped to client, exiting...");
-                if !SERVER_PERSIST {
+                if !(*(SERVER_PERSIST.lock().unwrap())) {
                     std::process::exit(0);
                 } else {
                     server_reset = true;
                 }
             }
-            *message_size = read_len;
+            unsafe { *message_size = read_len };
         }
         None => {
             unreachable!("Client connection lost")
@@ -212,7 +212,7 @@ pub fn register_device(context: *mut c_void, server_persist: bool) -> Result<(),
     setup_socket_and_listen()?;
 
     unsafe {
-        SERVER_PERSIST = server_persist;
+        *(SERVER_PERSIST.lock().unwrap()) = server_persist;
 
         libspdm_register_device_io_func(
             context,

@@ -415,7 +415,10 @@ pub fn prepare_request(
                         ptr::null_mut(),
                     );
                     if LibspdmReturnStatus::libspdm_status_is_error(ret) {
-                        println!("Failed to authenticate endpoint through the challenge-response protocol. libspdm error: 0x{:x}", ret);
+                        println!(
+                            "Failed to authenticate endpoint through the challenge-response protocol. libspdm error: 0x{:x}",
+                            ret
+                        );
                         return Err(ret);
                     }
                 } else {
@@ -561,9 +564,13 @@ pub fn prepare_request(
                         // Don't need to error here since it's the responder
                         // that does not support this feature.
                         if secure_msg {
-                            error!("Responder does not support Encapsulated Request capability with secure messages");
+                            error!(
+                                "Responder does not support Encapsulated Request capability with secure messages"
+                            );
                         } else {
-                            error!("Responder does not support Encapsulated Request capability with non-secure messages");
+                            error!(
+                                "Responder does not support Encapsulated Request capability with non-secure messages"
+                            );
                         }
                     } else {
                         return Err(ret);
@@ -699,198 +706,201 @@ pub fn prepare_request(
 /// # Panics
 ///
 /// Panics on invalid `cntx_ptr`
-pub unsafe fn get_responder_capabilities(cntx_ptr: *mut c_void) {
+pub fn get_responder_capabilities(cntx_ptr: *mut c_void) {
     info!("The responder supports the following capabilities:");
-    if libspdm_is_capabilities_flag_supported(
-        cntx_ptr as *const libspdm_context_t,
-        true,
-        0,
-        SPDM_GET_CAPABILITIES_RESPONSE_FLAGS_CACHE_CAP,
-    ) {
-        info!(" -SPDM_GET_CAPABILITIES_RESPONSE_FLAGS_CACHE_CAP");
-    }
-    if libspdm_is_capabilities_flag_supported(
-        cntx_ptr as *const libspdm_context_t,
-        true,
-        0,
-        SPDM_GET_CAPABILITIES_RESPONSE_FLAGS_CERT_CAP,
-    ) {
-        info!(" -SPDM_GET_CAPABILITIES_RESPONSE_FLAGS_CERT_CAP");
-    }
-    if libspdm_is_capabilities_flag_supported(
-        cntx_ptr as *const libspdm_context_t,
-        true,
-        0,
-        SPDM_GET_CAPABILITIES_RESPONSE_FLAGS_CHAL_CAP,
-    ) {
-        info!(" -SPDM_GET_CAPABILITIES_RESPONSE_FLAGS_CHAL_CAP");
-    }
-    if libspdm_is_capabilities_flag_supported(
-        cntx_ptr as *const libspdm_context_t,
-        true,
-        0,
-        SPDM_GET_CAPABILITIES_RESPONSE_FLAGS_MEAS_CAP,
-    ) {
-        info!(" -SPDM_GET_CAPABILITIES_RESPONSE_FLAGS_MEAS_CAP");
-    }
-    if libspdm_is_capabilities_flag_supported(
-        cntx_ptr as *const libspdm_context_t,
-        true,
-        0,
-        SPDM_GET_CAPABILITIES_RESPONSE_FLAGS_MEAS_CAP_NO_SIG,
-    ) {
-        info!(" -SPDM_GET_CAPABILITIES_RESPONSE_FLAGS_MEAS_CAP_NO_SIG");
-    }
-    if libspdm_is_capabilities_flag_supported(
-        cntx_ptr as *const libspdm_context_t,
-        true,
-        0,
-        SPDM_GET_CAPABILITIES_RESPONSE_FLAGS_MEAS_CAP_SIG,
-    ) {
-        info!(" -SPDM_GET_CAPABILITIES_RESPONSE_FLAGS_MEAS_CAP_SIG");
-    }
-    if libspdm_is_capabilities_flag_supported(
-        cntx_ptr as *const libspdm_context_t,
-        true,
-        0,
-        SPDM_GET_CAPABILITIES_RESPONSE_FLAGS_MEAS_FRESH_CAP,
-    ) {
-        info!(" -SPDM_GET_CAPABILITIES_RESPONSE_FLAGS_MEAS_FRESH_CAP");
-    }
-    if libspdm_is_capabilities_flag_supported(
-        cntx_ptr as *const libspdm_context_t,
-        true,
-        0,
-        SPDM_GET_CAPABILITIES_RESPONSE_FLAGS_ENCRYPT_CAP,
-    ) {
-        info!(" -SPDM_GET_CAPABILITIES_RESPONSE_FLAGS_ENCRYPT_CAP");
-    }
-    if libspdm_is_capabilities_flag_supported(
-        cntx_ptr as *const libspdm_context_t,
-        true,
-        0,
-        SPDM_GET_CAPABILITIES_RESPONSE_FLAGS_MAC_CAP,
-    ) {
-        info!(" -SPDM_GET_CAPABILITIES_RESPONSE_FLAGS_MAC_CAP");
-    }
-    if libspdm_is_capabilities_flag_supported(
-        cntx_ptr as *const libspdm_context_t,
-        true,
-        0,
-        SPDM_GET_CAPABILITIES_RESPONSE_FLAGS_MUT_AUTH_CAP,
-    ) {
-        info!(" -SPDM_GET_CAPABILITIES_RESPONSE_FLAGS_MUT_AUTH_CAP");
-    }
-    if libspdm_is_capabilities_flag_supported(
-        cntx_ptr as *const libspdm_context_t,
-        true,
-        0,
-        SPDM_GET_CAPABILITIES_RESPONSE_FLAGS_KEY_EX_CAP,
-    ) {
-        info!(" -SPDM_GET_CAPABILITIES_RESPONSE_FLAGS_KEY_EX_CAP");
-    }
-    if libspdm_is_capabilities_flag_supported(
-        cntx_ptr as *const libspdm_context_t,
-        true,
-        0,
-        SPDM_GET_CAPABILITIES_RESPONSE_FLAGS_PSK_CAP,
-    ) {
-        info!(" -SPDM_GET_CAPABILITIES_RESPONSE_FLAGS_PSK_CAP");
-    }
-    if libspdm_is_capabilities_flag_supported(
-        cntx_ptr as *const libspdm_context_t,
-        true,
-        0,
-        SPDM_GET_CAPABILITIES_RESPONSE_FLAGS_PSK_CAP_RESPONDER,
-    ) {
-        info!(" -SPDM_GET_CAPABILITIES_RESPONSE_FLAGS_PSK_CAP_RESPONDER");
-    }
-    if libspdm_is_capabilities_flag_supported(
-        cntx_ptr as *const libspdm_context_t,
-        true,
-        0,
-        SPDM_GET_CAPABILITIES_RESPONSE_FLAGS_PSK_CAP_RESPONDER_WITH_CONTEXT,
-    ) {
-        info!(" -SPDM_GET_CAPABILITIES_RESPONSE_FLAGS_PSK_CAP_RESPONDER_WITH_CONTEXT");
-    }
-    if libspdm_is_capabilities_flag_supported(
-        cntx_ptr as *const libspdm_context_t,
-        true,
-        0,
-        SPDM_GET_CAPABILITIES_RESPONSE_FLAGS_ENCAP_CAP,
-    ) {
-        info!(" -SPDM_GET_CAPABILITIES_RESPONSE_FLAGS_ENCAP_CAP");
-    }
-    if libspdm_is_capabilities_flag_supported(
-        cntx_ptr as *const libspdm_context_t,
-        true,
-        0,
-        SPDM_GET_CAPABILITIES_RESPONSE_FLAGS_HBEAT_CAP,
-    ) {
-        info!(" -SPDM_GET_CAPABILITIES_RESPONSE_FLAGS_HBEAT_CAP");
-    }
-    if libspdm_is_capabilities_flag_supported(
-        cntx_ptr as *const libspdm_context_t,
-        true,
-        0,
-        SPDM_GET_CAPABILITIES_RESPONSE_FLAGS_KEY_UPD_CAP,
-    ) {
-        info!(" -SPDM_GET_CAPABILITIES_RESPONSE_FLAGS_KEY_UPD_CAP");
-    }
-    if libspdm_is_capabilities_flag_supported(
-        cntx_ptr as *const libspdm_context_t,
-        true,
-        0,
-        SPDM_GET_CAPABILITIES_RESPONSE_FLAGS_HANDSHAKE_IN_THE_CLEAR_CAP,
-    ) {
-        info!(" -SPDM_GET_CAPABILITIES_RESPONSE_FLAGS_HANDSHAKE_IN_THE_CLEAR_CAP");
-    }
-    if libspdm_is_capabilities_flag_supported(
-        cntx_ptr as *const libspdm_context_t,
-        true,
-        0,
-        SPDM_GET_CAPABILITIES_RESPONSE_FLAGS_PUB_KEY_ID_CAP,
-    ) {
-        info!(" -SPDM_GET_CAPABILITIES_RESPONSE_FLAGS_PUB_KEY_ID_CAP");
-    }
-    if libspdm_is_capabilities_flag_supported(
-        cntx_ptr as *const libspdm_context_t,
-        true,
-        0,
-        SPDM_GET_CAPABILITIES_RESPONSE_FLAGS_CHUNK_CAP,
-    ) {
-        info!(" -SPDM_GET_CAPABILITIES_RESPONSE_FLAGS_CHUNK_CAP");
-    }
-    if libspdm_is_capabilities_flag_supported(
-        cntx_ptr as *const libspdm_context_t,
-        true,
-        0,
-        SPDM_GET_CAPABILITIES_RESPONSE_FLAGS_ALIAS_CERT_CAP,
-    ) {
-        info!(" -SPDM_GET_CAPABILITIES_RESPONSE_FLAGS_ALIAS_CERT_CAP");
-    }
-    if libspdm_is_capabilities_flag_supported(
-        cntx_ptr as *const libspdm_context_t,
-        true,
-        0,
-        SPDM_GET_CAPABILITIES_RESPONSE_FLAGS_SET_CERT_CAP,
-    ) {
-        info!(" -SPDM_GET_CAPABILITIES_RESPONSE_FLAGS_SET_CERT_CAP");
-    }
-    if libspdm_is_capabilities_flag_supported(
-        cntx_ptr as *const libspdm_context_t,
-        true,
-        0,
-        SPDM_GET_CAPABILITIES_RESPONSE_FLAGS_CSR_CAP,
-    ) {
-        info!(" -SPDM_GET_CAPABILITIES_RESPONSE_FLAGS_CSR_CAP");
-    }
-    if libspdm_is_capabilities_flag_supported(
-        cntx_ptr as *const libspdm_context_t,
-        true,
-        0,
-        SPDM_GET_CAPABILITIES_RESPONSE_FLAGS_CERT_INSTALL_RESET_CAP,
-    ) {
-        info!(" -SPDM_GET_CAPABILITIES_RESPONSE_FLAGS_CERT_INSTALL_RESET_CAP");
+
+    unsafe {
+        if libspdm_is_capabilities_flag_supported(
+            cntx_ptr as *const libspdm_context_t,
+            true,
+            0,
+            SPDM_GET_CAPABILITIES_RESPONSE_FLAGS_CACHE_CAP,
+        ) {
+            info!(" -SPDM_GET_CAPABILITIES_RESPONSE_FLAGS_CACHE_CAP");
+        }
+        if libspdm_is_capabilities_flag_supported(
+            cntx_ptr as *const libspdm_context_t,
+            true,
+            0,
+            SPDM_GET_CAPABILITIES_RESPONSE_FLAGS_CERT_CAP,
+        ) {
+            info!(" -SPDM_GET_CAPABILITIES_RESPONSE_FLAGS_CERT_CAP");
+        }
+        if libspdm_is_capabilities_flag_supported(
+            cntx_ptr as *const libspdm_context_t,
+            true,
+            0,
+            SPDM_GET_CAPABILITIES_RESPONSE_FLAGS_CHAL_CAP,
+        ) {
+            info!(" -SPDM_GET_CAPABILITIES_RESPONSE_FLAGS_CHAL_CAP");
+        }
+        if libspdm_is_capabilities_flag_supported(
+            cntx_ptr as *const libspdm_context_t,
+            true,
+            0,
+            SPDM_GET_CAPABILITIES_RESPONSE_FLAGS_MEAS_CAP,
+        ) {
+            info!(" -SPDM_GET_CAPABILITIES_RESPONSE_FLAGS_MEAS_CAP");
+        }
+        if libspdm_is_capabilities_flag_supported(
+            cntx_ptr as *const libspdm_context_t,
+            true,
+            0,
+            SPDM_GET_CAPABILITIES_RESPONSE_FLAGS_MEAS_CAP_NO_SIG,
+        ) {
+            info!(" -SPDM_GET_CAPABILITIES_RESPONSE_FLAGS_MEAS_CAP_NO_SIG");
+        }
+        if libspdm_is_capabilities_flag_supported(
+            cntx_ptr as *const libspdm_context_t,
+            true,
+            0,
+            SPDM_GET_CAPABILITIES_RESPONSE_FLAGS_MEAS_CAP_SIG,
+        ) {
+            info!(" -SPDM_GET_CAPABILITIES_RESPONSE_FLAGS_MEAS_CAP_SIG");
+        }
+        if libspdm_is_capabilities_flag_supported(
+            cntx_ptr as *const libspdm_context_t,
+            true,
+            0,
+            SPDM_GET_CAPABILITIES_RESPONSE_FLAGS_MEAS_FRESH_CAP,
+        ) {
+            info!(" -SPDM_GET_CAPABILITIES_RESPONSE_FLAGS_MEAS_FRESH_CAP");
+        }
+        if libspdm_is_capabilities_flag_supported(
+            cntx_ptr as *const libspdm_context_t,
+            true,
+            0,
+            SPDM_GET_CAPABILITIES_RESPONSE_FLAGS_ENCRYPT_CAP,
+        ) {
+            info!(" -SPDM_GET_CAPABILITIES_RESPONSE_FLAGS_ENCRYPT_CAP");
+        }
+        if libspdm_is_capabilities_flag_supported(
+            cntx_ptr as *const libspdm_context_t,
+            true,
+            0,
+            SPDM_GET_CAPABILITIES_RESPONSE_FLAGS_MAC_CAP,
+        ) {
+            info!(" -SPDM_GET_CAPABILITIES_RESPONSE_FLAGS_MAC_CAP");
+        }
+        if libspdm_is_capabilities_flag_supported(
+            cntx_ptr as *const libspdm_context_t,
+            true,
+            0,
+            SPDM_GET_CAPABILITIES_RESPONSE_FLAGS_MUT_AUTH_CAP,
+        ) {
+            info!(" -SPDM_GET_CAPABILITIES_RESPONSE_FLAGS_MUT_AUTH_CAP");
+        }
+        if libspdm_is_capabilities_flag_supported(
+            cntx_ptr as *const libspdm_context_t,
+            true,
+            0,
+            SPDM_GET_CAPABILITIES_RESPONSE_FLAGS_KEY_EX_CAP,
+        ) {
+            info!(" -SPDM_GET_CAPABILITIES_RESPONSE_FLAGS_KEY_EX_CAP");
+        }
+        if libspdm_is_capabilities_flag_supported(
+            cntx_ptr as *const libspdm_context_t,
+            true,
+            0,
+            SPDM_GET_CAPABILITIES_RESPONSE_FLAGS_PSK_CAP,
+        ) {
+            info!(" -SPDM_GET_CAPABILITIES_RESPONSE_FLAGS_PSK_CAP");
+        }
+        if libspdm_is_capabilities_flag_supported(
+            cntx_ptr as *const libspdm_context_t,
+            true,
+            0,
+            SPDM_GET_CAPABILITIES_RESPONSE_FLAGS_PSK_CAP_RESPONDER,
+        ) {
+            info!(" -SPDM_GET_CAPABILITIES_RESPONSE_FLAGS_PSK_CAP_RESPONDER");
+        }
+        if libspdm_is_capabilities_flag_supported(
+            cntx_ptr as *const libspdm_context_t,
+            true,
+            0,
+            SPDM_GET_CAPABILITIES_RESPONSE_FLAGS_PSK_CAP_RESPONDER_WITH_CONTEXT,
+        ) {
+            info!(" -SPDM_GET_CAPABILITIES_RESPONSE_FLAGS_PSK_CAP_RESPONDER_WITH_CONTEXT");
+        }
+        if libspdm_is_capabilities_flag_supported(
+            cntx_ptr as *const libspdm_context_t,
+            true,
+            0,
+            SPDM_GET_CAPABILITIES_RESPONSE_FLAGS_ENCAP_CAP,
+        ) {
+            info!(" -SPDM_GET_CAPABILITIES_RESPONSE_FLAGS_ENCAP_CAP");
+        }
+        if libspdm_is_capabilities_flag_supported(
+            cntx_ptr as *const libspdm_context_t,
+            true,
+            0,
+            SPDM_GET_CAPABILITIES_RESPONSE_FLAGS_HBEAT_CAP,
+        ) {
+            info!(" -SPDM_GET_CAPABILITIES_RESPONSE_FLAGS_HBEAT_CAP");
+        }
+        if libspdm_is_capabilities_flag_supported(
+            cntx_ptr as *const libspdm_context_t,
+            true,
+            0,
+            SPDM_GET_CAPABILITIES_RESPONSE_FLAGS_KEY_UPD_CAP,
+        ) {
+            info!(" -SPDM_GET_CAPABILITIES_RESPONSE_FLAGS_KEY_UPD_CAP");
+        }
+        if libspdm_is_capabilities_flag_supported(
+            cntx_ptr as *const libspdm_context_t,
+            true,
+            0,
+            SPDM_GET_CAPABILITIES_RESPONSE_FLAGS_HANDSHAKE_IN_THE_CLEAR_CAP,
+        ) {
+            info!(" -SPDM_GET_CAPABILITIES_RESPONSE_FLAGS_HANDSHAKE_IN_THE_CLEAR_CAP");
+        }
+        if libspdm_is_capabilities_flag_supported(
+            cntx_ptr as *const libspdm_context_t,
+            true,
+            0,
+            SPDM_GET_CAPABILITIES_RESPONSE_FLAGS_PUB_KEY_ID_CAP,
+        ) {
+            info!(" -SPDM_GET_CAPABILITIES_RESPONSE_FLAGS_PUB_KEY_ID_CAP");
+        }
+        if libspdm_is_capabilities_flag_supported(
+            cntx_ptr as *const libspdm_context_t,
+            true,
+            0,
+            SPDM_GET_CAPABILITIES_RESPONSE_FLAGS_CHUNK_CAP,
+        ) {
+            info!(" -SPDM_GET_CAPABILITIES_RESPONSE_FLAGS_CHUNK_CAP");
+        }
+        if libspdm_is_capabilities_flag_supported(
+            cntx_ptr as *const libspdm_context_t,
+            true,
+            0,
+            SPDM_GET_CAPABILITIES_RESPONSE_FLAGS_ALIAS_CERT_CAP,
+        ) {
+            info!(" -SPDM_GET_CAPABILITIES_RESPONSE_FLAGS_ALIAS_CERT_CAP");
+        }
+        if libspdm_is_capabilities_flag_supported(
+            cntx_ptr as *const libspdm_context_t,
+            true,
+            0,
+            SPDM_GET_CAPABILITIES_RESPONSE_FLAGS_SET_CERT_CAP,
+        ) {
+            info!(" -SPDM_GET_CAPABILITIES_RESPONSE_FLAGS_SET_CERT_CAP");
+        }
+        if libspdm_is_capabilities_flag_supported(
+            cntx_ptr as *const libspdm_context_t,
+            true,
+            0,
+            SPDM_GET_CAPABILITIES_RESPONSE_FLAGS_CSR_CAP,
+        ) {
+            info!(" -SPDM_GET_CAPABILITIES_RESPONSE_FLAGS_CSR_CAP");
+        }
+        if libspdm_is_capabilities_flag_supported(
+            cntx_ptr as *const libspdm_context_t,
+            true,
+            0,
+            SPDM_GET_CAPABILITIES_RESPONSE_FLAGS_CERT_INSTALL_RESET_CAP,
+        ) {
+            info!(" -SPDM_GET_CAPABILITIES_RESPONSE_FLAGS_CERT_INSTALL_RESET_CAP");
+        }
     }
 }
