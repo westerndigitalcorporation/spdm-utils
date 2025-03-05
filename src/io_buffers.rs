@@ -54,7 +54,7 @@ pub fn libspdm_setup_io_buffers(
 /// # Returns
 ///
 /// (0) on success
-#[no_mangle]
+#[unsafe(no_mangle)]
 pub unsafe extern "C" fn acquire_sender_buffer(
     _context: *mut c_void,
     msg_buf_ptr: *mut *mut c_void,
@@ -82,7 +82,7 @@ pub unsafe extern "C" fn acquire_sender_buffer(
 /// # Returns
 ///
 /// (0) on success
-#[no_mangle]
+#[unsafe(no_mangle)]
 pub unsafe extern "C" fn acquire_receiver_buffer(
     _context: *mut c_void,
     msg_buf_ptr: *mut *mut c_void,
@@ -97,7 +97,7 @@ pub unsafe extern "C" fn acquire_receiver_buffer(
 }
 
 /// We are only passing a reference to heap allocated memory, no-op required
-#[no_mangle]
+#[unsafe(no_mangle)]
 pub unsafe extern "C" fn release_receiver_buffer(
     _context: *mut c_void,
     _msg_buf_ptr: *const c_void,
@@ -105,7 +105,7 @@ pub unsafe extern "C" fn release_receiver_buffer(
 }
 
 /// We are only passing a reference to heap allocated memory, no-op required
-#[no_mangle]
+#[unsafe(no_mangle)]
 pub unsafe extern "C" fn release_sender_buffer(_context: *mut c_void, _msg_buf_ptr: *const c_void) {
 }
 

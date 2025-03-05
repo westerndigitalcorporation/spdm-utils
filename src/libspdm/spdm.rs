@@ -1060,7 +1060,7 @@ pub unsafe fn start_session(
     Ok(session_info)
 }
 
-#[no_mangle]
+#[unsafe(no_mangle)]
 pub unsafe extern "C" fn libspdm_requester_data_sign(
     _spdm_context: *mut c_void,
     _spdm_version: libspdm_rs::spdm_version_number_t,
@@ -1116,7 +1116,7 @@ libspdm_match_fn_prototypes!(
 /// # Returns
 ///
 /// True  signing success, false otherwise
-#[no_mangle]
+#[unsafe(no_mangle)]
 pub unsafe extern "C" fn libspdm_responder_data_sign(
     _spdm_context: *mut c_void,
     spdm_version: libspdm_rs::spdm_version_number_t,
@@ -1238,7 +1238,7 @@ libspdm_match_fn_prototypes!(
 ///
 /// True if certificate saved to NV successfully, otherwise, false
 #[allow(unused)]
-#[no_mangle]
+#[unsafe(no_mangle)]
 pub unsafe extern "C" fn libspdm_write_certificate_to_nvm(
     _spdm_context: *mut c_void,
     slot_id: u8,
@@ -1309,7 +1309,7 @@ libspdm_match_fn_prototypes!(
 /// # Returns
 ///
 /// True if CSR generation was a success, false otherwise
-#[no_mangle]
+#[unsafe(no_mangle)]
 pub unsafe extern "C" fn libspdm_gen_csr(
     _spdm_context: *mut c_void,
     base_hash_algo: u32,
@@ -1492,7 +1492,7 @@ libspdm_match_fn_prototypes!(
 ///
 /// True if measurement summary hash is generated or skipped
 /// False if the measurement summary has is not generated/generation failure
-#[no_mangle]
+#[unsafe(no_mangle)]
 pub unsafe extern "C" fn libspdm_generate_measurement_summary_hash(
     spdm_context: *mut c_void,
     spdm_version: libspdm_rs::spdm_version_number_t,
@@ -2095,7 +2095,7 @@ unsafe fn libspdm_fill_measurement_device_mode_block(
 /// RETURN_INVALID_PARAMETER: Invalid parameter passed to function.
 /// RETURN_NOT_FOUND: Unsupported measurement index.
 /// RETURN_***: Any other RETURN_ error indicating the type of failure.
-#[no_mangle]
+#[unsafe(no_mangle)]
 pub unsafe extern "C" fn libspdm_measurement_collection(
     _spdm_context: *mut c_void,
     spdm_version: libspdm_rs::spdm_version_number_t,
@@ -2335,7 +2335,7 @@ libspdm_match_fn_prototypes!(
 /// # Returns
 ///
 /// True if Hkdf generated successfully, false otherwise
-#[no_mangle]
+#[unsafe(no_mangle)]
 pub unsafe extern "C" fn libspdm_psk_handshake_secret_hkdf_expand(
     _spdm_version: libspdm_rs::spdm_version_number_t,
     base_hash_algo: u32,
@@ -2438,7 +2438,7 @@ libspdm_match_fn_prototypes!(
 /// # Returns
 ///
 /// True if Hkdf generated successfully, false otherwise
-#[no_mangle]
+#[unsafe(no_mangle)]
 pub unsafe extern "C" fn libspdm_psk_master_secret_hkdf_expand(
     spdm_version: libspdm_rs::spdm_version_number_t,
     base_hash_algo: u32,
@@ -2572,7 +2572,7 @@ libspdm_match_fn_prototypes!(
 /// # Summary
 ///
 /// Format the certificate specified by `path` into what `libspdm` expects
-#[no_mangle]
+#[unsafe(no_mangle)]
 pub unsafe extern "C" fn libspdm_measurement_opaque_data(
     _spdm_context: *mut c_void,
     _spdm_version: libspdm_rs::spdm_version_number_t,
@@ -2610,7 +2610,7 @@ libspdm_match_fn_prototypes!(
     libspdm_measurement_opaque_data
 );
 
-#[no_mangle]
+#[unsafe(no_mangle)]
 pub unsafe extern "C" fn libspdm_challenge_opaque_data(
     _spdm_context: *mut c_void,
     _spdm_version: libspdm_rs::spdm_version_number_t,
@@ -2646,7 +2646,7 @@ libspdm_match_fn_prototypes!(
     libspdm_challenge_opaque_data
 );
 
-#[no_mangle]
+#[unsafe(no_mangle)]
 pub unsafe extern "C" fn libspdm_encap_challenge_opaque_data(
     _spdm_context: *mut c_void,
     _spdm_version: libspdm_rs::spdm_version_number_t,
@@ -2720,7 +2720,7 @@ libspdm_match_fn_prototypes!(
 /// # Returns
 ///
 /// True if CSR generation was a success, false otherwise
-#[no_mangle]
+#[unsafe(no_mangle)]
 pub unsafe extern "C" fn libspdm_gen_csr_ex(
     spdm_context: *mut c_void,
     base_hash_algo: c_uint,
@@ -3029,7 +3029,7 @@ pub unsafe fn get_negotiated_algos(cntx_ptr: *mut c_void, slot_id: u8) -> Result
 }
 
 /// return if current code is running in a trusted environment.
-#[no_mangle]
+#[unsafe(no_mangle)]
 pub unsafe extern "C" fn libspdm_is_in_trusted_environment(_spdm_context: *mut c_void) -> bool {
     true
 }

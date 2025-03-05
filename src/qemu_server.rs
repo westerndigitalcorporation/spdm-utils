@@ -48,7 +48,7 @@ static CLIENT_CONNECTION: Lazy<Mutex<Option<TcpStream>>> = Lazy::new(|| Mutex::n
 ///
 /// Panics if the buffers passed in are invalid or for any other point of
 /// failure.
-#[no_mangle]
+#[unsafe(no_mangle)]
 unsafe extern "C" fn qemu_send_message_doe(
     _context: *mut c_void,
     message_size: usize,
@@ -129,7 +129,7 @@ unsafe extern "C" fn qemu_send_message_doe(
 ///
 /// Panics if the buffers passed in are invalid or for any other point of
 /// failure.
-#[no_mangle]
+#[unsafe(no_mangle)]
 unsafe extern "C" fn qemu_receive_message_doe(
     _context: *mut c_void,
     message_size: *mut usize,
@@ -208,7 +208,7 @@ unsafe extern "C" fn qemu_receive_message_doe(
 ///
 /// Panics if the buffers passed in are invalid or for any other point of
 /// failure.
-#[no_mangle]
+#[unsafe(no_mangle)]
 unsafe extern "C" fn qemu_send_message_mctp(
     _context: *mut c_void,
     message_size: usize,
@@ -284,7 +284,7 @@ unsafe extern "C" fn qemu_send_message_mctp(
 ///
 /// Panics if the buffers passed in are invalid or for any other point of
 /// failure.
-#[no_mangle]
+#[unsafe(no_mangle)]
 unsafe extern "C" fn qemu_receive_message_mctp(
     _context: *mut c_void,
     message_size: *mut usize,

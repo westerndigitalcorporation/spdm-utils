@@ -73,7 +73,7 @@ impl PcieIdentifiers {
 ///
 /// Panics if the buffers passed in are invalid or for any other point of
 /// failure.
-#[no_mangle]
+#[unsafe(no_mangle)]
 unsafe extern "C" fn doe_pci_cfg_send_message(
     _context: *mut c_void,
     message_size: usize,
@@ -139,7 +139,7 @@ unsafe extern "C" fn doe_pci_cfg_send_message(
 ///
 /// Panics if the buffers passed in are invalid or for any other point of
 /// failure.
-#[no_mangle]
+#[unsafe(no_mangle)]
 unsafe extern "C" fn doe_pci_cfg_receive_message(
     _context: *mut c_void,
     message_size: *mut usize,
