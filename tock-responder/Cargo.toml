@@ -14,7 +14,7 @@ version = "0.1.0"
 [workspace.package]
 # This must be kept in sync with rust-toolchain.toml; please see that file for
 # more information.
-rust-version = "1.81"
+rust-version = "1.82"
 
 [dependencies]
 # Pull in all of the libtock-rs crates
