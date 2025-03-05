@@ -138,8 +138,8 @@ unsafe extern "C" fn qemu_receive_message_doe(
 ) -> u32 {
     match &mut *CLIENT_CONNECTION.lock().unwrap() {
         Some(stream) => {
-            let message = *msg_buf_ptr as *mut u8;
-            let msg_buf = from_raw_parts_mut(message, SEND_RECEIVE_BUFFER_LEN);
+            let message = unsafe { *msg_buf_ptr as *mut u8 };
+            let msg_buf = unsafe { from_raw_parts_mut(message, SEND_RECEIVE_BUFFER_LEN) };
 
             if timeout == 0 {
                 stream
@@ -178,7 +178,7 @@ unsafe extern "C" fn qemu_receive_message_doe(
                 std::process::exit(0);
             }
 
-            *message_size = read_len;
+            unsafe { *message_size = read_len };
         }
         None => {
             unreachable!("Client connection lost")
@@ -293,8 +293,8 @@ unsafe extern "C" fn qemu_receive_message_mctp(
 ) -> u32 {
     match &mut *CLIENT_CONNECTION.lock().unwrap() {
         Some(stream) => {
-            let message = *msg_buf_ptr as *mut u8;
-            let msg_buf = from_raw_parts_mut(message, SEND_RECEIVE_BUFFER_LEN);
+            let message = unsafe { *msg_buf_ptr as *mut u8 };
+            let msg_buf = unsafe { from_raw_parts_mut(message, SEND_RECEIVE_BUFFER_LEN) };
 
             if timeout == 0 {
                 stream
@@ -333,7 +333,7 @@ unsafe extern "C" fn qemu_receive_message_mctp(
                 std::process::exit(0);
             }
 
-            *message_size = read_len;
+            unsafe { *message_size = read_len };
         }
         None => {
             unreachable!("Client connection lost")

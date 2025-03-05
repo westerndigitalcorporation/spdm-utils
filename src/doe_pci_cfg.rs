@@ -98,18 +98,20 @@ unsafe extern "C" fn doe_pci_cfg_send_message(
     for chunk in msg_buf.chunks(4) {
         let data = u32::from_le_bytes(chunk[0..4].try_into().unwrap());
 
-        pci_write_long(device, doe_offset + DOE_WRITE_DATA_MAILBOX, data);
+        unsafe { pci_write_long(device, doe_offset + DOE_WRITE_DATA_MAILBOX, data) };
     }
 
     // Set the DOE Go bit to indicate we are all done
-    let doe_control = pci_read_long(device, doe_offset + DOE_CONTROL);
-    pci_write_long(
-        device,
-        doe_offset + DOE_CONTROL,
-        doe_control | DOE_CONTROL_GO,
-    );
+    let doe_control = unsafe { pci_read_long(device, doe_offset + DOE_CONTROL) };
+    unsafe {
+        pci_write_long(
+            device,
+            doe_offset + DOE_CONTROL,
+            doe_control | DOE_CONTROL_GO,
+        )
+    };
 
-    pci_cleanup(pacc);
+    unsafe { pci_cleanup(pacc) };
 
     info!("Sent!\n");
     0
@@ -146,8 +148,8 @@ unsafe extern "C" fn doe_pci_cfg_receive_message(
     message_ptr: *mut *mut c_void,
     _timeout: u64,
 ) -> u32 {
-    let message = *message_ptr as *mut u8;
-    let msg_buf = from_raw_parts_mut(message, SEND_RECEIVE_BUFFER_LEN);
+    let message = unsafe { *message_ptr as *mut u8 };
+    let msg_buf = unsafe { from_raw_parts_mut(message, SEND_RECEIVE_BUFFER_LEN) };
 
     info!("Receiving message");
     let pcie_ids = PCIE_IDENTIFIERS.lock().unwrap();
@@ -162,25 +164,25 @@ unsafe extern "C" fn doe_pci_cfg_receive_message(
     };
 
     let mut bytes_received = 0;
-    let mut doe_status = pci_read_long(device, doe_offset + DOE_STATUS);
+    let mut doe_status = unsafe { pci_read_long(device, doe_offset + DOE_STATUS) };
 
     // Read data until there is no more
     while doe_status & DOE_STATUS_DOR == DOE_STATUS_DOR && (bytes_received + 4) < msg_buf.len() {
-        let data = pci_read_long(device, doe_offset + DOE_READ_DATA_MAILBOX);
+        let data = unsafe { pci_read_long(device, doe_offset + DOE_READ_DATA_MAILBOX) };
         msg_buf[bytes_received..(bytes_received + 4)].copy_from_slice(&data.to_le_bytes());
         bytes_received += 4;
 
         // Clear the data by writing to the FIFO (note we can write anything)
-        pci_write_long(device, doe_offset + DOE_READ_DATA_MAILBOX, 0xDEADBEEF);
+        unsafe { pci_write_long(device, doe_offset + DOE_READ_DATA_MAILBOX, 0xDEADBEEF) };
 
-        doe_status = pci_read_long(device, doe_offset + DOE_STATUS);
+        doe_status = unsafe { pci_read_long(device, doe_offset + DOE_STATUS) };
     }
 
-    *message_size = bytes_received;
+    unsafe { *message_size = bytes_received };
 
     info!("Received: {:x?}", &msg_buf[0..bytes_received]);
 
-    pci_cleanup(pacc);
+    unsafe { pci_cleanup(pacc) };
 
     0
 }
@@ -273,48 +275,51 @@ fn get_pcie_dev_name(vendor_id: u16, device_id: u16) -> Option<String> {
 ///
 /// On success a list of PCIe DoE supported devices and their names
 /// or None if no such devices exists
-pub unsafe fn get_doe_supported_devs() -> Option<Vec<PcieDevInfo>> {
-    let pacc = pci_alloc();
+pub fn get_doe_supported_devs() -> Option<Vec<PcieDevInfo>> {
+    let pacc = unsafe { pci_alloc() };
     if pacc.is_null() {
         error!("Failed to setup PCI access");
         return None;
     }
 
-    pci_init(pacc);
-    pci_scan_bus(pacc);
+    unsafe { pci_init(pacc) };
+    unsafe { pci_scan_bus(pacc) };
 
-    let mut device: *mut pci_dev = (*pacc).devices;
+    let mut device: *mut pci_dev = unsafe { (*pacc).devices };
     let mut doe_supported_dev: Vec<PcieDevInfo> = Vec::new();
 
     while !device.is_null() {
-        pci_fill_info(
-            device,
-            (PCI_FILL_IDENT | PCI_FILL_BASES | PCI_FILL_CLASS | PCI_FILL_EXT_CAPS) as i32,
-        );
+        unsafe {
+            pci_fill_info(
+                device,
+                (PCI_FILL_IDENT | PCI_FILL_BASES | PCI_FILL_CLASS | PCI_FILL_EXT_CAPS) as i32,
+            )
+        };
 
         if get_doe_offset(device).is_ok() {
             // Behold, it has DoE support
-            let dev_name =
-                if let Some(name) = get_pcie_dev_name((*device).vendor_id, (*device).device_id) {
-                    name
-                } else {
-                    warn!(
-                        "Device name not found for [{:04x}:{:04x}]",
-                        (*device).vendor_id,
-                        (*device).device_id
-                    );
-                    "Unnamed".to_string()
-                };
+            let dev_name = if let Some(name) =
+                unsafe { get_pcie_dev_name((*device).vendor_id, (*device).device_id) }
+            {
+                name
+            } else {
+                warn!(
+                    "Device name not found for [{:04x}:{:04x}]",
+                    unsafe { (*device).vendor_id },
+                    unsafe { (*device).device_id }
+                );
+                "Unnamed".to_string()
+            };
             doe_supported_dev.push(PcieDevInfo {
                 name: dev_name,
-                vendor_id: (*device).vendor_id,
-                device_id: (*device).device_id,
+                vendor_id: unsafe { (*device).vendor_id },
+                device_id: unsafe { (*device).device_id },
             });
         }
-        device = (*device).next;
+        unsafe { device = (*device).next };
     }
 
-    pci_cleanup(pacc);
+    unsafe { pci_cleanup(pacc) };
     if doe_supported_dev.is_empty() {
         return None;
     }
@@ -339,35 +344,35 @@ pub unsafe fn get_doe_supported_devs() -> Option<Vec<PcieDevInfo>> {
 ///                 capabilities list
 ///
 /// *  Err(()): On device not found
-pub unsafe fn get_pcie_dev(
-    dev_vid: u16,
-    dev_id: u16,
-) -> Result<(*mut pci_access, *mut pci_dev, i32), ()> {
-    let pacc = pci_alloc();
+pub fn get_pcie_dev(dev_vid: u16, dev_id: u16) -> Result<(*mut pci_access, *mut pci_dev, i32), ()> {
+    let pacc = unsafe { pci_alloc() };
     if pacc.is_null() {
         return Err(());
     }
-    pci_init(pacc);
-    pci_scan_bus(pacc);
 
-    let mut device = (*pacc).devices;
+    unsafe { pci_init(pacc) };
+    unsafe { pci_scan_bus(pacc) };
+
+    let mut device = unsafe { (*pacc).devices };
 
     while !device.is_null() {
-        pci_fill_info(
-            device,
-            (PCI_FILL_IDENT | PCI_FILL_BASES | PCI_FILL_CLASS | PCI_FILL_EXT_CAPS) as i32,
-        );
+        unsafe {
+            pci_fill_info(
+                device,
+                (PCI_FILL_IDENT | PCI_FILL_BASES | PCI_FILL_CLASS | PCI_FILL_EXT_CAPS) as i32,
+            )
+        };
 
-        if (*device).vendor_id == dev_vid && (*device).device_id == dev_id {
+        if unsafe { (*device).vendor_id == dev_vid && (*device).device_id == dev_id } {
             // Device found
             break;
         }
-        device = (*device).next;
+        unsafe { device = (*device).next };
     }
 
     if device.is_null() {
         // We didn't find anything, return
-        pci_cleanup(pacc);
+        unsafe { pci_cleanup(pacc) };
         error!("Device [VID: {} | DevID: {}] not found!", dev_vid, dev_id);
         return Err(());
     }
@@ -375,7 +380,7 @@ pub unsafe fn get_pcie_dev(
     if let Ok(doe_offset) = get_doe_offset(device) {
         Ok((pacc, device, doe_offset))
     } else {
-        pci_cleanup(pacc);
+        unsafe { pci_cleanup(pacc) };
         error!("DOE not found in the extended capability list");
         Err(())
     }
@@ -398,16 +403,16 @@ pub unsafe fn get_pcie_dev(
 /// capabilities list.
 ///
 /// Err(()) if DOE is not found.
-unsafe fn get_doe_offset(pdev: *mut pci_dev) -> Result<i32, ()> {
-    let mut current = (*pdev).first_cap;
+fn get_doe_offset(pdev: *mut pci_dev) -> Result<i32, ()> {
+    let mut current = unsafe { (*pdev).first_cap };
     while !current.is_null() {
         // Check if this is a DOE Capability (0x2E)
-        if (*current).id == 0x2E {
+        if unsafe { (*current).id } == 0x2E {
             // Get the offset, note this is a u32 but all the pci functions take
             // an int as the offset argument. So return as int.
-            return Ok(i32::try_from((*current).addr).unwrap());
+            return Ok(i32::try_from(unsafe { (*current).addr }).unwrap());
         }
-        current = (*current).next;
+        unsafe { current = (*current).next };
     }
     Err(())
 }
@@ -430,15 +435,15 @@ unsafe fn get_doe_offset(pdev: *mut pci_dev) -> Result<i32, ()> {
 /// # Panics
 ///
 /// Panics if `pci_dev` is invalid
-unsafe fn doe_wait_not_busy(device: *mut pci_dev, doe_offset: i32) -> Result<(), DoeStatus> {
-    let mut doe_status = pci_read_long(device, doe_offset + DOE_STATUS);
+fn doe_wait_not_busy(device: *mut pci_dev, doe_offset: i32) -> Result<(), DoeStatus> {
+    let mut doe_status = unsafe { pci_read_long(device, doe_offset + DOE_STATUS) };
 
     while doe_status & DOE_STATUS_BUSY == DOE_STATUS_BUSY {
         if doe_status & DOE_STATUS_ERR == DOE_STATUS_ERR {
             error!("Device DOE status error");
             return Err(DoeStatus::DoeStatusErr);
         }
-        doe_status = pci_read_long(device, doe_offset + DOE_STATUS)
+        doe_status = unsafe { pci_read_long(device, doe_offset + DOE_STATUS) };
     }
     Ok(())
 }
@@ -466,8 +471,8 @@ enum DoeStatus {
 /// # Panics
 ///
 /// Panics if `pci_dev` is invalid
-unsafe fn doe_wait_status_dor(device: *mut pci_dev, doe_offset: i32) -> Result<(), DoeStatus> {
-    let mut doe_status = pci_read_long(device, doe_offset + DOE_STATUS);
+fn doe_wait_status_dor(device: *mut pci_dev, doe_offset: i32) -> Result<(), DoeStatus> {
+    let mut doe_status = unsafe { pci_read_long(device, doe_offset + DOE_STATUS) };
 
     // Wait for the data object ready to be true
     while doe_status & DOE_STATUS_DOR != DOE_STATUS_DOR {
@@ -475,7 +480,7 @@ unsafe fn doe_wait_status_dor(device: *mut pci_dev, doe_offset: i32) -> Result<(
             error!("Device DOE status error");
             return Err(DoeStatus::DoeStatusErr);
         }
-        doe_status = pci_read_long(device, doe_offset + DOE_STATUS);
+        doe_status = unsafe { pci_read_long(device, doe_offset + DOE_STATUS) };
     }
     Ok(())
 }
@@ -493,20 +498,22 @@ unsafe fn doe_wait_status_dor(device: *mut pci_dev, doe_offset: i32) -> Result<(
 /// # Panics
 ///
 /// Panics if `pci_dev` is invalid
-unsafe fn doe_issue_abort(device: *mut pci_dev, doe_offset: i32, block_on_status_err: bool) {
-    let doe_control = pci_read_long(device, doe_offset + DOE_CONTROL);
+fn doe_issue_abort(device: *mut pci_dev, doe_offset: i32, block_on_status_err: bool) {
+    let doe_control = unsafe { pci_read_long(device, doe_offset + DOE_CONTROL) };
     warn!("Issuing DOE Control abort");
-    pci_write_long(
-        device,
-        doe_offset + DOE_CONTROL,
-        doe_control | DOE_CONTROL_ABORT,
-    );
+    unsafe {
+        pci_write_long(
+            device,
+            doe_offset + DOE_CONTROL,
+            doe_control | DOE_CONTROL_ABORT,
+        )
+    };
 
     if block_on_status_err {
         debug!("Waiting for DOE status error to clear");
-        let mut doe_status = pci_read_long(device, doe_offset + DOE_STATUS);
+        let mut doe_status = unsafe { pci_read_long(device, doe_offset + DOE_STATUS) };
         while doe_status & DOE_STATUS_ERR == DOE_STATUS_ERR {
-            doe_status = pci_read_long(device, doe_offset + DOE_STATUS);
+            doe_status = unsafe { pci_read_long(device, doe_offset + DOE_STATUS) };
         }
     }
     debug!("DOE Status error Cleared");
@@ -528,8 +535,8 @@ unsafe fn doe_issue_abort(device: *mut pci_dev, doe_offset: i32, block_on_status
 /// # Panics
 ///
 /// Panics if `pci_dev` is invalid
-unsafe fn doe_capability_version(device: *mut pci_dev, doe_offset: i32) -> u8 {
-    let doe_extended_cap = pci_read_long(device, doe_offset);
+fn doe_capability_version(device: *mut pci_dev, doe_offset: i32) -> u8 {
+    let doe_extended_cap = unsafe { pci_read_long(device, doe_offset) };
 
     ((doe_extended_cap & 0xF0000) >> 16) as u8
 }
@@ -666,7 +673,7 @@ impl fmt::Display for DoeDiscoveryPacket {
 ///
 /// Panics if test setup fails
 /// Panics if the tests assertions fail
-pub unsafe fn test_discovery_basic() -> Result<(), ()> {
+pub fn test_discovery_basic() -> Result<(), ()> {
     info!("--- Testing Discovery: Basic ---");
     let pcie_ids = PCIE_IDENTIFIERS.lock().unwrap();
     let (pacc, device, doe_offset) = get_pcie_dev(pcie_ids.vid, pcie_ids.devid).unwrap();
@@ -699,16 +706,18 @@ pub unsafe fn test_discovery_basic() -> Result<(), ()> {
     };
     info!("Discovery Request: {}", discovery_packet);
     for data in discovery_packet.as_array().iter() {
-        pci_write_long(device, doe_offset + DOE_WRITE_DATA_MAILBOX, *data);
+        unsafe { pci_write_long(device, doe_offset + DOE_WRITE_DATA_MAILBOX, *data) };
     }
 
     // Set the DOE Go bit to indicate we are all done
-    let doe_control = pci_read_long(device, doe_offset + DOE_CONTROL);
-    pci_write_long(
-        device,
-        doe_offset + DOE_CONTROL,
-        doe_control | DOE_CONTROL_GO,
-    );
+    let doe_control = unsafe { pci_read_long(device, doe_offset + DOE_CONTROL) };
+    unsafe {
+        pci_write_long(
+            device,
+            doe_offset + DOE_CONTROL,
+            doe_control | DOE_CONTROL_GO,
+        )
+    };
 
     // Wait for a response
     doe_wait_status_dor(device, doe_offset).map_err(|e| match e {
@@ -720,14 +729,14 @@ pub unsafe fn test_discovery_basic() -> Result<(), ()> {
     // Read and Print Response
     let mut recv = DoeDiscoveryResponse(Vec::new());
 
-    let mut doe_status = pci_read_long(device, doe_offset + DOE_STATUS);
+    let mut doe_status = unsafe { pci_read_long(device, doe_offset + DOE_STATUS) };
 
     while doe_status & DOE_STATUS_DOR == DOE_STATUS_DOR {
         recv.0
-            .push((pci_read_long(device, doe_offset + DOE_READ_DATA_MAILBOX)).to_le());
+            .push((unsafe { pci_read_long(device, doe_offset + DOE_READ_DATA_MAILBOX) }).to_le());
         // Clear the data by writing to the FIFO (note we can write anything)
-        pci_write_long(device, doe_offset + DOE_READ_DATA_MAILBOX, 0xDEADBEEF);
-        doe_status = pci_read_long(device, doe_offset + DOE_STATUS);
+        unsafe { pci_write_long(device, doe_offset + DOE_READ_DATA_MAILBOX, 0xDEADBEEF) };
+        doe_status = unsafe { pci_read_long(device, doe_offset + DOE_STATUS) };
     }
     assert_eq!(
         recv.0.len(),
@@ -736,7 +745,7 @@ pub unsafe fn test_discovery_basic() -> Result<(), ()> {
         recv.0.len() * 4
     );
     info!("Discovery Response: {}", recv);
-    pci_cleanup(pacc);
+    unsafe { pci_cleanup(pacc) };
     info!("[OK]\n");
     Ok(())
 }
@@ -757,7 +766,7 @@ pub unsafe fn test_discovery_basic() -> Result<(), ()> {
 ///
 /// Panics if test setup fails
 /// Panics if the tests assertions fail
-pub unsafe fn test_discovery_all() -> Result<(), ()> {
+pub fn test_discovery_all() -> Result<(), ()> {
     info!("--- Testing Discovery: All Discoverable objects ---");
     let pcie_ids = PCIE_IDENTIFIERS.lock().unwrap();
     let (pacc, device, doe_offset) = get_pcie_dev(pcie_ids.vid, pcie_ids.devid).unwrap();
@@ -795,15 +804,17 @@ pub unsafe fn test_discovery_all() -> Result<(), ()> {
         info!("Discovery Request: {}", discovery_packet);
 
         for data in discovery_packet.as_array().iter() {
-            pci_write_long(device, doe_offset + DOE_WRITE_DATA_MAILBOX, *data);
+            unsafe { pci_write_long(device, doe_offset + DOE_WRITE_DATA_MAILBOX, *data) };
         }
         // Set the DOE Go bit to indicate we are all done
-        let doe_control = pci_read_long(device, doe_offset + DOE_CONTROL);
-        pci_write_long(
-            device,
-            doe_offset + DOE_CONTROL,
-            doe_control | DOE_CONTROL_GO,
-        );
+        let doe_control = unsafe { pci_read_long(device, doe_offset + DOE_CONTROL) };
+        unsafe {
+            pci_write_long(
+                device,
+                doe_offset + DOE_CONTROL,
+                doe_control | DOE_CONTROL_GO,
+            )
+        };
         // Wait for a response
         doe_wait_status_dor(device, doe_offset).map_err(|e| match e {
             DoeStatus::DoeStatusErr => {
@@ -813,14 +824,15 @@ pub unsafe fn test_discovery_all() -> Result<(), ()> {
         // Read and Print Response
         let mut recv = DoeDiscoveryResponse(Vec::new());
 
-        let mut doe_status = pci_read_long(device, doe_offset + DOE_STATUS);
+        let mut doe_status = unsafe { pci_read_long(device, doe_offset + DOE_STATUS) };
 
         while doe_status & DOE_STATUS_DOR == DOE_STATUS_DOR {
-            recv.0
-                .push((pci_read_long(device, doe_offset + DOE_READ_DATA_MAILBOX)).to_le());
+            recv.0.push(
+                (unsafe { pci_read_long(device, doe_offset + DOE_READ_DATA_MAILBOX) }).to_le(),
+            );
             // Clear the data by writing to the FIFO (note we can write anything)
-            pci_write_long(device, doe_offset + DOE_READ_DATA_MAILBOX, 0xDEADBEEF);
-            doe_status = pci_read_long(device, doe_offset + DOE_STATUS);
+            unsafe { pci_write_long(device, doe_offset + DOE_READ_DATA_MAILBOX, 0xDEADBEEF) };
+            doe_status = unsafe { pci_read_long(device, doe_offset + DOE_STATUS) };
         }
 
         // This is the 3rd dword which is the response data (see table 6-42)
@@ -867,7 +879,7 @@ pub unsafe fn test_discovery_all() -> Result<(), ()> {
         }
     }
 
-    pci_cleanup(pacc);
+    unsafe { pci_cleanup(pacc) };
     info!("[OK]\n");
     Ok(())
 }
@@ -884,7 +896,7 @@ pub unsafe fn test_discovery_all() -> Result<(), ()> {
 ///
 /// Panics if test setup fails
 /// Panics if the tests assertions fail
-pub unsafe fn test_discovery_error() -> Result<(), ()> {
+pub fn test_discovery_error() -> Result<(), ()> {
     info!("--- Testing Discovery: Error Cases ---");
     let pcie_ids = PCIE_IDENTIFIERS.lock().unwrap();
     let (pacc, device, doe_offset) = get_pcie_dev(pcie_ids.vid, pcie_ids.devid).unwrap();
@@ -921,16 +933,18 @@ pub unsafe fn test_discovery_error() -> Result<(), ()> {
     info!("Discovery Request: {}", discovery_packet);
 
     for data in discovery_packet.as_array().iter() {
-        pci_write_long(device, doe_offset + DOE_WRITE_DATA_MAILBOX, *data);
+        unsafe { pci_write_long(device, doe_offset + DOE_WRITE_DATA_MAILBOX, *data) };
     }
 
     // Set the DOE Go bit to indicate we are all done
-    let doe_control = pci_read_long(device, doe_offset + DOE_CONTROL);
-    pci_write_long(
-        device,
-        doe_offset + DOE_CONTROL,
-        doe_control | DOE_CONTROL_GO,
-    );
+    let doe_control = unsafe { pci_read_long(device, doe_offset + DOE_CONTROL) };
+    unsafe {
+        pci_write_long(
+            device,
+            doe_offset + DOE_CONTROL,
+            doe_control | DOE_CONTROL_GO,
+        )
+    };
 
     // Wait for a response
     doe_wait_status_dor(device, doe_offset).map_err(|e| match e {
@@ -942,14 +956,14 @@ pub unsafe fn test_discovery_error() -> Result<(), ()> {
     // Read and Print Response
     let mut recv = DoeDiscoveryResponse(Vec::new());
 
-    let mut doe_status = pci_read_long(device, doe_offset + DOE_STATUS);
+    let mut doe_status = unsafe { pci_read_long(device, doe_offset + DOE_STATUS) };
 
     while doe_status & DOE_STATUS_DOR == DOE_STATUS_DOR {
         recv.0
-            .push((pci_read_long(device, doe_offset + DOE_READ_DATA_MAILBOX)).to_le());
+            .push((unsafe { pci_read_long(device, doe_offset + DOE_READ_DATA_MAILBOX) }).to_le());
         // Clear the data by writing to the FIFO (note we can write anything)
-        pci_write_long(device, doe_offset + DOE_READ_DATA_MAILBOX, 0xDEADBEEF);
-        doe_status = pci_read_long(device, doe_offset + DOE_STATUS);
+        unsafe { pci_write_long(device, doe_offset + DOE_READ_DATA_MAILBOX, 0xDEADBEEF) };
+        doe_status = unsafe { pci_read_long(device, doe_offset + DOE_STATUS) };
     }
     assert_eq!(
         recv.0.len(),
@@ -965,7 +979,7 @@ pub unsafe fn test_discovery_error() -> Result<(), ()> {
     );
 
     info!("Discovery Response: {}", recv);
-    pci_cleanup(pacc);
+    unsafe { pci_cleanup(pacc) };
     info!("[OK]\n");
     Ok(())
 }

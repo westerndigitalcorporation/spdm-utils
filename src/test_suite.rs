@@ -70,7 +70,7 @@ pub fn setup_test_backend(cntx: *mut c_void) -> Result<SpdmSessionInfo, u32> {
     }
 
     info!("[{slot_id}] Listing Responder Capabilities");
-    unsafe { request::get_responder_capabilities(cntx) };
+    request::get_responder_capabilities(cntx);
 
     Ok(session_info)
 }
@@ -497,7 +497,7 @@ pub fn test_set_certificate(cntx: *mut c_void, cert_slot_id: u8) -> Result<(), (
 /// # Returns
 ///
 /// Does not return, the process will exit after tests are complete.
-pub unsafe fn start_tests(cntx: *mut c_void, backend: TestBackend) -> ! {
+pub fn start_tests(cntx: *mut c_void, backend: TestBackend) -> ! {
     match backend {
         TestBackend::DoeBackend => {
             // Run DOE conformance tests
@@ -558,7 +558,7 @@ pub unsafe fn start_tests(cntx: *mut c_void, backend: TestBackend) -> ! {
 /// failure. If during tests, the tests hang (do not complete), the `test.log`
 /// should be looked at to find the point of failure.
 #[allow(unused_variables)]
-pub unsafe fn responder_validator_tests(context: *mut c_void) -> Result<(), ()> {
+pub fn responder_validator_tests(context: *mut c_void) -> Result<(), ()> {
     #[cfg(feature = "libspdm_tests")]
     {
         let mut m_spdm_test_group_capabilities_configs = [
@@ -1035,7 +1035,9 @@ pub unsafe fn responder_validator_tests(context: *mut c_void) -> Result<(), ()> 
             &m_spdm_responder_validator_config as *const common_test_suite_config_t,
         );
 
-        info!("\n---- Responder-Validator Tests Complete. See `log` to check the results of libspdm tests ----\n");
+        info!(
+            "\n---- Responder-Validator Tests Complete. See `log` to check the results of libspdm tests ----\n"
+        );
     }
 
     Ok(())

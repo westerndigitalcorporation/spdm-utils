@@ -898,13 +898,9 @@ async fn main() -> Result<(), ()> {
         }
         Commands::Tests {} => {
             if cli.doe_pci_cfg {
-                unsafe {
-                    test_suite::start_tests(cntx_ptr, test_suite::TestBackend::DoeBackend);
-                }
+                test_suite::start_tests(cntx_ptr, test_suite::TestBackend::DoeBackend);
             } else if cli.socket_server || cli.socket_client {
-                unsafe {
-                    test_suite::start_tests(cntx_ptr, test_suite::TestBackend::SocketBackend);
-                }
+                test_suite::start_tests(cntx_ptr, test_suite::TestBackend::SocketBackend);
             } else {
                 error!("The backend is not supported for testing");
                 return Err(());
@@ -939,7 +935,7 @@ async fn generate_kernel_hash() -> Result<(), std::io::Error> {
             return Err(std::io::Error::new(
                 std::io::ErrorKind::Other,
                 "RwLock error",
-            ))
+            ));
         }
     };
 
@@ -1006,7 +1002,7 @@ async fn generate_app_hash() -> Result<(), std::io::Error> {
             return Err(std::io::Error::new(
                 std::io::ErrorKind::Other,
                 "RwLock error",
-            ))
+            ));
         }
     };
 

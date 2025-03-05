@@ -186,8 +186,8 @@ unsafe extern "C" fn usb_i2c_receive_message(
 ) -> u32 {
     match &mut *MCTPCONTEXT.lock().unwrap() {
         Some(mctp_ctx) => {
-            let message = *message_ptr as *mut u8;
-            let spdm_msg_buf = from_raw_parts_mut(message, SEND_RECEIVE_BUFFER_LEN);
+            let message = unsafe { *message_ptr as *mut u8 };
+            let spdm_msg_buf = unsafe { from_raw_parts_mut(message, SEND_RECEIVE_BUFFER_LEN) };
             spdm_msg_buf.fill(0);
 
             info!("Receiving message");
@@ -234,7 +234,7 @@ unsafe extern "C" fn usb_i2c_receive_message(
 
             debug!("mctp_buf: {:x?}", &spdm_msg_buf[0..len]);
 
-            *message_size = len;
+            unsafe { *message_size = len };
 
             *SERIAL_PORT.lock().unwrap() = Some(port);
         }
