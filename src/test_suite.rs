@@ -10,14 +10,14 @@
 //! If libspdm/SPDM-Responder-Validator behaves in a manor we don't expect
 //! this will be very bad, so we are trusting libspdm here.
 
+use crate::RequestCode;
 use crate::cli_helpers;
 use crate::doe_pci_cfg::*;
 use crate::request;
 use crate::spdm;
-use crate::spdm::get_measurement;
 use crate::spdm::SpdmSessionInfo;
+use crate::spdm::get_measurement;
 use crate::tcg_concise_evidence_binding::check_tcg_dice_evidence_binding;
-use crate::RequestCode;
 #[cfg(feature = "libspdm_tests")]
 use crate::*;
 use core::ffi::c_void;
@@ -346,79 +346,87 @@ pub fn test_set_certificate(cntx: *mut c_void, cert_slot_id: u8) -> Result<(), (
     // more details on this process.
 
     // 1. Convert the CSR Response to PEM
-    assert!(Command::new("openssl")
-        .arg("req")
-        .arg("-inform")
-        .arg("der")
-        .arg("-in")
-        .arg("./csr_response.der")
-        .arg("-out")
-        .arg("csr_response.req")
-        .output()
-        .expect("Failed to convert the CSR Response to PEM")
-        .status
-        .success());
+    assert!(
+        Command::new("openssl")
+            .arg("req")
+            .arg("-inform")
+            .arg("der")
+            .arg("-in")
+            .arg("./csr_response.der")
+            .arg("-out")
+            .arg("csr_response.req")
+            .output()
+            .expect("Failed to convert the CSR Response to PEM")
+            .status
+            .success()
+    );
 
     // 2. Sign the CSR
     if alias_cert {
-        assert!(Command::new("openssl")
-            .arg("x509")
-            .arg("-req")
-            .arg("-in")
-            .arg("csr_response.req")
-            .arg("-out")
-            .arg("csr_response.cert")
-            .arg("-CA")
-            .arg("./certs/slot0/inter.der")
-            .arg("-sha384")
-            .arg("-days")
-            .arg("3650")
-            .arg("-set_serial")
-            .arg("2")
-            .arg("-extensions")
-            .arg("device_ca")
-            .arg("-extfile")
-            .arg("./certs/alias/openssl.cnf")
-            .output()
-            .expect("Failed to Sign the CSR")
-            .status
-            .success());
+        assert!(
+            Command::new("openssl")
+                .arg("x509")
+                .arg("-req")
+                .arg("-in")
+                .arg("csr_response.req")
+                .arg("-out")
+                .arg("csr_response.cert")
+                .arg("-CA")
+                .arg("./certs/slot0/inter.der")
+                .arg("-sha384")
+                .arg("-days")
+                .arg("3650")
+                .arg("-set_serial")
+                .arg("2")
+                .arg("-extensions")
+                .arg("device_ca")
+                .arg("-extfile")
+                .arg("./certs/alias/openssl.cnf")
+                .output()
+                .expect("Failed to Sign the CSR")
+                .status
+                .success()
+        );
     } else {
-        assert!(Command::new("openssl")
-            .arg("x509")
-            .arg("-req")
-            .arg("-in")
-            .arg("csr_response.req")
-            .arg("-out")
-            .arg("csr_response.cert")
-            .arg("-CA")
-            .arg("./certs/slot0/inter.der")
-            .arg("-sha384")
-            .arg("-days")
-            .arg("3650")
-            .arg("-set_serial")
-            .arg("2")
-            .arg("-extensions")
-            .arg("leaf")
-            .arg("-extfile")
-            .arg("./certs/device/openssl.cnf")
-            .output()
-            .expect("Failed to Sign the CSR")
-            .status
-            .success());
+        assert!(
+            Command::new("openssl")
+                .arg("x509")
+                .arg("-req")
+                .arg("-in")
+                .arg("csr_response.req")
+                .arg("-out")
+                .arg("csr_response.cert")
+                .arg("-CA")
+                .arg("./certs/slot0/inter.der")
+                .arg("-sha384")
+                .arg("-days")
+                .arg("3650")
+                .arg("-set_serial")
+                .arg("2")
+                .arg("-extensions")
+                .arg("leaf")
+                .arg("-extfile")
+                .arg("./certs/device/openssl.cnf")
+                .output()
+                .expect("Failed to Sign the CSR")
+                .status
+                .success()
+        );
     }
 
     // 3. Convert the Certificate back to DER format
-    assert!(Command::new("openssl")
-        .arg("asn1parse")
-        .arg("-in")
-        .arg("csr_response.cert")
-        .arg("-out")
-        .arg("csr_response.cert.der")
-        .output()
-        .expect("Failed to execute openssl command")
-        .status
-        .success());
+    assert!(
+        Command::new("openssl")
+            .arg("asn1parse")
+            .arg("-in")
+            .arg("csr_response.cert")
+            .arg("-out")
+            .arg("csr_response.cert.der")
+            .output()
+            .expect("Failed to execute openssl command")
+            .status
+            .success()
+    );
 
     // 4. Combine all the immutable certificates
     let immutables_certs = [

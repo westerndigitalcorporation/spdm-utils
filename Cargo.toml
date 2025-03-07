@@ -7,7 +7,7 @@ authors = [
     "Alistair Francis <alistair.francis@wdc.com>",
     "Wilfred Mallawa <wilfred.mallawa@wdc.com",
 ]
-edition = "2021"
+edition = "2024"
 readme = "README.md"
 
 [features]

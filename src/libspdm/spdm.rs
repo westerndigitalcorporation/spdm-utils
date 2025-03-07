@@ -53,8 +53,8 @@ use {
     colored::Colorize,
     minicbor::CborLen,
     once_cell::sync::Lazy,
-    std::alloc::{alloc, dealloc, Layout},
-    std::ffi::{c_uchar, c_uint, CString},
+    std::alloc::{Layout, alloc, dealloc},
+    std::ffi::{CString, c_uchar, c_uint},
     std::fs::OpenOptions,
     std::io::{BufRead, BufReader, BufWriter, Write},
     std::path::Path,
@@ -1007,14 +1007,16 @@ pub unsafe fn get_measurement(
         }
     }
 
-    let measurement_block =
+    let measurement_block_ptr =
         measurement_record_ptr as *mut libspdm_rs::spdm_measurement_block_dmtf_t;
 
-    if (*measurement_block).measurement_block_common_header.index != measurement_index as u8 {
+    let measurement_block = unsafe { *measurement_block_ptr };
+
+    if measurement_block.measurement_block_common_header.index != measurement_index as u8 {
         return Err(0);
     }
 
-    if (*measurement_block)
+    if measurement_block
         .measurement_block_common_header
         .measurement_specification
         != libspdm_rs::SPDM_MEASUREMENT_SPECIFICATION_DMTF as u8
@@ -1022,7 +1024,7 @@ pub unsafe fn get_measurement(
         return Err(0);
     }
 
-    let dmtf_spec_measure_type = (*measurement_block)
+    let dmtf_spec_measure_type = measurement_block
         .measurement_block_dmtf_header
         .dmtf_spec_measurement_value_type;
 
@@ -1545,7 +1547,8 @@ pub unsafe extern "C" fn libspdm_generate_measurement_summary_hash(
         SPDM_CHALLENGE_REQUEST_NO_MEASUREMENT_SUMMARY_HASH => true,
         SPDM_CHALLENGE_REQUEST_TCB_COMPONENT_MEASUREMENT_HASH
         | SPDM_CHALLENGE_REQUEST_ALL_MEASUREMENTS_HASH => {
-            if measurement_summary_hash_size != (libspdm_rs::libspdm_get_hash_size(base_hash_algo))
+            if measurement_summary_hash_size
+                != unsafe { libspdm_rs::libspdm_get_hash_size(base_hash_algo) }
             {
                 return false;
             }
@@ -1582,18 +1585,19 @@ pub unsafe extern "C" fn libspdm_generate_measurement_summary_hash(
             let mut device_measurement_offset = 0;
 
             for _i in 0..device_measurement_count {
-                let cached_measurement_block: *mut libspdm_rs::spdm_measurement_block_dmtf_t =
-                    core::mem::transmute(device_measurement_ptr);
+                let cached_measurement_block_ptr: *mut libspdm_rs::spdm_measurement_block_dmtf_t =
+                    unsafe { core::mem::transmute(device_measurement_ptr) };
+                let cached_measurement_block = unsafe { *cached_measurement_block_ptr };
 
                 let measurement_block_size = core::mem::size_of::<
                     spdm_measurement_block_common_header_t,
-                >() + (*cached_measurement_block)
+                >() + cached_measurement_block
                     .measurement_block_common_header
                     .measurement_size as usize;
                 /* filter unneeded data*/
                 if (measurement_summary_hash_type
                     == SPDM_CHALLENGE_REQUEST_ALL_MEASUREMENTS_HASH as u8)
-                    || ((*cached_measurement_block)
+                    || (cached_measurement_block
                         .measurement_block_dmtf_header
                         .dmtf_spec_measurement_value_type
                         & SPDM_MEASUREMENT_BLOCK_MEASUREMENT_TYPE_MASK as u8)
@@ -1603,7 +1607,7 @@ pub unsafe extern "C" fn libspdm_generate_measurement_summary_hash(
                         < (libspdm_rs::SPDM_MESSAGE_VERSION_12
                             << libspdm_rs::SPDM_VERSION_NUMBER_SHIFT_BIT)
                     {
-                        let length = (*cached_measurement_block)
+                        let length = cached_measurement_block
                             .measurement_block_common_header
                             .measurement_size as usize;
                         let measurement_block_dmtf_header_size =
@@ -1616,7 +1620,7 @@ pub unsafe extern "C" fn libspdm_generate_measurement_summary_hash(
                                 &device_measurement[base_offset..(base_offset + length)],
                             );
 
-                        measurement_data_size += (*cached_measurement_block)
+                        measurement_data_size += cached_measurement_block
                             .measurement_block_common_header
                             .measurement_size
                             as usize;
@@ -2932,10 +2936,12 @@ pub unsafe fn get_local_certchain(
 
     assert!(!cert_chain_buffer.is_null());
 
-    let cert_chain = cert_chain_buffer as *mut libspdm_rs::spdm_cert_chain_t;
+    let cert_chain_ptr = cert_chain_buffer as *mut libspdm_rs::spdm_cert_chain_t;
+    // SAFETY: `cert_chain_buffer` is allocated above and cast to `spdm_cert_chain_t`
+    let cert_chain = unsafe { &mut *cert_chain_ptr as &mut libspdm_rs::spdm_cert_chain_t };
 
-    (*cert_chain).length = cert_chain_size as u16;
-    (*cert_chain).reserved = 0;
+    cert_chain.length = cert_chain_size as u16;
+    cert_chain.reserved = 0;
 
     unsafe {
         if !libspdm_rs::libspdm_hash_all(
