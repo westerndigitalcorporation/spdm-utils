@@ -5,8 +5,8 @@
 //! Contains all of the handlers for creating SPDM responder.
 
 use crate::libspdm_rs::*;
-use crate::spdm::get_local_certchain;
 use crate::spdm::LibspdmReturnStatus;
+use crate::spdm::get_local_certchain;
 use core::ffi::c_void;
 #[cfg(not(feature = "no_std"))]
 use std::fs::OpenOptions;

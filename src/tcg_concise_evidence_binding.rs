@@ -12,25 +12,25 @@ use std::io::BufReader;
 use std::path::Path;
 use std::process::Command;
 use x509_parser::certificate::X509Certificate;
-use x509_parser::der_parser::{oid, Oid};
+use x509_parser::der_parser::{Oid, oid};
 use x509_parser::pem::Pem;
 
-const ID_SPDM_CERT_OIDS: Oid = oid!(1.3.6 .1 .4 .1 .412 .274 .6);
-const ID_DMTF_HARDWARE_IDENTITY: Oid = oid!(1.3.6 .1 .4 .1 .412 .274 .2);
-const ID_DMTF_MUTABLE_CERTIFICATE: Oid = oid!(1.3.6 .1 .4 .1 .412 .274 .5);
+const ID_SPDM_CERT_OIDS: Oid = oid!(1.3.6.1.4.1.412.274.6);
+const ID_DMTF_HARDWARE_IDENTITY: Oid = oid!(1.3.6.1.4.1.412.274.2);
+const ID_DMTF_MUTABLE_CERTIFICATE: Oid = oid!(1.3.6.1.4.1.412.274.5);
 
-const TCG_DICE_KP_ECA: Oid = oid!(2.23.133 .5 .4 .100 .12);
+const TCG_DICE_KP_ECA: Oid = oid!(2.23.133.5.4.100.12);
 
-const TCG_DICE_KP_IDENTITYINIT: Oid = oid!(2.23.133 .5 .4 .100 .6);
-const TCG_DICE_KP_ATTESTINIT: Oid = oid!(2.23.133 .5 .4 .100 .8);
-const TCG_DICE_KP_ASSERTINIT: Oid = oid!(2.23.133 .5 .4 .100 .10);
+const TCG_DICE_KP_IDENTITYINIT: Oid = oid!(2.23.133.5.4.100.6);
+const TCG_DICE_KP_ATTESTINIT: Oid = oid!(2.23.133.5.4.100.8);
+const TCG_DICE_KP_ASSERTINIT: Oid = oid!(2.23.133.5.4.100.10);
 
-const TCG_DICE_KP_IDENTITYLOC: Oid = oid!(2.23.133 .5 .4 .100 .7);
-const TCG_DICE_KP_ATTESTLOC: Oid = oid!(2.23.133 .5 .4 .100 .9);
-const TCG_DICE_KP_ASSERTLOC: Oid = oid!(2.23.133 .5 .4 .100 .11);
+const TCG_DICE_KP_IDENTITYLOC: Oid = oid!(2.23.133.5.4.100.7);
+const TCG_DICE_KP_ATTESTLOC: Oid = oid!(2.23.133.5.4.100.9);
+const TCG_DICE_KP_ASSERTLOC: Oid = oid!(2.23.133.5.4.100.11);
 
-const ID_DMTF_EKU_RESPONDER_AUTH: Oid = oid!(1.3.6 .1 .4 .1 .412 .274 .3);
-const ID_DMTF_EKU_REQUESTER_AUTH: Oid = oid!(1.3.6 .1 .4 .1 .412 .274 .4);
+const ID_DMTF_EKU_RESPONDER_AUTH: Oid = oid!(1.3.6.1.4.1.412.274.3);
+const ID_DMTF_EKU_REQUESTER_AUTH: Oid = oid!(1.3.6.1.4.1.412.274.4);
 
 #[derive(Debug, PartialEq)]
 enum SPDMCertificateType {
