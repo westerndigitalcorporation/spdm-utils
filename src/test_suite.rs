@@ -1030,10 +1030,12 @@ pub fn responder_validator_tests(context: *mut c_void) -> Result<(), ()> {
             test_group_configs: &mut m_spdm_test_group_configs as *mut common_test_group_config_t,
         };
 
-        spdm_responder_conformance_test(
-            context,
-            &m_spdm_responder_validator_config as *const common_test_suite_config_t,
-        );
+        unsafe {
+            spdm_responder_conformance_test(
+                context,
+                &m_spdm_responder_validator_config as *const common_test_suite_config_t,
+            );
+        }
 
         info!(
             "\n---- Responder-Validator Tests Complete. See `log` to check the results of libspdm tests ----\n"
