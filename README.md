@@ -39,6 +39,7 @@ See LICENSE-APACHE, LICENSE-MIT, and COPYRIGHT for details.
     - [Running libspdm tests](#running-libspdm-tests)
     - [Testing completely on the host](#testing-completely-on-the-host)
     - [Testing a real device](#testing-a-real-device)
+    - [Retrieving Certificates](#retrieving-certificates)
     - [Setting the certificate](#setting-the-certificate)
     - [Getting a Certificate Signing Request](#getting-a-certificate-signing-request)
     - [Signing a Certificate Signing Request](#signing-a-certificate-signing-request)
@@ -296,6 +297,25 @@ invoked as below:
 
 ```shell
 ./target/debug/spdm_utils --pcie-vid <VendorID> --pcie-devid <DeviceID> --doe-pci-cfg request get-digests
+```
+
+## Retrieving Certificates
+
+You can retrieve the list of certificates from the device by running
+
+```shell
+./target/debug/spdm_utils <DeviceOptions> request get-certificate
+```
+
+Which will create a file `retrieved_slot_id0` with the full certificate chain.
+
+If the device is 'TCG DICE Concise Evidence Binding for SPDM ' compliant, the chain
+can be verified by also including the `--tcg-dice-evidence-binding-checks` argument.
+
+The certificate chain can be decoded with `openssl` by running the following:
+
+```shell
+while openssl x509 -noout -text; do :; done < ~/retrieved_slot_id0
 ```
 
 ## Setting the certificate
