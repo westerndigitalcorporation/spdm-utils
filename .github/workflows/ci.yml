@@ -48,6 +48,7 @@ jobs:
                   -DLIBSPDM_HAL_PASS_SPDM_CONTEXT=1 \
                   -DLIBSPDM_ENABLE_CAPABILITY_GET_KEY_PAIR_INFO_CAP=0 \
                   -DLIBSPDM_ENABLE_CAPABILITY_SET_KEY_PAIR_INFO_CAP=0 \
+                  -DLIBSPDM_ENABLE_CAPABILITY_ENDPOINT_INFO_CAP=0 \
                   " \
             .. ; \
           make -j8; \
