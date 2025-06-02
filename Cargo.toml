@@ -44,7 +44,7 @@ name = "spdm_utils"
 path = "src/main.rs"
 
 [build-dependencies]
-bindgen = "0.71.1"
+bindgen = { git = "https://github.com/rust-lang/rust-bindgen.git" }
 which = "6.0.0"
 
 [dependencies]
