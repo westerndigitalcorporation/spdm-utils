@@ -100,6 +100,7 @@ fn main() {
         .blocklist_function("qgcvt")
         .blocklist_function("strtold")
         .blocklist_type("_Float64x")
+        .wrap_unsafe_ops(true)
         .generate()
         .expect("Unable to generate bindings");
 
