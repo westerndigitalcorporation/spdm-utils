@@ -655,9 +655,29 @@ pub fn prepare_request(
                 let (cert_chain_buffer, cert_chain_size) =
                     get_local_certchain(buffer, asym_algo, hash_algo, true);
 
+                // For Slot 0 provisioning, the Requester should issue
+                // SET_CERTIFICATE only in a trusted environment (such as a
+                // secure manufacturing environment). For slots 1-7, if the
+                // provisioning happens in a trusted environment, the
+                // Requester should issue SET_CERTIFICATE inside a secure session.
+                if cert_slot_id > 0 && session_info.session_id == 0 {
+                    error!("SET_CERTIFICATE for slots 1-7 inclusive requires a sescured session");
+                }
+
+                let session_id_ptr = if session_info.session_id == 0 {
+                    info!("Issuing SET_CERTIFICATE for slot {}", cert_slot_id);
+                    ptr::null_mut()
+                } else {
+                    info!(
+                        "Issuing SET_CERTIFICATE for slot {} with a sescured session",
+                        cert_slot_id
+                    );
+                    &session_info.session_id as *const u32
+                };
+
                 let ret = libspdm_set_certificate(
                     cntx_ptr,
-                    ptr::null_mut(),
+                    session_id_ptr,
                     cert_slot_id,
                     cert_chain_buffer,
                     cert_chain_size,
