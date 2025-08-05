@@ -91,7 +91,6 @@ fn main() {
     let bindings = builder
         .parse_callbacks(Box::new(bindgen::CargoCallbacks::new()))
         .use_core()
-        .rust_target("1.85.0".parse().unwrap())
         .blocklist_item("max_align_t")
         .blocklist_function("qfcvt_r")
         .blocklist_function("qfcvt")
