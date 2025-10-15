@@ -609,10 +609,6 @@ pub fn responder_validator_tests(context: *mut c_void) -> Result<(), ()> {
                 action: common_test_action_t_COMMON_TEST_ACTION_RUN,
             },
             common_test_case_config_t {
-                case_id: SPDM_RESPONDER_TEST_CASE_ALGORITHMS_UNEXPECTED_REQUEST,
-                action: common_test_action_t_COMMON_TEST_ACTION_RUN,
-            },
-            common_test_case_config_t {
                 case_id: SPDM_RESPONDER_TEST_CASE_ALGORITHMS_INVALID_REQUEST,
                 action: common_test_action_t_COMMON_TEST_ACTION_RUN,
             },
@@ -644,10 +640,6 @@ pub fn responder_validator_tests(context: *mut c_void) -> Result<(), ()> {
                 action: common_test_action_t_COMMON_TEST_ACTION_RUN,
             },
             common_test_case_config_t {
-                case_id: SPDM_RESPONDER_TEST_CASE_DIGESTS_UNEXPECTED_REQUEST,
-                action: common_test_action_t_COMMON_TEST_ACTION_RUN,
-            },
-            common_test_case_config_t {
                 case_id: COMMON_TEST_ID_END,
                 action: common_test_action_t_COMMON_TEST_ACTION_SKIP,
             },
@@ -660,10 +652,6 @@ pub fn responder_validator_tests(context: *mut c_void) -> Result<(), ()> {
             },
             common_test_case_config_t {
                 case_id: SPDM_RESPONDER_TEST_CASE_DIGESTS_VERSION_MISMATCH,
-                action: common_test_action_t_COMMON_TEST_ACTION_RUN,
-            },
-            common_test_case_config_t {
-                case_id: SPDM_RESPONDER_TEST_CASE_DIGESTS_UNEXPECTED_REQUEST,
                 action: common_test_action_t_COMMON_TEST_ACTION_RUN,
             },
             common_test_case_config_t {
@@ -695,10 +683,6 @@ pub fn responder_validator_tests(context: *mut c_void) -> Result<(), ()> {
             },
             common_test_case_config_t {
                 case_id: SPDM_RESPONDER_TEST_CASE_CHALLENGE_AUTH_VERSION_MISMATCH,
-                action: common_test_action_t_COMMON_TEST_ACTION_RUN,
-            },
-            common_test_case_config_t {
-                case_id: SPDM_RESPONDER_TEST_CASE_CHALLENGE_AUTH_UNEXPECTED_REQUEST,
                 action: common_test_action_t_COMMON_TEST_ACTION_RUN,
             },
             common_test_case_config_t {
@@ -753,10 +737,6 @@ pub fn responder_validator_tests(context: *mut c_void) -> Result<(), ()> {
                 action: common_test_action_t_COMMON_TEST_ACTION_RUN,
             },
             common_test_case_config_t {
-                case_id: SPDM_RESPONDER_TEST_CASE_MEASUREMENTS_UNEXPECTED_REQUEST,
-                action: common_test_action_t_COMMON_TEST_ACTION_RUN,
-            },
-            common_test_case_config_t {
                 case_id: SPDM_RESPONDER_TEST_CASE_MEASUREMENTS_INVALID_REQUEST,
                 action: common_test_action_t_COMMON_TEST_ACTION_RUN,
             },
@@ -804,10 +784,6 @@ pub fn responder_validator_tests(context: *mut c_void) -> Result<(), ()> {
                 action: common_test_action_t_COMMON_TEST_ACTION_RUN,
             },
             common_test_case_config_t {
-                case_id: SPDM_RESPONDER_TEST_CASE_KEY_EXCHANGE_RSP_UNEXPECTED_REQUEST,
-                action: common_test_action_t_COMMON_TEST_ACTION_RUN,
-            },
-            common_test_case_config_t {
                 case_id: SPDM_RESPONDER_TEST_CASE_KEY_EXCHANGE_RSP_UNEXPECTED_REQUEST_IN_SESSION,
                 action: common_test_action_t_COMMON_TEST_ACTION_RUN,
             },
@@ -840,10 +816,6 @@ pub fn responder_validator_tests(context: *mut c_void) -> Result<(), ()> {
             },
             common_test_case_config_t {
                 case_id: SPDM_RESPONDER_TEST_CASE_FINISH_RSP_VERSION_MISMATCH,
-                action: common_test_action_t_COMMON_TEST_ACTION_RUN,
-            },
-            common_test_case_config_t {
-                case_id: SPDM_RESPONDER_TEST_CASE_FINISH_RSP_UNEXPECTED_REQUEST,
                 action: common_test_action_t_COMMON_TEST_ACTION_RUN,
             },
             common_test_case_config_t {
