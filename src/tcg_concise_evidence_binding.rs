@@ -54,7 +54,7 @@ pub struct CertificateUsage {
 }
 
 // TODO: Handle multiple entries
-fn spdm_cert_oids_parser(i: &[u8]) -> ParseResult<Oid> {
+fn spdm_cert_oids_parser<'a>(i: &'a [u8]) -> ParseResult<'a, Oid<'a>> {
     Sequence::from_der_and_then(i, |i| {
         Ok((i, Oid::new(std::borrow::Cow::Borrowed(&i[4..]))))
     })
