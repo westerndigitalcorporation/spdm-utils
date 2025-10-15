@@ -279,12 +279,12 @@ const DIGESTS: u8 = RAW_BIT_STREAM - 1;
 ///
 /// This function will parse a Concise Evidence Binding manifest and replace
 /// the `spdm-indirect` entries with measurements.
-pub fn generate_direct_manifest(
+pub fn generate_direct_manifest<'a>(
     context: *mut c_void,
     slot_id: u8,
-    measurement_manifest: &[u8],
-) -> Result<SpdmToc, minicbor::decode::Error> {
-    let mut spdm_toc: SpdmToc<'_> = minicbor::decode(measurement_manifest)?;
+    measurement_manifest: &'a [u8],
+) -> Result<SpdmToc<'a>, minicbor::decode::Error> {
+    let mut spdm_toc: SpdmToc<'a> = minicbor::decode(measurement_manifest)?;
     let ce_ev_triples = &mut spdm_toc
         .value_mut()
         .tagged_evidence
