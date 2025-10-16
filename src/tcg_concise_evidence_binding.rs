@@ -391,18 +391,12 @@ pub fn check_tcg_dice_evidence_binding(cert_slot_id: u8) -> Result<CertificateUs
                     Ok(Some(extension)) => {
                         let other_key_usage = &extension.value.other;
 
-                        if other_key_usage
-                            .iter()
-                            .any(|eku| *eku == ID_DMTF_EKU_RESPONDER_AUTH)
-                        {
+                        if other_key_usage.contains(&ID_DMTF_EKU_RESPONDER_AUTH) {
                             info!("    Used as a responder");
                             usage.sign_responses = true;
                         }
 
-                        if other_key_usage
-                            .iter()
-                            .any(|eku| *eku == ID_DMTF_EKU_REQUESTER_AUTH)
-                        {
+                        if other_key_usage.contains(&ID_DMTF_EKU_REQUESTER_AUTH) {
                             info!("    Used as a requester");
                             usage.sign_requests = true;
                         }
