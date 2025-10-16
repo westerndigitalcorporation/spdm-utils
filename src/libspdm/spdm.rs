@@ -1719,14 +1719,12 @@ fn libspdm_fill_measurement_image_hash_block(
     }
 
     #[cfg(feature = "no_std")]
-    unsafe {
-        fill_static_measurement_image_hash_block(
-            use_bit_stream,
-            measurement_hash_algo,
-            measurements_index,
-            measurement_block,
-        )
-    }
+    fill_static_measurement_image_hash_block(
+        use_bit_stream,
+        measurement_hash_algo,
+        measurements_index,
+        measurement_block,
+    )
 }
 
 /// # Summary
