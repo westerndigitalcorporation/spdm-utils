@@ -62,7 +62,7 @@ unsafe extern "C" fn qemu_send_message_doe(
 
             // CMA required 32-bit alignment, ensure that we meet that
             // Note we can also pad with 0's if required
-            assert!(message_size % 4 == 0);
+            assert!(message_size.is_multiple_of(4));
 
             if timeout == 0 {
                 stream

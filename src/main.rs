@@ -528,7 +528,7 @@ fn parse_request_codes(s: &str) -> Result<Vec<RequestCode>, String> {
     let mut skip_next_delim = false;
     let input_len = s.len();
 
-    for (i, c) in s.chars().enumerate() {
+    for (i, c) in s.char_indices() {
         if c == '[' && !subarg_start {
             subarg_start = true;
             continue;
@@ -537,6 +537,7 @@ fn parse_request_codes(s: &str) -> Result<Vec<RequestCode>, String> {
                 "Invalid request argument formatting, unexpected {c} at {:?}X",
                 &s[..i]
             );
+
             return Err("Failed to parse requests".to_string());
         } else if c != ']' && subarg_start {
             continue;
@@ -697,11 +698,11 @@ async fn main() -> Result<(), ()> {
     } else if cli.socket_client {
         socket_client::register_device(cntx_ptr)?;
     } else if cli.usb_i2c {
-        if let Some(proto) = cli.spdm_transport_protocol {
-            if proto != spdm::TransportLayer::Mctp {
-                error!("Only MCTP supported over USB I2C");
-                return Err(());
-            }
+        if let Some(proto) = cli.spdm_transport_protocol
+            && proto != spdm::TransportLayer::Mctp
+        {
+            error!("Only MCTP supported over USB I2C");
+            return Err(());
         }
 
         usb_i2c::register_device(cntx_ptr, cli.usb_i2c_dev, cli.usb_i2c_baud)?;
@@ -896,7 +897,7 @@ async fn main() -> Result<(), ()> {
 
             responder::response_loop(cntx_ptr);
         }
-        Commands::Tests {} => {
+        Commands::Tests => {
             if cli.doe_pci_cfg {
                 test_suite::start_tests(cntx_ptr, test_suite::TestBackend::DoeBackend);
             } else if cli.socket_server || cli.socket_client {
@@ -932,10 +933,7 @@ async fn generate_kernel_hash() -> Result<(), std::io::Error> {
     let mut dyn_image_measure = match spdm::DYN_IMAGE_MEASURE.write() {
         Ok(val) => val,
         Err(_) => {
-            return Err(std::io::Error::new(
-                std::io::ErrorKind::Other,
-                "RwLock error",
-            ));
+            return Err(std::io::Error::other("RwLock error"));
         }
     };
 
@@ -999,10 +997,7 @@ async fn generate_app_hash() -> Result<(), std::io::Error> {
     let mut dyn_image_measure = match spdm::DYN_IMAGE_MEASURE.write() {
         Ok(val) => val,
         Err(_) => {
-            return Err(std::io::Error::new(
-                std::io::ErrorKind::Other,
-                "RwLock error",
-            ));
+            return Err(std::io::Error::other("RwLock error"));
         }
     };
 

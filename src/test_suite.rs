@@ -253,13 +253,8 @@ pub fn request_all_measurements(cntx: *mut c_void) -> Result<(), u32> {
                     &mut measurement_record,
                 );
 
-                if ret.is_err() {
-                    warn!(
-                        "No measurement at index 0x{:x?} as {format}",
-                        measurement_index
-                    );
-                } else {
-                    let (_, measurement_record_length) = ret.unwrap();
+                if let Ok(measures) = ret {
+                    let (_, measurement_record_length) = measures;
                     // measurement_record shall point to the measurement block,
                     // which contains the DMTF measurement specification format
                     let dmtf_spec_measurement_value_type_index = core::mem::size_of::<
@@ -281,6 +276,11 @@ pub fn request_all_measurements(cntx: *mut c_void) -> Result<(), u32> {
                     info!(
                         "Measurement as {format}: {:x?}",
                         &measurement_record[..measurement_record_length as usize]
+                    );
+                } else {
+                    warn!(
+                        "No measurement at index 0x{:x?} as {format}",
+                        measurement_index
                     );
                 }
             }
@@ -482,10 +482,10 @@ pub fn test_set_certificate(cntx: *mut c_void, cert_slot_id: u8) -> Result<(), (
     ];
 
     for artifact in csr_artifacts {
-        if let Err(e) = std::fs::remove_file(artifact) {
-            if e.kind() == std::io::ErrorKind::NotFound {
-                warn!("{:?}: does not exist", artifact)
-            }
+        if let Err(e) = std::fs::remove_file(artifact)
+            && e.kind() == std::io::ErrorKind::NotFound
+        {
+            warn!("{:?}: does not exist", artifact)
         }
     }
 
@@ -529,12 +529,11 @@ pub fn start_tests(cntx: *mut c_void, backend: TestBackend) -> ! {
         )
     };
 
-    if alias_cert {
-        if let Err(libpsm_err) =
+    if alias_cert
+        && let Err(libpsm_err) =
             do_tcg_dice_evidence_binding_request_checks(cntx, &mut session_info)
-        {
-            panic!("    request failed with libspdm err: {:x}", libpsm_err);
-        }
+    {
+        panic!("    request failed with libspdm err: {:x}", libpsm_err);
     }
     if let Err(e) = request_all_measurements(cntx) {
         panic!("    failed to request all measurements err:  {:x}", e);

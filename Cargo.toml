@@ -82,3 +82,4 @@ inquire = { version = "0.7.5", optional = true}
 not_unsafe_ptr_arg_deref = "allow"
 missing_safety_doc = "allow"
 result_unit_err = "allow"
+doc_overindented_list_items = "allow"
