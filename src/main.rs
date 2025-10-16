@@ -944,30 +944,30 @@ async fn generate_kernel_hash() -> Result<(), std::io::Error> {
 
                 copy(&mut file, &mut hasher)?;
                 let hash_bytes = hasher.finalize();
-                let slice_len = hash_bytes.as_slice().len();
+                let slice_len = hash_bytes.len();
 
                 Lazy::force_mut(&mut dyn_image_measure).kernel_hashes[i][0..slice_len]
-                    .copy_from_slice(hash_bytes.as_slice());
+                    .copy_from_slice(hash_bytes.as_ref());
             }
             SPDM_ALGORITHMS_MEASUREMENT_HASH_ALGO_TPM_ALG_SHA_384 => {
                 let mut hasher = Sha384::new();
 
                 copy(&mut file, &mut hasher)?;
                 let hash_bytes = hasher.finalize();
-                let slice_len = hash_bytes.as_slice().len();
+                let slice_len = hash_bytes.len();
 
                 Lazy::force_mut(&mut dyn_image_measure).kernel_hashes[i][0..slice_len]
-                    .copy_from_slice(hash_bytes.as_slice());
+                    .copy_from_slice(hash_bytes.as_ref());
             }
             SPDM_ALGORITHMS_MEASUREMENT_HASH_ALGO_TPM_ALG_SHA_512 => {
                 let mut hasher = Sha512::new();
 
                 copy(&mut file, &mut hasher)?;
                 let hash_bytes = hasher.finalize();
-                let slice_len = hash_bytes.as_slice().len();
+                let slice_len = hash_bytes.len();
 
                 Lazy::force_mut(&mut dyn_image_measure).kernel_hashes[i][0..slice_len]
-                    .copy_from_slice(hash_bytes.as_slice());
+                    .copy_from_slice(hash_bytes.as_ref());
             }
             _ => continue,
         };
@@ -1008,30 +1008,30 @@ async fn generate_app_hash() -> Result<(), std::io::Error> {
 
                 copy(&mut file, &mut hasher)?;
                 let hash_bytes = hasher.finalize();
-                let slice_len = hash_bytes.as_slice().len();
+                let slice_len = hash_bytes.len();
 
                 Lazy::force_mut(&mut dyn_image_measure).app_hashes[i][0..slice_len]
-                    .copy_from_slice(hash_bytes.as_slice());
+                    .copy_from_slice(hash_bytes.as_ref());
             }
             SPDM_ALGORITHMS_MEASUREMENT_HASH_ALGO_TPM_ALG_SHA_384 => {
                 let mut hasher = Sha384::new();
 
                 copy(&mut file, &mut hasher)?;
                 let hash_bytes = hasher.finalize();
-                let slice_len = hash_bytes.as_slice().len();
+                let slice_len = hash_bytes.len();
 
                 Lazy::force_mut(&mut dyn_image_measure).app_hashes[i][0..slice_len]
-                    .copy_from_slice(hash_bytes.as_slice());
+                    .copy_from_slice(hash_bytes.as_ref());
             }
             SPDM_ALGORITHMS_MEASUREMENT_HASH_ALGO_TPM_ALG_SHA_512 => {
                 let mut hasher = Sha512::new();
 
                 copy(&mut file, &mut hasher)?;
                 let hash_bytes = hasher.finalize();
-                let slice_len = hash_bytes.as_slice().len();
+                let slice_len = hash_bytes.len();
 
                 Lazy::force_mut(&mut dyn_image_measure).app_hashes[i][0..slice_len]
-                    .copy_from_slice(hash_bytes.as_slice());
+                    .copy_from_slice(hash_bytes.as_ref());
             }
             _ => continue,
         };
