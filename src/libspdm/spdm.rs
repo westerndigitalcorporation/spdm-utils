@@ -288,6 +288,8 @@ pub enum TransportLayer {
     Doe,
     /// DMTF Management Component Transport Protocol
     Mctp,
+    /// SCSI Security Protocol In/Out commands
+    Storage,
 }
 
 /// Contains the information used to setup the current
