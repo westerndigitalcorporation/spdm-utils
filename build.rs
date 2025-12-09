@@ -90,6 +90,8 @@ fn main() {
         }
     }
 
+    builder = builder.clang_arg("-DLIBSPDM_RECORD_TRANSCRIPT_DATA_SUPPORT=1");
+
     let bindings = builder
         .parse_callbacks(Box::new(bindgen::CargoCallbacks::new()))
         .use_core()
