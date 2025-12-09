@@ -263,8 +263,8 @@ impl fmt::Display for SpdmAlgoKeyScheduleHmacHash {
         if self.0 == 0 {
             return writeln!(f, "None");
         }
-        if self.0 & SPDM_ALGORITHMS_KEY_SCHEDULE_HMAC_HASH != 0 {
-            writeln!(f, "SPDM_ALGORITHMS_KEY_SCHEDULE_HMAC_HASH")?
+        if self.0 & SPDM_ALGORITHMS_KEY_SCHEDULE_SPDM != 0 {
+            writeln!(f, "SPDM_ALGORITHMS_KEY_SCHEDULE_SPDM")?
         }
         Ok(())
     }
