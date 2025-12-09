@@ -195,7 +195,7 @@ pub fn setup_capabilities(
             core::mem::size_of::<u16>(),
         );
 
-        let mut data: u16 = SPDM_ALGORITHMS_KEY_SCHEDULE_HMAC_HASH as u16;
+        let mut data: u16 = SPDM_ALGORITHMS_KEY_SCHEDULE_SPDM as u16;
         let data_ptr = &mut data as *mut _ as *mut c_void;
         libspdm_set_data(
             context,
