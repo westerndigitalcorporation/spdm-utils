@@ -46,6 +46,11 @@ jobs:
                   -DLIBSPDM_ENABLE_CAPABILITY_GET_KEY_PAIR_INFO_CAP=0 \
                   -DLIBSPDM_ENABLE_CAPABILITY_SET_KEY_PAIR_INFO_CAP=0 \
                   -DLIBSPDM_ENABLE_CAPABILITY_ENDPOINT_INFO_CAP=0 \
+                  -DLIBSPDM_ENABLE_CAPABILITY_MUT_AUTH_CAP=0 \
+                  -DLIBSPDM_RECORD_TRANSCRIPT_DATA_SUPPORT=1 \
+                  -DLIBSPDM_ENABLE_CAPABILITY_SET_CERT_CAP=1 \
+                  -DLIBSPDM_ENABLE_CAPABILITY_CERT_CAP=1 \
+                  -DLIBSPDM_ENABLE_CAPABILITY_KEY_EX_CAP=1 \
                   " \
             .. ; \
           make -j8; \
