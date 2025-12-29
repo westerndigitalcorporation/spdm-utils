@@ -642,15 +642,19 @@ pub fn process_cbor_measurement_manifest(
 ) -> Result<(), ()> {
     print_measurement_manifest(measurement_manifest, false)?;
 
-    let spdm_toc =
-        manifest::generate_direct_manifest(context, slot_id, measurement_manifest).unwrap();
+    let spdm_toc = manifest::generate_direct_manifest(context, slot_id, measurement_manifest)
+        .map_err(|e| {
+            error!("Failed to generate direct manifest: {e:?}");
+        })?;
 
     let mut direct_manifest = [0u8; 1024];
     let original_len = measurement_manifest.len();
     assert!(original_len < 1024);
     minicbor::Encoder::new(direct_manifest.as_mut())
         .encode(&spdm_toc)
-        .unwrap();
+        .map_err(|e| {
+            error!("Failed to create direct manifest: {e:?}");
+        })?;
     let length = spdm_toc.cbor_len(&mut ());
 
     print_measurement_manifest(&direct_manifest[0..length], true)?;
