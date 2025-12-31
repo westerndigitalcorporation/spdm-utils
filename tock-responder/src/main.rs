@@ -9,6 +9,8 @@
 
 extern crate alloc;
 
+use alloc::vec;
+use alloc::vec::Vec;
 use core::fmt::Write;
 use critical_section::RawRestoreState;
 use embedded_alloc::Heap;
@@ -75,10 +77,11 @@ fn main() {
     )
     .unwrap();
 
+    let spdm_ver: Vec<u16> = vec![libspdm::libspdm_rs::SPDM_MESSAGE_VERSION_13 as u16];
     responder::setup_capabilities(
         cntx_ptr,
         0,
-        Some(u8::try_from(libspdm::libspdm_rs::SPDM_MESSAGE_VERSION_13).unwrap()),
+        Some(&spdm_ver),
         SPDM_ALGORITHMS_BASE_ASYM_ALGO_TPM_ALG_ECDSA_ECC_NIST_P384,
         SPDM_ALGORITHMS_BASE_HASH_ALGO_TPM_ALG_SHA_384,
         CertModel::Alias,
@@ -92,11 +95,7 @@ fn main() {
         "spdm-sample: starting response_loop...\r",
     )
     .unwrap();
-    responder::set_supported_slots_mask(
-        1,
-        Some(u8::try_from(libspdm::libspdm_rs::SPDM_MESSAGE_VERSION_13).unwrap()),
-        cntx_ptr,
-    )
-    .expect("failed to set supported slot mask");
+    responder::set_supported_slots_mask(1, &spdm_ver, cntx_ptr)
+        .expect("failed to set supported slot mask");
     responder::response_loop(cntx_ptr);
 }

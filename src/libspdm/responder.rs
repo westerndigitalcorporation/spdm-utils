@@ -4,9 +4,12 @@
 
 //! Contains all of the handlers for creating SPDM responder.
 
+use crate::libspdm_rs;
 use crate::libspdm_rs::*;
 use crate::spdm::LibspdmReturnStatus;
 use crate::spdm::get_local_certchain;
+#[cfg(feature = "no_std")]
+use alloc::vec::Vec;
 use core::ffi::c_void;
 #[cfg(not(feature = "no_std"))]
 use std::fs::OpenOptions;
@@ -49,7 +52,7 @@ pub enum CertModel {
 pub fn setup_capabilities(
     context: *mut c_void,
     slot_id: u8,
-    spdm_ver: Option<u8>,
+    spdm_ver: Option<&Vec<u16>>,
     asym_algo: u32,
     hash_algo: u32,
     cert_mode: CertModel,
@@ -87,19 +90,19 @@ pub fn setup_capabilities(
         );
 
         if let Some(ver) = spdm_ver {
-            let mut data: u16 = (ver as u16)
-                .checked_shl(SPDM_VERSION_NUMBER_SHIFT_BIT)
-                .expect("SPDM version shift overflow");
-            let data_ptr = &mut data as *mut _ as *mut c_void;
+            let v: Vec<u16> = ver
+                .iter()
+                .map(|&x| x.checked_shl(SPDM_VERSION_NUMBER_SHIFT_BIT))
+                .collect::<Option<Vec<u16>>>()
+                .unwrap();
+            let data_ptr = v.as_ptr() as *mut c_void;
             libspdm_set_data(
                 context,
                 libspdm_data_type_t_LIBSPDM_DATA_SPDM_VERSION,
                 &parameter as *const libspdm_data_parameter_t,
                 data_ptr,
-                core::mem::size_of::<u16>(),
+                core::mem::size_of::<u16>() * v.len(),
             );
-        } else {
-            warn!("libspdm data SPDM version not specified");
         }
 
         let mut data: u8 = 0x00;
@@ -320,7 +323,7 @@ pub fn setup_capabilities(
 /// Ok(()) if the slot mask was set, Err(()), otherwise.
 pub fn set_supported_slots_mask(
     slots_supported: u8,
-    spdm_ver: Option<u8>,
+    spdm_ver: &Vec<u16>,
     context: *mut c_void,
 ) -> Result<(), ()> {
     assert!(slots_supported < 8);
@@ -334,10 +337,7 @@ pub fn set_supported_slots_mask(
     // not be set and certificate slot X shall be an invalid
     // value in various slot ID fields ( SlotID ) across all
     // SPDM request messages that contain this field." - SPDM 1.3, 374
-    if spdm_ver
-        .map(|v| v >= u8::try_from(SPDM_MESSAGE_VERSION_13).unwrap())
-        .is_some()
-    {
+    if spdm_ver.contains(&(libspdm_rs::SPDM_MESSAGE_VERSION_13 as u16)) {
         let mut data: u8 =
             u8::try_from((1u16 << (slots_supported + 1)) - 1).expect("arithemtic overflow");
         let data_ptr = &mut data as *mut _ as *mut c_void;
