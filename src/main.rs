@@ -257,7 +257,8 @@ enum Commands {
         /// The SPDM (DSP0274) version(s) (1.0, 1.1, 1.2 or 1.3) of an endpoint.
         /// These are communicated through the `GET_VERSION / VERSION` messages.
         #[arg(long, default_value = "1.3")]
-        spdm_ver: Option<String>,
+        #[clap(value_parser = parse_spdm_versions)]
+        spdm_ver: std::vec::Vec<u16>,
 
         /// The SPDM certificate model to use. See `Figure 1 — SPDM certificate chain models`
         /// in SPDM (DSP0274) version 1.3 for details.
@@ -519,6 +520,27 @@ impl std::str::FromStr for RequestCode {
             }
         }
     }
+}
+
+fn parse_spdm_versions(s: &str) -> Result<Vec<u16>, String> {
+    let versions: Vec<&str> = s.split(",").collect();
+    let mut supported_versions: Vec<u16> = Vec::new();
+    let version_type = |v: &str| -> Option<u16> {
+        match v {
+            "1.0" => u16::try_from(libspdm::libspdm_rs::SPDM_MESSAGE_VERSION_10).ok(),
+            "1.1" => u16::try_from(libspdm::libspdm_rs::SPDM_MESSAGE_VERSION_11).ok(),
+            "1.2" => u16::try_from(libspdm::libspdm_rs::SPDM_MESSAGE_VERSION_12).ok(),
+            "1.3" => u16::try_from(libspdm::libspdm_rs::SPDM_MESSAGE_VERSION_13).ok(),
+            _ => None,
+        }
+    };
+
+    for ver in versions {
+        let v = version_type(ver).ok_or_else(|| "Unsupported/Invalid SPDM version".to_string())?;
+        supported_versions.push(v);
+    }
+    assert!(!supported_versions.is_empty());
+    Ok(supported_versions)
 }
 
 fn parse_request_codes(s: &str) -> Result<Vec<RequestCode>, String> {
@@ -861,16 +883,11 @@ async fn main() -> Result<(), ()> {
                     num_provisioned_slots += 1;
                 }
             }
-            // Check if version was specified
-            let ver = Some(
-                cli_helpers::parse_spdm_responder_version(spdm_ver).ok_or_else(|| {
-                    error!("Unsupported/Invalid SPDM version");
-                })?,
-            );
+
             responder::setup_capabilities(
                 cntx_ptr,
                 0,
-                ver,
+                Some(&spdm_ver),
                 SPDM_ALGORITHMS_BASE_ASYM_ALGO_TPM_ALG_ECDSA_ECC_NIST_P384,
                 SPDM_ALGORITHMS_BASE_HASH_ALGO_TPM_ALG_SHA_384,
                 model,
@@ -878,11 +895,10 @@ async fn main() -> Result<(), ()> {
             )?;
             num_provisioned_slots += 1;
             assert!(num_provisioned_slots < 8);
-            responder::set_supported_slots_mask(num_provisioned_slots, ver, cntx_ptr).map_err(
-                |_| {
+            responder::set_supported_slots_mask(num_provisioned_slots, &spdm_ver, cntx_ptr)
+                .map_err(|_| {
                     error!("failed to set supported slot mask");
-                },
-            )?;
+                })?;
 
             // We need to make sure the hashes are generated before starting the
             // response loop

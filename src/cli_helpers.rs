@@ -70,27 +70,6 @@ pub fn parse_pcie_identifiers(vid: String, dev_id: String) -> Result<(u16, u16),
 
 /// # Summary
 ///
-/// Parses the CLI argument for the SPDM version used by a responder.
-///
-/// # Parameter
-///
-/// * `spdm_ver`: String option containing the version (1.0, 1,1 ...etc)
-///
-/// # Returns
-///
-/// The corresponding libspdm value for the version, None if not found.
-pub fn parse_spdm_responder_version(spdm_ver: Option<String>) -> Option<u8> {
-    spdm_ver.and_then(|ver| match ver.as_str() {
-        "1.0" => u8::try_from(libspdm::libspdm_rs::SPDM_MESSAGE_VERSION_10).ok(),
-        "1.1" => u8::try_from(libspdm::libspdm_rs::SPDM_MESSAGE_VERSION_11).ok(),
-        "1.2" => u8::try_from(libspdm::libspdm_rs::SPDM_MESSAGE_VERSION_12).ok(),
-        "1.3" => u8::try_from(libspdm::libspdm_rs::SPDM_MESSAGE_VERSION_13).ok(),
-        _ => None,
-    })
-}
-
-/// # Summary
-///
 /// Parses the CLI based AEAD Cipher Suites
 ///
 /// # Parameter
