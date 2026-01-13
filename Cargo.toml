@@ -29,7 +29,7 @@ std = [
     "x509-parser",
     "minicbor",
     "minicbor-derive",
-    "async-std",
+    "tokio",
     "futures",
     "nix",
     "inquire",
@@ -70,7 +70,7 @@ minicbor-derive = { version = "0.15", features = [
     "alloc",
     "std",
 ], optional = true }
-async-std = { version = "1.12", features = ["attributes"], optional = true }
+tokio = { version = "1.49", features = ["full"], optional = true }
 futures = { version = "0.3", optional = true }
 nix = { version = "0.29.0", features = ["user"], optional = true }
 libmctp = { version = "0.2" }

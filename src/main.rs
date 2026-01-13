@@ -8,7 +8,6 @@
 //! (which is generated from here) or the README
 //!
 
-use async_std::task;
 use clap::{Parser, Subcommand};
 use futures::future::join_all;
 use libspdm::libspdm_rs::*;
@@ -18,6 +17,7 @@ use std::fs::File;
 use std::fs::OpenOptions;
 use std::io::copy;
 use std::path::Path;
+use tokio::task;
 #[macro_use]
 extern crate log;
 use env_logger::Env;
@@ -655,7 +655,7 @@ fn init_logger() {
 ///
 /// If we are running tests:
 /// Setup test cases for SPDM-Responder-Validator and run them.
-#[async_std::main]
+#[tokio::main]
 async fn main() -> Result<(), ()> {
     init_logger();
     let cli = Args::parse();
