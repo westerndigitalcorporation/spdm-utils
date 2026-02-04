@@ -10,8 +10,8 @@ It can be used as a requester CLI to interface with SPDM devices.
 It includes support for the PCIe Data Object Exchange (DOE) Capability
 and MCTP transport layers.
 
-SPDM-Utils can also be used as a responder. It can be an embedded MCTP responder
-running on Tock. It can also be used as a responder running on Linux, and exposed
+SPDM-Utils can also be used as a responder. It can be an embedded MCTP responder.
+It can also be used as a responder running on Linux, and exposed
 to QEMU or other applications via sockets.
 
 SPDM-Utils can use Unix sockets as well. So you can test it all locally as a
@@ -133,8 +133,6 @@ make -j8
 
 Note that we build `libspdm` with chunking enabled. Chunking allows us to keep the maximum data transferred
 in a single burst down by chunking the SPDM message data into frames of digestible size(s).
-
-For example, `usb_i2c` communication with the `tock-responder` requires it, so we enable it by default.
 
 ## Build the binary
 
