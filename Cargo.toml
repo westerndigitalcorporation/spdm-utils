@@ -33,6 +33,7 @@ std = [
     "futures",
     "nix",
     "inquire",
+    "page_size",
 ]
 
 [lib]
@@ -61,6 +62,7 @@ colored = { version = "2.1", optional = true }
 which = { version = "6.0", optional = true }
 asn1-rs = { version = "0.6", optional = true }
 x509-parser = { version = "0.15", optional = true }
+page_size = { version = "0.6", optional = true }
 minicbor = { version = "0.25", features = [
     "half",
     "alloc",
@@ -72,7 +74,7 @@ minicbor-derive = { version = "0.15", features = [
 ], optional = true }
 tokio = { version = "1.49", features = ["full"], optional = true }
 futures = { version = "0.3", optional = true }
-nix = { version = "0.29.0", features = ["user"], optional = true }
+nix = { version = "0.29", features = ["user", "fs", "ioctl"], optional = true }
 libmctp = { version = "0.2" }
 inquire = { version = "0.7.5", optional = true}
 

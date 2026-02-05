@@ -57,11 +57,11 @@ Note: `dnf` commands are for Fedora, and `apt` is used for Debian/Ubuntu based
 distributions.
 
 ```shell
-$ sudo dnf install cmake clang-libs clang-devel pciutils-devel openssl openssl-devel python3-devel systemd-devel
+$ sudo dnf install cmake clang-libs clang-devel pciutils-devel openssl openssl-devel python3-devel systemd-devel libnvme
 
 or
 
-$ sudo apt install cmake clang libclang-dev pciutils libpci-dev openssl libssl-dev libsystemd-dev python3-dev pkg-config
+$ sudo apt install cmake clang libclang-dev pciutils libpci-dev openssl libssl-dev libsystemd-dev python3-dev pkg-config libnvme
 ```
 
 ### Ruby
@@ -295,6 +295,14 @@ invoked as below:
 
 ```shell
 ./target/debug/spdm_utils --pcie-vid <VendorID> --pcie-devid <DeviceID> --doe-pci-cfg request get-digests
+```
+### SPDM for NVMe over the SPDM Storage Transport
+
+SPDM-utils supports the SPDM over storage transport as defined by the DMTF DSP0286.
+For example, the following command can be used to interact with an NVMe device.
+
+```shell
+$ ./target/debug/spdm_utils --blk-dev-path /dev/nvme0 --nvme --no-session request get-version,get-capabilities
 ```
 
 ## Retrieving Certificates
