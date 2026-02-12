@@ -22,6 +22,7 @@ fn main() {
     println!("cargo:rustc-link-arg=-Wl,--start-group");
 
     println!("cargo:rustc-link-arg=-lpci");
+    println!("cargo:rustc-link-arg=-lnvme");
 
     println!("cargo:rustc-link-arg=-lmemlib");
     println!("cargo:rustc-link-arg=-lmalloclib");
@@ -41,6 +42,7 @@ fn main() {
     println!("cargo:rustc-link-arg=-lspdm_crypt_ext_lib");
     println!("cargo:rustc-link-arg=-lspdm_transport_pcidoe_lib");
     println!("cargo:rustc-link-arg=-lspdm_transport_mctp_lib");
+    println!("cargo:rustc-link-arg=-lspdm_transport_storage_lib");
 
     // Link SPDM Test Libraries
     let mut builder = if cfg!(feature = "libspdm_tests") {
