@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/usr/bin/env bash
 set -e
 
 ### This script updates and signs the mutable SPDM-Utils certificates ###
