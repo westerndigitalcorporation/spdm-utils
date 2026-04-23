@@ -33,10 +33,10 @@ mod io_buffers;
 mod nvme;
 mod qemu_server;
 mod request;
-mod socket_client;
-mod socket_server;
 mod storage_standards;
 mod tcg_concise_evidence_binding;
+mod tcp_client;
+mod tcp_server;
 mod test_suite;
 mod usb_i2c;
 
@@ -71,10 +71,6 @@ struct Args {
     #[arg(long, default_value = "")]
     pcie_devid: String,
 
-    /// Use the Socket Server backend
-    #[arg(long)]
-    socket_server: bool,
-
     /// If the client drops, keep the server alive
     #[arg(long)]
     server_persist: bool,
@@ -96,9 +92,21 @@ struct Args {
     #[arg(long)]
     spdm_transport_protocol: Option<spdm::TransportLayer>,
 
-    /// Use the Socket Client backend
+    /// Use the network client backend.
     #[arg(long)]
-    socket_client: bool,
+    tcp_client: bool,
+
+    /// Use the network server backend.
+    #[arg(long)]
+    tcp_server: bool,
+
+    /// Port used for network server/client.
+    #[arg(long, default_value_t = 49153)]
+    port: u16,
+
+    /// IP address of the server to connect to.
+    #[arg(long, default_value = "127.0.0.1")]
+    ip: Option<String>,
 
     /// Allow QEMU to connect to SPDM-Utils SPDM server (Responder only)
     #[arg(long)]
@@ -687,13 +695,13 @@ async fn main() -> Result<(), ()> {
     cli.doe_pci_cfg.then(|| {
         count += 1;
     });
-    cli.socket_server.then(|| {
+    cli.tcp_server.then(|| {
         count += 1;
     });
     cli.usb_i2c.then(|| {
         count += 1;
     });
-    cli.socket_client.then(|| {
+    cli.tcp_client.then(|| {
         count += 1;
     });
     cli.qemu_server.then(|| {
@@ -735,10 +743,10 @@ async fn main() -> Result<(), ()> {
             };
             doe_pci_cfg::register_device(cntx_ptr, vid, dev_id)?;
         }
-    } else if cli.socket_server {
-        socket_server::register_device(cntx_ptr, cli.server_persist)?;
-    } else if cli.socket_client {
-        socket_client::register_device(cntx_ptr)?;
+    } else if cli.tcp_server {
+        tcp_server::register_device(cntx_ptr, cli.port, cli.server_persist)?;
+    } else if cli.tcp_client {
+        tcp_client::register_device(cntx_ptr, cli.port, cli.ip)?;
     } else if cli.usb_i2c {
         if let Some(proto) = cli.spdm_transport_protocol
             && proto != spdm::TransportLayer::Mctp
@@ -953,7 +961,7 @@ async fn main() -> Result<(), ()> {
         Commands::Tests => {
             if cli.doe_pci_cfg {
                 test_suite::start_tests(cntx_ptr, test_suite::TestBackend::DoeBackend);
-            } else if cli.socket_server || cli.socket_client {
+            } else if cli.tcp_server || cli.tcp_client {
                 test_suite::start_tests(cntx_ptr, test_suite::TestBackend::SocketBackend);
             } else {
                 error!("The backend is not supported for testing");
