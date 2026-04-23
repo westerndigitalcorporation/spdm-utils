@@ -2761,9 +2761,10 @@ pub unsafe extern "C" fn libspdm_finish_rsp_opaque_data(
     _req_opaque_data: *const c_void,
     _req_opaque_data_size: usize,
     _opaque_data: *mut c_void,
-    _opaque_data_size: *mut usize,
+    opaque_data_size: *mut usize,
 ) -> bool {
-    false
+    unsafe { *opaque_data_size = 0 };
+    true
 }
 #[cfg(test)]
 libspdm_match_fn_prototypes!(
@@ -2820,9 +2821,10 @@ pub unsafe extern "C" fn libspdm_psk_finish_rsp_opaque_data(
     _req_opaque_data: *const c_void,
     _req_opaque_data_size: usize,
     _opaque_data: *mut c_void,
-    _opaque_data_size: *mut usize,
+    opaque_data_size: *mut usize,
 ) -> bool {
-    false
+    unsafe { *opaque_data_size = 0 };
+    true
 }
 #[cfg(test)]
 libspdm_match_fn_prototypes!(

@@ -269,7 +269,7 @@ enum Commands {
     },
     /// initiate a SPDM response
     Response {
-        /// The SPDM (DSP0274) version(s) (1.0, 1.1, 1.2 or 1.3) of an endpoint.
+        /// The SPDM (DSP0274) version(s) (1.0, 1.1, 1.2, 1.3 or 1.4) of an endpoint.
         /// These are communicated through the `GET_VERSION / VERSION` messages.
         #[arg(long, default_value = "1.3")]
         #[clap(value_parser = parse_spdm_versions)]
@@ -546,6 +546,7 @@ fn parse_spdm_versions(s: &str) -> Result<Vec<u16>, String> {
             "1.1" => u16::try_from(libspdm::libspdm_rs::SPDM_MESSAGE_VERSION_11).ok(),
             "1.2" => u16::try_from(libspdm::libspdm_rs::SPDM_MESSAGE_VERSION_12).ok(),
             "1.3" => u16::try_from(libspdm::libspdm_rs::SPDM_MESSAGE_VERSION_13).ok(),
+            "1.4" => u16::try_from(libspdm::libspdm_rs::SPDM_MESSAGE_VERSION_14).ok(),
             _ => None,
         }
     };

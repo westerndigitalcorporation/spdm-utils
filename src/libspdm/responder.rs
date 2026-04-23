@@ -337,7 +337,10 @@ pub fn set_supported_slots_mask(
     // not be set and certificate slot X shall be an invalid
     // value in various slot ID fields ( SlotID ) across all
     // SPDM request messages that contain this field." - SPDM 1.3, 374
-    if spdm_ver.contains(&(libspdm_rs::SPDM_MESSAGE_VERSION_13 as u16)) {
+    if spdm_ver
+        .iter()
+        .any(|&v| v >= libspdm_rs::SPDM_MESSAGE_VERSION_13 as u16)
+    {
         let mut data: u8 =
             u8::try_from((1u16 << (slots_supported + 1)) - 1).expect("arithemtic overflow");
         let data_ptr = &mut data as *mut _ as *mut c_void;
