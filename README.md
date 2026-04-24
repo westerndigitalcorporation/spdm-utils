@@ -14,8 +14,8 @@ SPDM-Utils can also be used as a responder. It can be an embedded MCTP responder
 It can also be used as a responder running on Linux, and exposed
 to QEMU or other applications via sockets.
 
-SPDM-Utils can use Unix sockets as well. So you can test it all locally as a
-requester and responder.
+SPDM-Utils can use TCP/IP as well. So you can test it all locally as a
+requester and responder (localhost).
 
 # Copyright
 
@@ -225,27 +225,48 @@ cargo build --features libspdm_tests
 
 ## Testing completely on the host
 
-You can run SPDM-Utils completely on the host using unix sockets.
+You can run SPDM-Utils completely on the host using TCP/IP and localhost.
 In this case you can run the server side with
 
 ```shell
-cargo run -- --socket-server request get-digests
+cargo run -- --tcp-server request get-digests
 ```
 
 and the client side with
 
 ```shell
-./target/debug/spdm_utils --socket-client response
+./target/debug/spdm_utils --tcp-client response
 ```
 
 Note that the server must be run first. You can also swap the server/client
 specification between the request or response side as well.
 
-You can also run the libspdm tests by running tests on the socket server with:
+You can also run the libspdm tests by running tests on the tcp server with:
 
 ```shell
-cargo run -- --socket-server tests
+cargo run -- --tcp-server tests
 ```
+
+## Testing over a network (TCP/IP)
+
+As mentioned before, `spdm-utils` supports communicating SPDM messages over
+TCP/IP, however, it does not conform to the SPDM TCP transport binding
+specification. Instead, just transmits the raw SPDM messages over the network.
+Compliance to the TCP transport specification may be added later.
+
+To use SPDM with TCP/IP, first setup a server:
+
+```shell
+$ ./target/debug/spdm_utils --tcp-server --server-persist response
+```
+
+On another machine with network access to the server run:
+
+```shell
+$ /target/debug/spdm_utils --tcp-client --ip <ip_addr> request get-version
+```
+
+If desired, the `port` option can be used to specify a port on both ends.
 
 ### Issuing a list of request
 
@@ -254,19 +275,19 @@ It is the responsibility of the user to ensure, the SPDM requests are ordered
 in a specification compliant way. It is not checked
 by `spdm-utils` or `libspdm`.
 
-Usage is as follows, as demonstrated over the socket model. Ensure you have an
-SPDM responder server socket running in responder mode prior to issuing this
+Usage is as follows, as demonstrated over the network model. Ensure you have an
+SPDM responder server running in responder mode prior to issuing this
 command.
 
 ```
-$./target/debug/spdm_utils --socket-client request get-version,get-capabilities,negotiate-algorithms
+$./target/debug/spdm_utils --tcp-client request get-version,get-capabilities,negotiate-algorithms
 ```
 
 Request sub-commands can be specified as follows, refer to usage `request --help`
 for available options.
 
 ```
-$./target/debug/spdm_utils --socket-client request get-version,get-measurement[index=1]
+$./target/debug/spdm_utils --tcp-client request get-version,get-measurement[index=1]
 ```
 
 ### Direct SPDM requests with no session establishment
@@ -279,7 +300,7 @@ compliant way. `spdm-utils` or `libspdm` do not check the request order, instead
 directly issues them to the responder.
 
 ```
-$ ./target/debug/spdm_utils --socket-client --no-session request get-version,get-capabilities,negotiate-algorithms,get-digests,get-certificate,challenge
+$ ./target/debug/spdm_utils --tcp-client --no-session request get-version,get-capabilities,negotiate-algorithms,get-digests,get-certificate,challenge
 ```
 
 This command with issue the requests listed in the order in which they are listed
@@ -410,7 +431,7 @@ Then you request the certificate back
 spdm_utils --pcie-vid <VendorID> --pcie-devid <DeviceID> --doe-pci-cfg request --cert-slot-id 1 get-certificate
 ```
 
-If you are running the socket/client mode you will have to simulate a
+If you are running the tcp server/client mode you will have to simulate a
 device reset and certificate re-gen. That can be done by running this
 
 ```shell

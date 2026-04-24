@@ -70,9 +70,9 @@ jobs:
       - name: Test
         run: |
           cargo test; \
-          ./target/debug/spdm_utils --socket-server response & \
+          ./target/debug/spdm_utils --tcp-server response & \
           sleep 1; \
-          ./target/debug/spdm_utils --socket-client tests;
+          ./target/debug/spdm_utils --tcp-client tests;
 
       - name: Clippy
         uses: actions-rs/cargo@v1
