@@ -372,7 +372,7 @@ pub fn test_set_certificate(cntx: *mut c_void, cert_slot_id: u8) -> Result<(), (
                 .arg("-out")
                 .arg("csr_response.cert")
                 .arg("-CA")
-                .arg("./certs/slot0/inter.der")
+                .arg("./certs/bank-ecc384/slot0/inter.der")
                 .arg("-sha384")
                 .arg("-days")
                 .arg("3650")
@@ -381,7 +381,7 @@ pub fn test_set_certificate(cntx: *mut c_void, cert_slot_id: u8) -> Result<(), (
                 .arg("-extensions")
                 .arg("device_ca")
                 .arg("-extfile")
-                .arg("./certs/alias/openssl.cnf")
+                .arg("./certs/bank-ecc384/alias/openssl.cnf")
                 .output()
                 .expect("Failed to Sign the CSR")
                 .status
@@ -397,7 +397,7 @@ pub fn test_set_certificate(cntx: *mut c_void, cert_slot_id: u8) -> Result<(), (
                 .arg("-out")
                 .arg("csr_response.cert")
                 .arg("-CA")
-                .arg("./certs/slot0/inter.der")
+                .arg("./certs/bank-ecc384/slot0/inter.der")
                 .arg("-sha384")
                 .arg("-days")
                 .arg("3650")
@@ -406,7 +406,7 @@ pub fn test_set_certificate(cntx: *mut c_void, cert_slot_id: u8) -> Result<(), (
                 .arg("-extensions")
                 .arg("leaf")
                 .arg("-extfile")
-                .arg("./certs/device/openssl.cnf")
+                .arg("./certs/bank-ecc384/device/openssl.cnf")
                 .output()
                 .expect("Failed to Sign the CSR")
                 .status
@@ -430,8 +430,8 @@ pub fn test_set_certificate(cntx: *mut c_void, cert_slot_id: u8) -> Result<(), (
 
     // 4. Combine all the immutable certificates
     let immutables_certs = [
-        "./certs/slot0/ca.cert.der",
-        "./certs/slot0/inter.cert.der",
+        "./certs/bank-ecc384/slot0/ca.cert.der",
+        "./certs/bank-ecc384/slot0/inter.cert.der",
         "./csr_response.cert.der",
     ];
 
@@ -465,9 +465,9 @@ pub fn test_set_certificate(cntx: *mut c_void, cert_slot_id: u8) -> Result<(), (
 
     // Cleanup after test slot
     let cleanup_path = if alias_cert {
-        format!("./certs/alias/slot{}", cert_slot_id)
+        format!("./certs/bank-ecc384/alias/slot{}", cert_slot_id)
     } else {
-        format!("./certs/device/slot{}", cert_slot_id)
+        format!("./certs/bank-ecc384/device/slot{}", cert_slot_id)
     };
     if Path::new(&cleanup_path).is_dir() {
         std::fs::remove_dir_all(cleanup_path).expect("Failed to cleanup test slot");

@@ -1186,13 +1186,13 @@ pub unsafe extern "C" fn libspdm_responder_data_sign(
 
     #[cfg(feature = "no_std")]
     {
-        buffer = include_bytes!("../../certs/slot0/end_responder.key");
+        buffer = include_bytes!("../../certs/bank-ecc384/slot0/end_responder.key");
     }
     #[cfg(not(feature = "no_std"))]
     let mut reader;
     #[cfg(not(feature = "no_std"))]
     {
-        let path = Path::new("certs/slot0/end_responder.key");
+        let path = Path::new("certs/bank-ecc384/slot0/end_responder.key");
 
         let file = match OpenOptions::new().read(true).write(false).open(path) {
             Err(why) => panic!("couldn't open {}: {}", path.display(), why),
@@ -1318,7 +1318,7 @@ pub unsafe extern "C" fn libspdm_write_certificate_to_nvm(
     {
         // TODO: We have no way to know if this is an alias or device
         // certificate.
-        let dir_name = format!("certs/alias/slot{}", slot_id);
+        let dir_name = format!("certs/bank-ecc384/alias/slot{}", slot_id);
         let file_name = format!("{}/immutable.der", dir_name);
         let path = Path::new(&file_name);
 
@@ -1411,7 +1411,7 @@ pub unsafe extern "C" fn libspdm_gen_csr(
         if is_device_cert_model {
             panic!("DeviceCert Model is unsupported");
         } else {
-            key_buffer = include_bytes!("../../certs/alias/slot0/device.key");
+            key_buffer = include_bytes!("../../certs/bank-ecc384/alias/slot0/device.key");
         }
     }
     #[cfg(not(feature = "no_std"))]
@@ -1419,9 +1419,9 @@ pub unsafe extern "C" fn libspdm_gen_csr(
     #[cfg(not(feature = "no_std"))]
     {
         let key_path = if is_device_cert_model {
-            Path::new("certs/device/slot0/device.key")
+            Path::new("certs/bank-ecc384/device/slot0/device.key")
         } else {
-            Path::new("certs/alias/slot0/device.key")
+            Path::new("certs/bank-ecc384/alias/slot0/device.key")
         };
 
         let key_file = match OpenOptions::new().read(true).write(false).open(key_path) {
@@ -1462,7 +1462,7 @@ pub unsafe extern "C" fn libspdm_gen_csr(
         if is_device_cert_model {
             panic!("DeviceCert Model is unsupported");
         } else {
-            cert_buffer = include_bytes!("../../certs/alias/slot0/device.cert.der");
+            cert_buffer = include_bytes!("../../certs/bank-ecc384/alias/slot0/device.cert.der");
         }
     }
     #[cfg(not(feature = "no_std"))]
@@ -1470,9 +1470,9 @@ pub unsafe extern "C" fn libspdm_gen_csr(
     #[cfg(not(feature = "no_std"))]
     {
         let cert_path = if is_device_cert_model {
-            Path::new("certs/device/slot0/device.cert.der")
+            Path::new("certs/bank-ecc384/device/slot0/device.cert.der")
         } else {
-            Path::new("certs/alias/slot0/device.cert.der")
+            Path::new("certs/bank-ecc384/alias/slot0/device.cert.der")
         };
 
         let cert_file = match OpenOptions::new().read(true).write(false).open(cert_path) {
