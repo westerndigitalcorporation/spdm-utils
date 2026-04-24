@@ -1,0 +1,5 @@
+[ inter_ca ]
+basicConstraints = CA:true
+keyUsage = cRLSign, keyCertSign, digitalSignature, nonRepudiation, keyEncipherment, dataEncipherment, keyAgreement, keyCertSign, cRLSign
+subjectKeyIdentifier = hash
+extendedKeyUsage = critical, serverAuth, clientAuth, OCSPSigning

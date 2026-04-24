@@ -14,8 +14,6 @@ use which::which;
 fn main() {
     println!("cargo:rerun-if-changed=wrapper.h");
     println!("cargo:rerun-if-changed=manifest/manifest.in.cbor");
-    println!("cargo:rerun-if-changed=certs/bank-ecc384/alias/slot0/device.der");
-    println!("cargo:rerun-if-changed=certs/bank-ecc384/alias/slot0/immutable.der");
 
     // cargo:rustc-link-lib doesn't seem to support start-group/end-group
     // so we manually pass the arguments
@@ -117,6 +115,13 @@ fn main() {
     if !Path::new("certs/bank-ecc384/alias/slot0/bundle_responder.certchain.der").is_file() {
         Command::new("./setup_certs.sh")
             .current_dir(env::current_dir().unwrap().join("certs/bank-ecc384/"))
+            .output()
+            .expect("Failed to execute command");
+    }
+
+    if !Path::new("certs/bank-mldsa87/alias/slot0/bundle_responder.certchain.der").is_file() {
+        Command::new("./setup_certs.sh")
+            .current_dir(env::current_dir().unwrap().join("certs/bank-mldsa87/"))
             .output()
             .expect("Failed to execute command");
     }

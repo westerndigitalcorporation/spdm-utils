@@ -1,8 +1,8 @@
 #!/bin/bash
 set -e
 
-### This script generates all of the immutable SPDM-Utils certificates ###
-### It is unlikely you want to run this script ###
+### This script generates all of the immutable SPDM-Utils certificates
+### It is unlikely you want to run this script
 
 ## Generate slot 0 certs ##
 pushd slot0
