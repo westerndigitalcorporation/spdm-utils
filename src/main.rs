@@ -890,10 +890,10 @@ async fn main() -> Result<(), ()> {
 
             for slot_id in 1..8 {
                 let file_name = if certificate_model == "alias" {
-                    format!("certs/alias/slot{}/immutable.der", slot_id)
+                    format!("certs/bank-ecc384/alias/slot{}/immutable.der", slot_id)
                 } else if certificate_model == "device" {
                     format!(
-                        "certs/device/slot{}/bundle_responder.certchain.der",
+                        "certs/bank-ecc384/device/slot{}/bundle_responder.certchain.der",
                         slot_id
                     )
                 } else {

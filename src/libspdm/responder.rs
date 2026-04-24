@@ -256,13 +256,15 @@ pub fn setup_capabilities(
         {
             assert!(slot_id == 0);
             if cert_mode == CertModel::Alias {
-                let buffer =
-                    include_bytes!("../../certs/alias/slot0/bundle_responder.certchain.der");
+                let buffer = include_bytes!(
+                    "../../certs/bank-ecc384/alias/slot0/bundle_responder.certchain.der"
+                );
                 (cert_chain_buffer, cert_chain_size) =
                     get_local_certchain(buffer, asym_algo, hash_algo, false);
             } else {
-                let buffer =
-                    include_bytes!("../../certs/device/slot0/bundle_responder.certchain.der");
+                let buffer = include_bytes!(
+                    "../../certs/bank-ecc384/device/slot0/bundle_responder.certchain.der"
+                );
                 (cert_chain_buffer, cert_chain_size) =
                     get_local_certchain(buffer, asym_algo, hash_algo, false);
             }
@@ -270,10 +272,13 @@ pub fn setup_capabilities(
         #[cfg(not(feature = "no_std"))]
         {
             let file_path = if cert_mode == CertModel::Alias {
-                format!("certs/alias/slot{}/bundle_responder.certchain.der", slot_id)
+                format!(
+                    "certs/bank-ecc384/alias/slot{}/bundle_responder.certchain.der",
+                    slot_id
+                )
             } else {
                 format!(
-                    "certs/device/slot{}/bundle_responder.certchain.der",
+                    "certs/bank-ecc384/device/slot{}/bundle_responder.certchain.der",
                     slot_id
                 )
             };
