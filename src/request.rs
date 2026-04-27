@@ -34,6 +34,7 @@ const LIBSPDM_STATUS_INVALID_CERT: u32 = 0x80030000;
 /// * `context`: The SPDM context
 /// * `slot_id`: slot id for this session
 /// * `asym_algo`: Asymmetric algorithm used
+/// * `pqc_asym_algo`: PQC asymmetric algorithm bitmask (SPDM 1.4); 0 means none
 /// * `hash_algo`: Hashing algorithm used
 ///
 /// # Returns
@@ -49,6 +50,7 @@ pub fn setup_capabilities(
     context: *mut c_void,
     slot_id: u8,
     asym_algo: u32,
+    pqc_asym_algo: u32,
     hash_algo: u32,
     dhe_groups: u16,
     aead_cipher_suites: u16,
@@ -120,6 +122,48 @@ pub fn setup_capabilities(
             data_ptr,
             core::mem::size_of::<u32>(),
         );
+
+        if pqc_asym_algo != 0 {
+            let mut data: u32 = pqc_asym_algo;
+            let data_ptr = &mut data as *mut _ as *mut c_void;
+            if LibspdmReturnStatus::libspdm_status_is_error(libspdm_set_data(
+                context,
+                libspdm_data_type_t_LIBSPDM_DATA_PQC_ASYM_ALGO,
+                &parameter as *const libspdm_data_parameter_t,
+                data_ptr,
+                core::mem::size_of::<u32>(),
+            )) {
+                error!("Failed to set [LIBSPDM_DATA_PQC_ASYM_ALGO]");
+                return Err(());
+            }
+
+            let mut data: u32 = pqc_asym_algo;
+            let data_ptr = &mut data as *mut _ as *mut c_void;
+            if LibspdmReturnStatus::libspdm_status_is_error(libspdm_set_data(
+                context,
+                libspdm_data_type_t_LIBSPDM_DATA_REQ_PQC_ASYM_ALG,
+                &parameter as *const libspdm_data_parameter_t,
+                data_ptr,
+                core::mem::size_of::<u32>(),
+            )) {
+                error!("Failed to set [LIBSPDM_DATA_PQC_ASYM_ALGO]");
+                return Err(());
+            }
+
+            // If PQC was set, default to using PQC if we can
+            let mut data: bool = true;
+            let data_ptr = &mut data as *mut _ as *mut c_void;
+            if LibspdmReturnStatus::libspdm_status_is_error(libspdm_set_data(
+                context,
+                libspdm_data_type_t_LIBSPDM_DATA_ALGO_PRIORITY_PQC_FIRST,
+                &parameter as *const libspdm_data_parameter_t,
+                data_ptr,
+                core::mem::size_of::<bool>(),
+            )) {
+                error!("Failed to set [LIBSPDM_DATA_ALGO_PRIORITY_PQC_FIRST]");
+                return Err(());
+            }
+        }
 
         let mut data: u16 = dhe_groups;
         let data_ptr = &mut data as *mut _ as *mut c_void;
