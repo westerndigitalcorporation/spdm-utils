@@ -12,9 +12,7 @@ use crate::spdm::get_local_certchain;
 use alloc::vec::Vec;
 use core::ffi::c_void;
 #[cfg(not(feature = "no_std"))]
-use std::fs::OpenOptions;
-#[cfg(not(feature = "no_std"))]
-use std::io::{BufRead, BufReader};
+use std::fs;
 #[cfg(not(feature = "no_std"))]
 use std::path::Path;
 
@@ -284,16 +282,13 @@ pub fn setup_capabilities(
             };
             let path = Path::new(&file_path);
 
-            let file = match OpenOptions::new().read(true).write(false).open(path) {
+            let buffer = match fs::read(path) {
                 Err(why) => panic!("couldn't open {}: {}", path.display(), why),
-                Ok(file) => file,
+                Ok(data) => data,
             };
 
-            let mut reader = BufReader::new(file);
-            let buffer = reader.fill_buf().unwrap();
-
             (cert_chain_buffer, cert_chain_size) =
-                get_local_certchain(buffer, asym_algo, hash_algo, false);
+                get_local_certchain(&buffer, asym_algo, hash_algo, false);
         }
 
         if LibspdmReturnStatus::libspdm_status_is_error(libspdm_set_data(
