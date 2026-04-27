@@ -220,6 +220,20 @@ enum Commands {
         #[arg(long, default_value = "ECDSA_ECC_NIST_P384")]
         asym_algos: Option<String>,
 
+        /// Supported PQC asymmetric algorithm
+        ///
+        /// Multiple algorithms may be specified in this form
+        /// [ML_DSA_44,ML_DSA_65,ML_DSA_87]
+        ///
+        /// The default is enabled all, PQC can be disabled
+        /// with an empty string.
+        ///
+        /// ML_DSA_44
+        /// ML_DSA_65
+        /// ML_DSA_87
+        #[arg(long)]
+        pqc_asym_algo: Option<String>,
+
         /// Supported hashing algorithms
         ///
         /// Multiple algorithms may be specified in this form
@@ -805,6 +819,7 @@ async fn main() -> Result<(), ()> {
             cert_slot_id,
             cert_path,
             asym_algos,
+            pqc_asym_algo,
             hash_algos,
             dhe_named_groups,
             aead_cipher_suites,
@@ -814,6 +829,7 @@ async fn main() -> Result<(), ()> {
                 cntx_ptr,
                 slot_id,
                 cli_helpers::parse_asym_algos(asym_algos)?,
+                cli_helpers::parse_pqc_asym_algos(pqc_asym_algo)?,
                 cli_helpers::parse_hash_algos(hash_algos)?,
                 cli_helpers::parse_dhe_named_groups(dhe_named_groups)?,
                 cli_helpers::parse_aead_cipher_suite(aead_cipher_suites)?,
@@ -913,6 +929,7 @@ async fn main() -> Result<(), ()> {
                         slot_id,
                         None,
                         SPDM_ALGORITHMS_BASE_ASYM_ALGO_TPM_ALG_ECDSA_ECC_NIST_P384,
+                        SPDM_ALGORITHMS_PQC_ASYM_ALGO_ML_DSA_87,
                         SPDM_ALGORITHMS_BASE_HASH_ALGO_TPM_ALG_SHA_384,
                         model,
                         1,
@@ -926,6 +943,7 @@ async fn main() -> Result<(), ()> {
                 0,
                 Some(&spdm_ver),
                 SPDM_ALGORITHMS_BASE_ASYM_ALGO_TPM_ALG_ECDSA_ECC_NIST_P384,
+                SPDM_ALGORITHMS_PQC_ASYM_ALGO_ML_DSA_87,
                 SPDM_ALGORITHMS_BASE_HASH_ALGO_TPM_ALG_SHA_384,
                 model,
                 1,
@@ -936,6 +954,12 @@ async fn main() -> Result<(), ()> {
                 .map_err(|_| {
                     error!("failed to set supported slot mask");
                 })?;
+
+            if certificate_model == "alias" {
+                responder::register_algs_negotiated_callback(cntx_ptr, CertModel::Alias);
+            } else {
+                responder::register_algs_negotiated_callback(cntx_ptr, CertModel::Device);
+            }
 
             // We need to make sure the hashes are generated before starting the
             // response loop

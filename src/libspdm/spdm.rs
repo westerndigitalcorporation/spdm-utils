@@ -1173,7 +1173,7 @@ pub unsafe extern "C" fn libspdm_responder_data_sign(
     _key_pair_id: u8,
     op_code: u8,
     base_asym_algo: u32,
-    _pqc_asym_algo: u32,
+    pqc_asym_algo: u32,
     base_hash_algo: u32,
     is_data_hash: bool,
     message: *const u8,
@@ -1182,6 +1182,75 @@ pub unsafe extern "C" fn libspdm_responder_data_sign(
     sig_size: *mut usize,
 ) -> bool {
     let mut context: *mut c_void = ptr::null_mut();
+
+    #[cfg(not(feature = "no_std"))]
+    if pqc_asym_algo != 0 {
+        let key_path = match pqc_asym_algo {
+            libspdm_rs::SPDM_ALGORITHMS_PQC_ASYM_ALGO_ML_DSA_87 => {
+                "certs/bank-mldsa87/slot0/end_responder.key"
+            }
+            _ => panic!("unsupported pqc_asym_algo: 0x{:x}", pqc_asym_algo),
+        };
+
+        let path = Path::new(key_path);
+        let buffer = fs::read(path).expect("couldn't open PQC responder key");
+        let buffer_len = buffer.len();
+        let key_buffer_layout = Layout::from_size_align(buffer_len, 8).unwrap();
+        let key_buffer = unsafe { alloc(key_buffer_layout) };
+        unsafe { key_buffer.copy_from(buffer.as_ptr(), buffer_len) };
+
+        let result = unsafe {
+            libspdm_pqc_asym_get_private_key_from_pem(
+                pqc_asym_algo,
+                key_buffer,
+                buffer_len,
+                ptr::null_mut(),
+                &mut context,
+            )
+        };
+        if !result {
+            unsafe { key_buffer.write_bytes(0, buffer_len) };
+            unsafe { dealloc(key_buffer, key_buffer_layout) };
+            return false;
+        }
+
+        let result = if is_data_hash {
+            unsafe {
+                libspdm_pqc_asym_sign_hash(
+                    spdm_version,
+                    op_code,
+                    pqc_asym_algo,
+                    base_hash_algo,
+                    context,
+                    message,
+                    message_size,
+                    signature,
+                    sig_size,
+                )
+            }
+        } else {
+            unsafe {
+                libspdm_pqc_asym_sign(
+                    spdm_version,
+                    op_code,
+                    pqc_asym_algo,
+                    base_hash_algo,
+                    context,
+                    message,
+                    message_size,
+                    signature,
+                    sig_size,
+                )
+            }
+        };
+
+        unsafe { libspdm_pqc_asym_free(pqc_asym_algo, context) };
+        unsafe { key_buffer.write_bytes(0, buffer_len) };
+        unsafe { dealloc(key_buffer, key_buffer_layout) };
+
+        return result;
+    }
+
     let buffer;
 
     #[cfg(feature = "no_std")]

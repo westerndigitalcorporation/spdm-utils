@@ -288,6 +288,57 @@ pub fn parse_asym_algos(asym_algos: Option<String>) -> Result<u32, ()> {
 
 /// # Summary
 ///
+/// Parses the CLI PQC asymmetric algorithms specified.
+///
+/// If an empty string is specified then no algorithms are enalbed. We default
+/// to enable all.
+///
+/// # Parameter
+///
+/// * `pqc_asym_algo`: An optional comma delimited string containing the PQC algos
+///
+/// # Returns
+///
+/// Returns a `u32` bitmask suitable for `LIBSPDM_DATA_PQC_ASYM_ALGO`, or `Ok(0)` for none.
+pub fn parse_pqc_asym_algos(pqc_asym_algo: Option<String>) -> Result<u32, ()> {
+    let mut specified_algos: u32 = 0;
+    let algos = match pqc_asym_algo.as_deref() {
+        None => {
+            let default = SPDM_ALGORITHMS_PQC_ASYM_ALGO_ML_DSA_44
+                | SPDM_ALGORITHMS_PQC_ASYM_ALGO_ML_DSA_65
+                | SPDM_ALGORITHMS_PQC_ASYM_ALGO_ML_DSA_87;
+            debug!("Enabling all PQC Algos: {}", default);
+            return Ok(default);
+        }
+        Some("") => {
+            debug!("All PQC Algos are disabled");
+            return Ok(0);
+        }
+        Some(s) => s
+            .split(',')
+            .map(|elem| elem.trim().to_string())
+            .collect::<Vec<String>>(),
+    };
+
+    for algo in algos {
+        match algo.as_str() {
+            "ML_DSA_44" => specified_algos |= SPDM_ALGORITHMS_PQC_ASYM_ALGO_ML_DSA_44,
+            "ML_DSA_65" => specified_algos |= SPDM_ALGORITHMS_PQC_ASYM_ALGO_ML_DSA_65,
+            "ML_DSA_87" => specified_algos |= SPDM_ALGORITHMS_PQC_ASYM_ALGO_ML_DSA_87,
+            "" => {}
+            other => {
+                error!("Unsupported PQC asymmetric algorithm: {}", other);
+                return Err(());
+            }
+        }
+    }
+
+    debug!("Specified PQC Algos: {}", specified_algos);
+    Ok(specified_algos)
+}
+
+/// # Summary
+///
 /// Parses the CLI based hashing algorithms specified
 ///
 /// # Parameter

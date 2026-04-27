@@ -55,6 +55,7 @@ pub fn setup_test_backend(cntx: *mut c_void) -> Result<SpdmSessionInfo, u32> {
         cntx,
         slot_id,
         cli_helpers::parse_asym_algos(Some("ECDSA_ECC_NIST_P384".to_string())).unwrap(),
+        cli_helpers::parse_pqc_asym_algos(Some("ML_DSA_87".to_string())).unwrap(),
         cli_helpers::parse_hash_algos(Some("SHA_384".to_string())).unwrap(),
         cli_helpers::parse_dhe_named_groups(Some("SECP_384_R1,SECP_521_R1".to_string())).unwrap(),
         cli_helpers::parse_aead_cipher_suite(Some("AES_256_GCM".to_string())).unwrap(),
