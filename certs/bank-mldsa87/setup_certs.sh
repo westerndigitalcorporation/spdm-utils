@@ -1,28 +1,30 @@
 #!/bin/bash
 set -e
 
-### This script updates and signs the mutable SPDM-Utils certificates ###
-### You probably want to run this on boot ###
+### This script updates and signs the mutable SPDM-Utils certificates
+### You probably want to run this on boot
 
 # Generate the slot0 leaf certificates
 # As we don't support MULTI_KEY_CAP, we must have a
 # "single public-private key pair per supported
 # algorithm for its leaf certificates". So we generate one
 # certificate for slot0 and use that for all other slots
+# Note that each bank uses a different algorithm if
+# `SLOT_MGMT_CAP` is enabled
 pushd alias/slot0
 
 # Generate Alias CA (DeviceID in RIoT)
-openssl req -nodes -newkey ec:../../slot0/param.pem \
-	-keyout alias.key -out alias.req -sha384 -batch \
-	-subj "/CN=Test Bootloader CA"
-openssl x509 -req -in alias.req -out alias.cert -CA device.der -sha384 -days 3650 -set_serial 3 -extensions alias_ca -extfile ../openssl.cnf
+openssl genpkey -algorithm mldsa87 -out alias.key
+openssl req -new -key alias.key -out alias.req -batch \
+	-subj "/CN=Test Bootloader CA ML-DSA-87"
+openssl x509 -req -in alias.req -out alias.cert -CA device.der -days 3650 -set_serial 3 -extensions alias_ca -extfile ../openssl.cnf
 
 # Copy in CSRs
 cp ../../slot0/end* ./
 
 # Sign the CSRs
-openssl x509 -req -in end_requester.req -out end_requester.cert -CA alias.cert -CAkey alias.key -sha384 -days 3650 -set_serial 4 -extensions leaf_requester -extfile ../openssl.cnf
-openssl x509 -req -in end_responder.req -out end_responder.cert -CA alias.cert -CAkey alias.key -sha384 -days 3650 -set_serial 5 -extensions leaf_responder -extfile ../openssl.cnf
+openssl x509 -req -in end_requester.req -out end_requester.cert -CA alias.cert -CAkey alias.key -days 3650 -set_serial 4 -extensions leaf_requester -extfile ../openssl.cnf
+openssl x509 -req -in end_responder.req -out end_responder.cert -CA alias.cert -CAkey alias.key -days 3650 -set_serial 5 -extensions leaf_responder -extfile ../openssl.cnf
 
 # Generate der files
 openssl asn1parse -in alias.cert -out alias.cert.der
@@ -57,10 +59,10 @@ do
     /-----END CERTIFICATE-----/ { f=0 }
     END { if (f=="0") printf "%s", rec }
 ' > custom_device.cert
-		openssl x509 -req -in ../slot0/alias.req -out alias.cert -CA custom_device.cert -CAkey ../slot0/device.key -sha384 -days 3650 -set_serial 3 -extensions alias_ca -extfile ../openssl.cnf
+		openssl x509 -req -in ../slot0/alias.req -out alias.cert -CA custom_device.cert -CAkey ../slot0/device.key -days 3650 -set_serial 3 -extensions alias_ca -extfile ../openssl.cnf
 
-		openssl x509 -req -in ../slot0/end_requester.req -out end_requester.cert -CA alias.cert -CAkey ../slot0/alias.key -sha384 -days 3650 -set_serial 4 -extensions leaf -extfile ../openssl.cnf
-		openssl x509 -req -in ../slot0/end_responder.req -out end_responder.cert -CA alias.cert -CAkey ../slot0/alias.key -sha384 -days 3650 -set_serial 5 -extensions leaf -extfile ../openssl.cnf
+		openssl x509 -req -in ../slot0/end_requester.req -out end_requester.cert -CA alias.cert -CAkey ../slot0/alias.key -days 3650 -set_serial 4 -extensions leaf -extfile ../openssl.cnf
+		openssl x509 -req -in ../slot0/end_responder.req -out end_responder.cert -CA alias.cert -CAkey ../slot0/alias.key -days 3650 -set_serial 5 -extensions leaf -extfile ../openssl.cnf
 
 		# Generate der files
 		openssl asn1parse -in alias.cert -out alias.cert.der

@@ -14,7 +14,7 @@ use libspdm::spdm::{
 };
 use libspdm::{libspdm_status_code, libspdm_status_source};
 use std::fs::OpenOptions;
-use std::io::{BufRead, BufReader, BufWriter, Write};
+use std::io::{BufWriter, Write};
 use std::path::Path;
 use std::ptr;
 
@@ -216,17 +216,15 @@ pub fn setup_capabilities(
 
         // Only support slot0
         let path = match slot_id {
-            0 => Path::new("certs/alias/slot0/end_requester.cert.der"),
+            0 => Path::new("certs/bank-ecc384/alias/slot0/end_requester.cert.der"),
             _ => unimplemented!(),
         };
 
-        let file = match OpenOptions::new().read(true).write(false).open(path) {
+        let buffer_vec = match std::fs::read(path) {
             Err(why) => panic!("couldn't open {}: {}", path.display(), why),
-            Ok(file) => file,
+            Ok(data) => data,
         };
-
-        let mut reader = BufReader::new(file);
-        let buffer = reader.fill_buf().unwrap();
+        let buffer = buffer_vec.as_slice();
 
         let (cert_chain_buffer, cert_chain_size) =
             libspdm::spdm::get_local_certchain(buffer, asym_algo, hash_algo, true);
@@ -644,13 +642,11 @@ pub fn prepare_request(
                     cert_path.expect("Certificate path was not specified for SetCertificate");
                 let path = Path::new(&file_path);
 
-                let file = match OpenOptions::new().read(true).write(false).open(path) {
+                let buffer_vec = match std::fs::read(path) {
                     Err(why) => panic!("couldn't open {}: {}", path.display(), why),
-                    Ok(file) => file,
+                    Ok(data) => data,
                 };
-
-                let mut reader = BufReader::new(file);
-                let buffer = reader.fill_buf().unwrap();
+                let buffer = buffer_vec.as_slice();
 
                 let (cert_chain_buffer, cert_chain_size) =
                     get_local_certchain(buffer, asym_algo, hash_algo, true);

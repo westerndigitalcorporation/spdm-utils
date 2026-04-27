@@ -12,9 +12,7 @@ use crate::spdm::get_local_certchain;
 use alloc::vec::Vec;
 use core::ffi::c_void;
 #[cfg(not(feature = "no_std"))]
-use std::fs::OpenOptions;
-#[cfg(not(feature = "no_std"))]
-use std::io::{BufRead, BufReader};
+use std::fs;
 #[cfg(not(feature = "no_std"))]
 use std::path::Path;
 
@@ -256,13 +254,15 @@ pub fn setup_capabilities(
         {
             assert!(slot_id == 0);
             if cert_mode == CertModel::Alias {
-                let buffer =
-                    include_bytes!("../../certs/alias/slot0/bundle_responder.certchain.der");
+                let buffer = include_bytes!(
+                    "../../certs/bank-ecc384/alias/slot0/bundle_responder.certchain.der"
+                );
                 (cert_chain_buffer, cert_chain_size) =
                     get_local_certchain(buffer, asym_algo, hash_algo, false);
             } else {
-                let buffer =
-                    include_bytes!("../../certs/device/slot0/bundle_responder.certchain.der");
+                let buffer = include_bytes!(
+                    "../../certs/bank-ecc384/device/slot0/bundle_responder.certchain.der"
+                );
                 (cert_chain_buffer, cert_chain_size) =
                     get_local_certchain(buffer, asym_algo, hash_algo, false);
             }
@@ -270,25 +270,25 @@ pub fn setup_capabilities(
         #[cfg(not(feature = "no_std"))]
         {
             let file_path = if cert_mode == CertModel::Alias {
-                format!("certs/alias/slot{}/bundle_responder.certchain.der", slot_id)
+                format!(
+                    "certs/bank-ecc384/alias/slot{}/bundle_responder.certchain.der",
+                    slot_id
+                )
             } else {
                 format!(
-                    "certs/device/slot{}/bundle_responder.certchain.der",
+                    "certs/bank-ecc384/device/slot{}/bundle_responder.certchain.der",
                     slot_id
                 )
             };
             let path = Path::new(&file_path);
 
-            let file = match OpenOptions::new().read(true).write(false).open(path) {
+            let buffer = match fs::read(path) {
                 Err(why) => panic!("couldn't open {}: {}", path.display(), why),
-                Ok(file) => file,
+                Ok(data) => data,
             };
 
-            let mut reader = BufReader::new(file);
-            let buffer = reader.fill_buf().unwrap();
-
             (cert_chain_buffer, cert_chain_size) =
-                get_local_certchain(buffer, asym_algo, hash_algo, false);
+                get_local_certchain(&buffer, asym_algo, hash_algo, false);
         }
 
         if LibspdmReturnStatus::libspdm_status_is_error(libspdm_set_data(
