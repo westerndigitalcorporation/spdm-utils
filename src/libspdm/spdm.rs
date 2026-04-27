@@ -55,8 +55,8 @@ use {
     once_cell::sync::Lazy,
     std::alloc::{Layout, alloc, dealloc},
     std::ffi::{CString, c_uchar, c_uint},
-    std::fs::OpenOptions,
-    std::io::{BufRead, BufReader, BufWriter, Write},
+    std::fs::{self, OpenOptions},
+    std::io::{BufWriter, Write},
     std::path::Path,
     std::sync::RwLock,
 };
@@ -1189,18 +1189,12 @@ pub unsafe extern "C" fn libspdm_responder_data_sign(
         buffer = include_bytes!("../../certs/bank-ecc384/slot0/end_responder.key");
     }
     #[cfg(not(feature = "no_std"))]
-    let mut reader;
+    let file_data;
     #[cfg(not(feature = "no_std"))]
     {
         let path = Path::new("certs/bank-ecc384/slot0/end_responder.key");
-
-        let file = match OpenOptions::new().read(true).write(false).open(path) {
-            Err(why) => panic!("couldn't open {}: {}", path.display(), why),
-            Ok(file) => file,
-        };
-
-        reader = BufReader::new(file);
-        buffer = reader.fill_buf().unwrap();
+        file_data = fs::read(path).expect("couldn't open end_responder.key");
+        buffer = file_data.as_slice();
     }
 
     let buffer_len = buffer.len();
@@ -1415,7 +1409,7 @@ pub unsafe extern "C" fn libspdm_gen_csr(
         }
     }
     #[cfg(not(feature = "no_std"))]
-    let mut key_reader;
+    let key_file_data;
     #[cfg(not(feature = "no_std"))]
     {
         let key_path = if is_device_cert_model {
@@ -1423,14 +1417,8 @@ pub unsafe extern "C" fn libspdm_gen_csr(
         } else {
             Path::new("certs/bank-ecc384/alias/slot0/device.key")
         };
-
-        let key_file = match OpenOptions::new().read(true).write(false).open(key_path) {
-            Err(why) => panic!("couldn't open {}: {}", key_path.display(), why),
-            Ok(file) => file,
-        };
-
-        key_reader = BufReader::new(key_file);
-        key_buffer = key_reader.fill_buf().unwrap();
+        key_file_data = fs::read(key_path).expect("couldn't open device.key");
+        key_buffer = key_file_data.as_slice();
     }
 
     let key_buffer_len = key_buffer.len();
@@ -1466,7 +1454,7 @@ pub unsafe extern "C" fn libspdm_gen_csr(
         }
     }
     #[cfg(not(feature = "no_std"))]
-    let mut cert_reader;
+    let cert_file_data;
     #[cfg(not(feature = "no_std"))]
     {
         let cert_path = if is_device_cert_model {
@@ -1474,14 +1462,8 @@ pub unsafe extern "C" fn libspdm_gen_csr(
         } else {
             Path::new("certs/bank-ecc384/alias/slot0/device.cert.der")
         };
-
-        let cert_file = match OpenOptions::new().read(true).write(false).open(cert_path) {
-            Err(why) => panic!("couldn't open {}: {}", cert_path.display(), why),
-            Ok(file) => file,
-        };
-
-        cert_reader = BufReader::new(cert_file);
-        cert_buffer = cert_reader.fill_buf().unwrap();
+        cert_file_data = fs::read(cert_path).expect("couldn't open device.cert.der");
+        cert_buffer = cert_file_data.as_slice();
     }
 
     let cert_buffer_len = cert_buffer.len();
