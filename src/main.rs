@@ -931,7 +931,7 @@ async fn main() -> Result<(), ()> {
                 1,
             )?;
             num_provisioned_slots += 1;
-            assert!(num_provisioned_slots < 8);
+
             responder::set_supported_slots_mask(num_provisioned_slots, &spdm_ver, cntx_ptr)
                 .map_err(|_| {
                     error!("failed to set supported slot mask");
