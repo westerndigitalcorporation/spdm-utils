@@ -29,6 +29,7 @@ See LICENSE-APACHE, LICENSE-MIT, and COPYRIGHT for details.
 
 - [Dependencies](#dependencies)
     - [Fedora](#fedora)
+- [Building with Nix](#building-with-nix)
 - [Building](#building)
     - [Build libspdm](#build-libspdm)
     - [Build the binary](#build-the-binary)
@@ -103,6 +104,53 @@ home/<user>/bin/cbor2diag.rb
 When building `spdm-utils` it will generate a `manifest.out.cbor` which contains
 the serialised cbor manifest, and also a `manifest.pretty` which is the *pretty* format
 of the manifest (user friendly).
+
+# Building with Nix
+
+If you have [Nix](https://nixos.org/) installed with flakes enabled, you can build
+SPDM-Utils without manually installing any dependencies.
+
+## Quick Build
+
+To build the release binary directly:
+
+```shell
+$ nix build .#
+```
+
+The resulting binary will be available at `./result/bin/spdm_utils`.
+
+## Development Shell
+
+For development, you can enter a shell with all dependencies available:
+
+```shell
+$ nix develop
+```
+
+Then build libspdm (only needed once, or after submodule updates):
+
+```shell
+$ cd third-party/libspdm
+$ mkdir -p build && cd build
+$ cmake -DARCH=x64 -DTOOLCHAIN=GCC -DTARGET=Debug -DCRYPTO=openssl \
+    -DENABLE_BINARY_BUILD=1 -DCOMPILED_LIBCRYPTO_PATH=/usr/lib/ \
+    -DCOMPILED_LIBSSL_PATH=/usr/lib/ -DDISABLE_TESTS=1 \
+    -DCMAKE_C_FLAGS="-DLIBSPDM_ENABLE_CAPABILITY_EVENT_CAP=0 \
+    -DLIBSPDM_ENABLE_CAPABILITY_MEL_CAP=0 \
+    -DLIBSPDM_HAL_PASS_SPDM_CONTEXT=1 \
+    -DLIBSPDM_ENABLE_CAPABILITY_GET_KEY_PAIR_INFO_CAP=0 \
+    -DLIBSPDM_ENABLE_CAPABILITY_SET_KEY_PAIR_INFO_CAP=0 \
+    -DLIBSPDM_ENABLE_CAPABILITY_ENDPOINT_INFO_CAP=0" ..
+$ make -j$(nproc)
+$ cd ../../..
+```
+
+Then build spdm-utils:
+
+```shell
+$ cargo build
+```
 
 # Building
 
