@@ -1486,9 +1486,11 @@ pub unsafe extern "C" fn libspdm_gen_csr(
         CString::new("C=AU,O=Western Digital Test,CN=Western Digital AN300 Test CSR").unwrap();
 
     let result = unsafe {
+        // TODO: Support pqc_asym_nid
         libspdm_gen_x509_csr(
             hash_nid,
             asym_nid,
+            0,
             requester_info,
             requester_info_length,
             !is_device_cert_model,
