@@ -1,15 +1,14 @@
 #!/bin/bash
 set -e
 
-### This script updates and signs the mutable SPDM-Utils certificates
-### You probably want to run this on boot
+### This script updates and signs the mutable SPDM-Utils certificates ###
+### You probably want to run this on boot ###
 
 # Generate the slot0 leaf certificates
 # As we don't support MULTI_KEY_CAP, we must have a
 # "single public-private key pair per supported
 # algorithm for its leaf certificates". So we generate one
 # certificate for slot0 and use that for all other slots
-# Note that each bank uses a different algorithm though
 pushd alias/slot0
 
 # Generate Alias CA (DeviceID in RIoT)
