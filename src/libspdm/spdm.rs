@@ -3429,6 +3429,141 @@ libspdm_match_fn_prototypes!(
     libspdm_get_cert_chain_slot_storage_size
 );
 
+/// # Summary
+///
+/// HAL callback queried by the responder inside `CHALLENGE_AUTH` to decide
+/// whether basic mutual authentication should be initiated for this challenge.
+///
+/// # Parameter
+///
+/// * `spdm_context`: The SPDM context
+/// * `spdm_version`: The SPDM version
+/// * `slot_id`: Slot ID of the responder's certificate being challenged
+/// * `request_context_size`: Size in bytes of the request context
+/// * `request_context`: A pointer to the request context, if any
+///
+/// # Returns
+///
+/// True if `MUT_AUTH_CAP` is set in the local capability flags, false otherwise.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn libspdm_challenge_start_mut_auth(
+    spdm_context: *mut c_void,
+    _spdm_version: libspdm_rs::spdm_version_number_t,
+    _slot_id: u8,
+    _request_context_size: usize,
+    _request_context: *const c_void,
+) -> bool {
+    let parameter = libspdm_rs::libspdm_data_parameter_t::new_local(0);
+    let mut flags: u32 = 0;
+    let mut data_size = core::mem::size_of::<u32>();
+
+    let ret = unsafe {
+        libspdm_rs::libspdm_get_data(
+            spdm_context,
+            libspdm_data_type_t_LIBSPDM_DATA_CAPABILITY_FLAGS,
+            &parameter as *const libspdm_rs::libspdm_data_parameter_t,
+            &mut flags as *mut _ as *mut c_void,
+            &mut data_size,
+        )
+    };
+
+    if LibspdmReturnStatus::libspdm_status_is_error(ret) {
+        return false;
+    }
+    flags & SPDM_GET_CAPABILITIES_RESPONSE_FLAGS_MUT_AUTH_CAP != 0
+}
+#[cfg(test)]
+libspdm_match_fn_prototypes!(
+    unsafe extern "C" fn(
+        *mut c_void,
+        libspdm_rs::spdm_version_number_t,
+        u8,
+        usize,
+        *const c_void,
+    ) -> bool,
+    libspdm_challenge_start_mut_auth
+);
+
+/// # Summary
+///
+/// HAL callback queried by the responder inside `KEY_EXCHANGE_RSP` to decide
+/// whether session-based mutual authentication should be initiated for the
+/// new session.
+///
+/// # Parameter
+///
+/// * `spdm_context`: The SPDM context
+/// * `session_id`: The session ID being established
+/// * `spdm_version`: The SPDM version
+/// * `slot_id`: Slot ID of the responder's certificate
+/// * `req_slot_id`: On output, the slot ID the requester should use for
+///                  mutual authentication
+/// * `session_policy`: Session policy bits
+/// * `opaque_data_length`: Size in bytes of the opaque data
+/// * `opaque_data`: A pointer to the opaque data, if any
+/// * `mandatory_mut_auth`: On output, whether mutual authentication is
+///                         required for the session to establish
+///
+/// # Returns
+///
+/// `SPDM_KEY_EXCHANGE_RESPONSE_MUT_AUTH_REQUESTED_WITH_ENCAP_REQUEST` if
+/// `MUT_AUTH_CAP` is set in the local capability flags, 0 otherwise.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn libspdm_key_exchange_start_mut_auth(
+    spdm_context: *mut c_void,
+    _session_id: u32,
+    _spdm_version: libspdm_rs::spdm_version_number_t,
+    _slot_id: u8,
+    _req_slot_id: *mut u8,
+    _session_policy: u8,
+    _opaque_data_length: usize,
+    _opaque_data: *const c_void,
+    mandatory_mut_auth: *mut bool,
+) -> u8 {
+    let parameter = libspdm_rs::libspdm_data_parameter_t::new_local(0);
+    let mut flags: u32 = 0;
+    let mut data_size = core::mem::size_of::<u32>();
+
+    if !mandatory_mut_auth.is_null() {
+        unsafe { *mandatory_mut_auth = true };
+    }
+
+    let ret = unsafe {
+        libspdm_rs::libspdm_get_data(
+            spdm_context,
+            libspdm_data_type_t_LIBSPDM_DATA_CAPABILITY_FLAGS,
+            &parameter as *const libspdm_rs::libspdm_data_parameter_t,
+            &mut flags as *mut _ as *mut c_void,
+            &mut data_size,
+        )
+    };
+
+    if LibspdmReturnStatus::libspdm_status_is_error(ret) {
+        return 0;
+    }
+
+    if flags & SPDM_GET_CAPABILITIES_RESPONSE_FLAGS_MUT_AUTH_CAP != 0 {
+        SPDM_KEY_EXCHANGE_RESPONSE_MUT_AUTH_REQUESTED_WITH_ENCAP_REQUEST as u8
+    } else {
+        0
+    }
+}
+#[cfg(test)]
+libspdm_match_fn_prototypes!(
+    unsafe extern "C" fn(
+        *mut c_void,
+        u32,
+        libspdm_rs::spdm_version_number_t,
+        u8,
+        *mut u8,
+        u8,
+        usize,
+        *const c_void,
+        *mut bool,
+    ) -> u8,
+    libspdm_key_exchange_start_mut_auth
+);
+
 pub unsafe fn requester_respond_if_ready(
     cntx_ptr: *mut c_void,
     session_info: &mut SpdmSessionInfo,
