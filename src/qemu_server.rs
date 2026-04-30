@@ -1232,6 +1232,7 @@ pub fn register_device(
                     Some(qemu_receive_message_storage),
                 );
             }
+            _ => unreachable!(),
         }
         io_buffers::libspdm_setup_io_buffers(
             context,

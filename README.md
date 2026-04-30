@@ -270,9 +270,10 @@ cargo run -- --tcp-server tests
 ## Testing over a network (TCP/IP)
 
 As mentioned before, `spdm-utils` supports communicating SPDM messages over
-TCP/IP, however, it does not conform to the SPDM TCP transport binding
-specification. Instead, just transmits the raw SPDM messages over the network.
-Compliance to the TCP transport specification may be added later.
+TCP/IP. The TCP/IP transport by default conforms to the SPDM TCP Transport
+binding. However, a different transport protocol maybe be used with the
+`--spdm-transport-protocol` argument. Note that both the client and the
+server will need to be started with this argument specified.
 
 To use SPDM with TCP/IP, first setup a server:
 
@@ -300,14 +301,14 @@ SPDM responder server running in responder mode prior to issuing this
 command.
 
 ```
-$./target/debug/spdm_utils --tcp-client request get-version,get-capabilities,negotiate-algorithms
+$./target/debug/spdm_utils --tcp-client --no-session request get-version,get-capabilities,negotiate-algorithms
 ```
 
 Request sub-commands can be specified as follows, refer to usage `request --help`
 for available options.
 
 ```
-$./target/debug/spdm_utils --tcp-client request get-version,get-measurement[index=1]
+$./target/debug/spdm_utils --tcp-client request --no-session get-version,get-measurement[index=1]
 ```
 
 ### Direct SPDM requests with no session establishment

@@ -129,19 +129,21 @@ struct Args {
     #[arg(long)]
     spdm_transport_protocol: Option<spdm::TransportLayer>,
 
-    /// Use the network client backend.
+    /// Use the TCP client, this could be used to connect to a local or a
+    /// remote TCP server.
     #[arg(long)]
     tcp_client: bool,
 
-    /// Use the network server backend.
+    /// Use the TCP server, reachable by a local or a remote TCP client.
     #[arg(long)]
     tcp_server: bool,
 
-    /// Port used for network server/client.
-    #[arg(long, default_value_t = 49153)]
+    /// Port used for SPDM TCP as defined by the IANA [DSP0287 - Section 5]
+    #[arg(long, default_value_t = 4194)]
     port: u16,
 
-    /// IP address of the server to connect to.
+    /// IP address of the server to connect to. If not specified, localhost is
+    /// used.
     #[arg(long, default_value = "127.0.0.1")]
     ip: Option<String>,
 
@@ -734,6 +736,7 @@ fn init_logger() {
 async fn main() -> Result<(), ()> {
     init_logger();
     let cli = Args::parse();
+    let mut trans_proto = cli.spdm_transport_protocol;
 
     let cntx_ptr = spdm::initialise_spdm_context();
 
@@ -787,12 +790,21 @@ async fn main() -> Result<(), ()> {
         }
     }
 
+    if trans_proto.is_none() && (cli.tcp_server || cli.tcp_client) {
+        let role = if cli.tcp_server { "server" } else { "client" };
+
+        info!("Transport unspecified for TCP {role}, defaulting to SPDM TCP");
+        trans_proto = Some(spdm::TransportLayer::Tcp);
+    }
+
     if cli.tcp_server {
+        info!("TCP Server: transport: {:?}", trans_proto.as_ref().unwrap());
         tcp_server::register_device(cntx_ptr, cli.port, cli.server_persist)?;
     } else if cli.tcp_client {
+        info!("TCP Client: transport: {:?}", trans_proto.as_ref().unwrap());
         tcp_client::register_device(cntx_ptr, cli.port, cli.ip)?;
     } else if cli.usb_i2c {
-        if let Some(proto) = cli.spdm_transport_protocol
+        if let Some(proto) = trans_proto
             && proto != spdm::TransportLayer::Mctp
         {
             error!("Only MCTP supported over USB I2C");
@@ -805,7 +817,7 @@ async fn main() -> Result<(), ()> {
             error!("QEMU Server does not support running an SPDM requester");
             return Err(());
         }
-        if let Some(proto) = cli.spdm_transport_protocol {
+        if let Some(proto) = trans_proto {
             info!("Using {:?} transport for QEMU", proto);
             qemu_server::register_device(cntx_ptr, cli.qemu_port, proto)?;
         } else {
@@ -860,8 +872,7 @@ async fn main() -> Result<(), ()> {
     }
 
     unsafe {
-        if let Some(proto) = cli.spdm_transport_protocol {
-            info!("Using {:?} transport", proto);
+        if let Some(proto) = trans_proto {
             spdm::setup_transport_layer(cntx_ptr, proto, spdm::LIBSPDM_MAX_SPDM_MSG_SIZE)?;
         } else if cli.usb_i2c {
             spdm::setup_transport_layer(
@@ -870,8 +881,12 @@ async fn main() -> Result<(), ()> {
                 spdm::LIBSPDM_MAX_SPDM_MSG_SIZE,
             )?;
         } else {
+            #[allow(unused_mut)]
+            let mut trans_set = false;
+
             #[cfg(feature = "nvme")]
             if cli.nvme {
+                trans_set = true;
                 spdm::setup_transport_layer(
                     cntx_ptr,
                     spdm::TransportLayer::Storage,
@@ -879,8 +894,21 @@ async fn main() -> Result<(), ()> {
                 )?;
             }
 
-            #[cfg(not(feature = "nvme"))]
+            #[cfg(feature = "pci")]
             {
+                if cli.doe_pci_cfg {
+                    trans_set = true;
+                    spdm::setup_transport_layer(
+                        cntx_ptr,
+                        spdm::TransportLayer::Doe,
+                        spdm::LIBSPDM_MAX_SPDM_MSG_SIZE,
+                    )?;
+                }
+            }
+
+            // If we are QEMU response server, we could be here
+            if trans_set == false {
+                warn!("Transport unspecified, defaulting to PCIe Data Object Exchange");
                 spdm::setup_transport_layer(
                     cntx_ptr,
                     spdm::TransportLayer::Doe,
