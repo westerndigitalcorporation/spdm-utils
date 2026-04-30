@@ -279,6 +279,8 @@ pub enum TransportLayer {
     Mctp,
     /// SCSI Security Protocol In/Out commands
     Storage,
+    /// TCP/IP over networking
+    Tcp,
 }
 
 #[cfg(feature = "no_std")]
@@ -517,6 +519,18 @@ pub unsafe fn setup_transport_layer(
                     LIBSPDM_STORAGE_TRANSPORT_TAIL_SIZE,
                     Some(libspdm_transport_storage_encode_message),
                     Some(libspdm_transport_storage_decode_message),
+                )
+            };
+        }
+        TransportLayer::Tcp => {
+            unsafe {
+                libspdm_register_transport_layer_func(
+                    context,
+                    libspdm_max_spdm_msg_size,
+                    LIBSPDM_TCP_TRANSPORT_HEADER_SIZE,
+                    LIBSPDM_TCP_TRANSPORT_TAIL_SIZE,
+                    Some(libspdm_transport_tcp_encode_message),
+                    Some(libspdm_transport_tcp_decode_message),
                 )
             };
         }
