@@ -8,7 +8,7 @@ use crate::spdm::{get_base_hash_algo, get_measurement};
 use core::ffi::c_void;
 use core::slice::from_raw_parts;
 use minicbor::bytes::ByteSlice;
-use minicbor::data::Tagged;
+use minicbor::data::{Tag, Tagged};
 use minicbor_derive::{CborLen, Decode, Encode};
 use std::fs::File;
 use std::io::Read;
@@ -210,7 +210,187 @@ pub struct MeasurementMap<'a> {
     #[n(1)]
     mval: MeasurementValuesMap<'a>,
     #[b(2)]
-    authorised_by: [Tagged<554, &'a str>; 1],
+    authorised_by: [AuthorisedBy<'a>; 1],
+}
+
+// CBOR tag values for the `$crypto-key-type-choice` group as defined in
+// draft-ietf-rats-corim-10 secion 5.1.4.6.
+const TAGGED_PKIX_BASE64_KEY_TYPE: u64 = 554;
+const TAGGED_PKIX_BASE64_CERT_TYPE: u64 = 555;
+const TAGGED_PKIX_BASE64_CERT_PATH_TYPE: u64 = 556;
+const TAGGED_KEY_THUMBPRINT_TYPE: u64 = 557;
+const TAGGED_COSE_KEY_TYPE: u64 = 558;
+const TAGGED_CERT_THUMBPRINT_TYPE: u64 = 559;
+const TAGGED_BYTES_TYPE: u64 = 560;
+const TAGGED_CERT_PATH_THUMBPRINT_TYPE: u64 = 561;
+const TAGGED_PKIX_ASN1DER_CERT_TYPE: u64 = 562;
+
+/// Represents an `authorised-by` entry, i.e. a `$crypto-key-type-choice`
+/// per draft-ietf-rats-corim-10 secion 5.1.4.6:
+///
+/// ```text
+/// $crypto-key-type-choice /= tagged-pkix-base64-key-type        ; 554, tstr
+/// $crypto-key-type-choice /= tagged-pkix-base64-cert-type       ; 555, tstr
+/// $crypto-key-type-choice /= tagged-pkix-base64-cert-path-type  ; 556, tstr
+/// $crypto-key-type-choice /= tagged-key-thumbprint-type         ; 557, digest
+/// $crypto-key-type-choice /= tagged-cose-key-type               ; 558, COSE_Key
+/// $crypto-key-type-choice /= tagged-cert-thumbprint-type        ; 559, digest
+/// $crypto-key-type-choice /= tagged-bytes                       ; 560, bstr
+/// $crypto-key-type-choice /= tagged-cert-path-thumbprint-type   ; 561, digest
+/// $crypto-key-type-choice /= tagged-pkix-asn1der-cert-type      ; 562, bstr
+/// ```
+#[derive(Debug)]
+pub enum AuthorisedBy<'a> {
+    PkixBase64Key(&'a str),
+    PkixBase64Cert(&'a str),
+    PkixBase64CertPath(&'a str),
+    KeyThumbprint(i64, &'a ByteSlice),
+    CoseKey(&'a [u8]),
+    CertThumbprint(i64, &'a ByteSlice),
+    TaggedBytes(&'a ByteSlice),
+    CertPathThumbprint(i64, &'a ByteSlice),
+    PkixAsn1DerCert(&'a ByteSlice),
+}
+
+/// Helper: decode a CoRIM `digest` = `[alg-id: int, value: bytes]`.
+fn decode_corim_digest<'b>(
+    d: &mut minicbor::Decoder<'b>,
+) -> Result<(i64, &'b ByteSlice), minicbor::decode::Error> {
+    let _len = d.array()?;
+    let alg = d.i64()?;
+    let bytes: &[u8] = d.bytes()?;
+    Ok((alg, bytes.into()))
+}
+
+impl<'b, C> minicbor::Decode<'b, C> for AuthorisedBy<'b> {
+    fn decode(
+        d: &mut minicbor::Decoder<'b>,
+        _ctx: &mut C,
+    ) -> Result<Self, minicbor::decode::Error> {
+        let tag = d.tag()?;
+        match tag.as_u64() {
+            TAGGED_PKIX_BASE64_KEY_TYPE => Ok(AuthorisedBy::PkixBase64Key(d.str()?)),
+            TAGGED_PKIX_BASE64_CERT_TYPE => Ok(AuthorisedBy::PkixBase64Cert(d.str()?)),
+            TAGGED_PKIX_BASE64_CERT_PATH_TYPE => Ok(AuthorisedBy::PkixBase64CertPath(d.str()?)),
+            TAGGED_KEY_THUMBPRINT_TYPE => {
+                let (alg, value) = decode_corim_digest(d)?;
+                Ok(AuthorisedBy::KeyThumbprint(alg, value))
+            }
+            TAGGED_COSE_KEY_TYPE => {
+                // COSE_Key is an arbitrary CBOR map; capture the raw
+                // encoded bytes for verbatim round-tripping.
+                let start = d.position();
+                d.skip()?;
+                let end = d.position();
+                Ok(AuthorisedBy::CoseKey(&d.input()[start..end]))
+            }
+            TAGGED_CERT_THUMBPRINT_TYPE => {
+                let (alg, value) = decode_corim_digest(d)?;
+                Ok(AuthorisedBy::CertThumbprint(alg, value))
+            }
+            TAGGED_BYTES_TYPE => {
+                let bytes: &[u8] = d.bytes()?;
+                Ok(AuthorisedBy::TaggedBytes(bytes.into()))
+            }
+            TAGGED_CERT_PATH_THUMBPRINT_TYPE => {
+                let (alg, value) = decode_corim_digest(d)?;
+                Ok(AuthorisedBy::CertPathThumbprint(alg, value))
+            }
+            TAGGED_PKIX_ASN1DER_CERT_TYPE => {
+                let bytes: &[u8] = d.bytes()?;
+                Ok(AuthorisedBy::PkixAsn1DerCert(bytes.into()))
+            }
+            other => Err(minicbor::decode::Error::message(format!(
+                "unsupported authorised-by tag: {}",
+                other
+            ))),
+        }
+    }
+}
+
+impl<C> minicbor::Encode<C> for AuthorisedBy<'_> {
+    fn encode<W: minicbor::encode::Write>(
+        &self,
+        e: &mut minicbor::Encoder<W>,
+        _ctx: &mut C,
+    ) -> Result<(), minicbor::encode::Error<W::Error>> {
+        match self {
+            AuthorisedBy::PkixBase64Key(s) => {
+                e.tag(Tag::new(TAGGED_PKIX_BASE64_KEY_TYPE))?.str(s)?;
+            }
+            AuthorisedBy::PkixBase64Cert(s) => {
+                e.tag(Tag::new(TAGGED_PKIX_BASE64_CERT_TYPE))?.str(s)?;
+            }
+            AuthorisedBy::PkixBase64CertPath(s) => {
+                e.tag(Tag::new(TAGGED_PKIX_BASE64_CERT_PATH_TYPE))?.str(s)?;
+            }
+            AuthorisedBy::KeyThumbprint(alg, hash) => {
+                e.tag(Tag::new(TAGGED_KEY_THUMBPRINT_TYPE))?
+                    .array(2)?
+                    .i64(*alg)?
+                    .bytes(hash.as_ref())?;
+            }
+            AuthorisedBy::CoseKey(raw) => {
+                e.tag(Tag::new(TAGGED_COSE_KEY_TYPE))?;
+                e.writer_mut()
+                    .write_all(raw)
+                    .map_err(minicbor::encode::Error::write)?;
+            }
+            AuthorisedBy::CertThumbprint(alg, hash) => {
+                e.tag(Tag::new(TAGGED_CERT_THUMBPRINT_TYPE))?
+                    .array(2)?
+                    .i64(*alg)?
+                    .bytes(hash.as_ref())?;
+            }
+            AuthorisedBy::TaggedBytes(bytes) => {
+                e.tag(Tag::new(TAGGED_BYTES_TYPE))?.bytes(bytes.as_ref())?;
+            }
+            AuthorisedBy::CertPathThumbprint(alg, hash) => {
+                e.tag(Tag::new(TAGGED_CERT_PATH_THUMBPRINT_TYPE))?
+                    .array(2)?
+                    .i64(*alg)?
+                    .bytes(hash.as_ref())?;
+            }
+            AuthorisedBy::PkixAsn1DerCert(bytes) => {
+                e.tag(Tag::new(TAGGED_PKIX_ASN1DER_CERT_TYPE))?
+                    .bytes(bytes.as_ref())?;
+            }
+        }
+        Ok(())
+    }
+}
+
+impl<C> minicbor::CborLen<C> for AuthorisedBy<'_> {
+    fn cbor_len(&self, ctx: &mut C) -> usize {
+        match self {
+            AuthorisedBy::PkixBase64Key(s) => {
+                Tag::new(TAGGED_PKIX_BASE64_KEY_TYPE).cbor_len(ctx) + s.cbor_len(ctx)
+            }
+            AuthorisedBy::PkixBase64Cert(s) => {
+                Tag::new(TAGGED_PKIX_BASE64_CERT_TYPE).cbor_len(ctx) + s.cbor_len(ctx)
+            }
+            AuthorisedBy::PkixBase64CertPath(s) => {
+                Tag::new(TAGGED_PKIX_BASE64_CERT_PATH_TYPE).cbor_len(ctx) + s.cbor_len(ctx)
+            }
+            AuthorisedBy::KeyThumbprint(alg, hash) => {
+                Tag::new(TAGGED_KEY_THUMBPRINT_TYPE).cbor_len(ctx) + (*alg, *hash).cbor_len(ctx)
+            }
+            AuthorisedBy::CoseKey(raw) => Tag::new(TAGGED_COSE_KEY_TYPE).cbor_len(ctx) + raw.len(),
+            AuthorisedBy::CertThumbprint(alg, hash) => {
+                Tag::new(TAGGED_CERT_THUMBPRINT_TYPE).cbor_len(ctx) + (*alg, *hash).cbor_len(ctx)
+            }
+            AuthorisedBy::TaggedBytes(bytes) => {
+                Tag::new(TAGGED_BYTES_TYPE).cbor_len(ctx) + (*bytes).cbor_len(ctx)
+            }
+            AuthorisedBy::CertPathThumbprint(alg, hash) => {
+                Tag::new(TAGGED_CERT_PATH_THUMBPRINT_TYPE).cbor_len(ctx)
+                    + (*alg, *hash).cbor_len(ctx)
+            }
+            AuthorisedBy::PkixAsn1DerCert(bytes) => {
+                Tag::new(TAGGED_PKIX_ASN1DER_CERT_TYPE).cbor_len(ctx) + (*bytes).cbor_len(ctx)
+            }
+        }
+    }
 }
 
 #[derive(Debug, Encode, Decode, CborLen)]
