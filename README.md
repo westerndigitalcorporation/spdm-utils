@@ -49,7 +49,10 @@ See LICENSE-APACHE, LICENSE-MIT, and COPYRIGHT for details.
 
 First you need to install Rust, instructions for that are available at: https://rustup.rs/
 
-You will also need a few host dependencies
+You will also need a few host dependencies, the commands below contain all the
+dependencies needed by `spdm-utils` to enable all supported transports.
+However, `spdm-utils` can be built with only the desired transports enabled,
+see the `Building` section.
 
 ## Fedora or Ubuntu Based
 
@@ -163,6 +166,23 @@ This is currently a work in progress
 
 ```shell
 cargo build --lib --features=no_std
+```
+
+## Build with specific transports enabled
+
+`spdm-utils` suppports building the binary with two transport options, `doe`
+and `nvme`. Which means you can install only the dependencies needed by those
+transports and build the binary as below. Note, we enable other transports that
+do not have external dependecies.
+
+```shell
+# To build with PCI DoE transport support
+$ cargo build --features pci
+
+or
+
+# To build with Storage NVMe transport support
+$ cargo build --features nvme
 ```
 
 ## Configuring the Logger

@@ -12,6 +12,7 @@
 
 use crate::RequestCode;
 use crate::cli_helpers;
+#[cfg(feature = "pci")]
 use crate::doe_pci_cfg::*;
 use crate::request;
 use crate::spdm;
@@ -32,6 +33,7 @@ use std::process::Command;
 
 /// Defines the type of backend to be used in testing
 pub enum TestBackend {
+    #[cfg(feature = "pci")]
     DoeBackend,
     SocketBackend,
 }
@@ -508,6 +510,7 @@ pub fn test_set_certificate(cntx: *mut c_void, cert_slot_id: u8) -> Result<(), (
 /// Does not return, the process will exit after tests are complete.
 pub fn start_tests(cntx: *mut c_void, backend: TestBackend) -> ! {
     match backend {
+        #[cfg(feature = "pci")]
         TestBackend::DoeBackend => {
             // Run DOE conformance tests
             test_discovery_basic().unwrap();

@@ -13,6 +13,8 @@ readme = "README.md"
 [features]
 default = ["std"]
 libspdm_tests = []
+pci = []
+nvme = []
 
 no_std = []
 std = [

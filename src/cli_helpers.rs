@@ -4,8 +4,10 @@
 
 //! Contains helper functions used in parsing the CLI arguments
 
+#[cfg(feature = "pci")]
 use crate::doe_pci_cfg::PcieDevInfo;
 use crate::*;
+#[cfg(feature = "pci")]
 use inquire::Select;
 
 /// # Summary
@@ -21,6 +23,7 @@ use inquire::Select;
 ///
 /// On success, OK(index) where the index maps to a device in `doe_device`
 /// On any failure, returns an error
+#[cfg(feature = "pci")]
 pub fn pcie_devices_user_select(doe_devices: &[PcieDevInfo]) -> Result<usize, ()> {
     let choice = Select::new("Select a PCIe DoE compatible device:", doe_devices.to_vec()).prompt();
     match choice {
@@ -49,6 +52,7 @@ pub fn pcie_devices_user_select(doe_devices: &[PcieDevInfo]) -> Result<usize, ()
 /// # Returns
 ///
 /// On success, OK((vid, dev_id)) or Err(()) on failure to parse.
+#[cfg(feature = "pci")]
 pub fn parse_pcie_identifiers(vid: String, dev_id: String) -> Result<(u16, u16), ()> {
     fn parse_identifier(id: String, id_type: &str) -> Result<u16, ()> {
         let (id, base) = if id.starts_with("0x") {

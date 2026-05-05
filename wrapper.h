@@ -3,9 +3,13 @@
 // Copyright (C) 2022, Western Digital Corporation or its affiliates.
 
 #ifdef RUST_STD
+#ifdef PCI
 #include <pci/pci.h>
+#endif //PCI
+#ifdef NVME
 #include <libnvme.h>
-#endif
+#endif // NVME
+#endif // RUST_STD
 
 #include <library/spdm_common_lib.h>
 #include <library/spdm_crypt_lib.h>
