@@ -19,8 +19,13 @@ fn main() {
     // so we manually pass the arguments
     println!("cargo:rustc-link-arg=-Wl,--start-group");
 
-    println!("cargo:rustc-link-arg=-lpci");
-    println!("cargo:rustc-link-arg=-lnvme");
+    if cfg!(feature = "pci") {
+        println!("cargo:rustc-link-arg=-lpci");
+    }
+
+    if cfg!(feature = "nvme") {
+        println!("cargo:rustc-link-arg=-lnvme");
+    }
 
     println!("cargo:rustc-link-arg=-lmemlib");
     println!("cargo:rustc-link-arg=-lmalloclib");
@@ -65,6 +70,14 @@ fn main() {
 
     if cfg!(feature = "std") {
         builder = builder.clang_arg("-DRUST_STD");
+
+        if cfg!(feature = "pci") {
+            builder = builder.clang_arg("-DPCI");
+        }
+
+        if cfg!(feature = "nvme") {
+            builder = builder.clang_arg("-DNVME");
+        }
     }
 
     if let Ok(sysroot) = env::var("STAGING_DIR") {

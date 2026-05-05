@@ -28,8 +28,10 @@ use once_cell::sync::Lazy;
 pub static SOCKET_PATH: &str = "SPDM-Utils-loopback-socket";
 
 mod cli_helpers;
+#[cfg(feature = "pci")]
 mod doe_pci_cfg;
 mod io_buffers;
+#[cfg(feature = "nvme")]
 mod nvme;
 mod qemu_server;
 mod request;
@@ -47,27 +49,33 @@ struct Args {
     command: Commands,
 
     /// Use NVMe commands for the target device
+    #[cfg(feature = "nvme")]
     #[arg(short, long, requires_ifs([("true", "blk_dev_path")]))]
     nvme: bool,
 
     /// NVME NameSpace Identifier
+    #[cfg(feature = "nvme")]
     #[arg(long, default_value_t = 1)]
     nsid: u32,
 
     /// Path to the block device
+    #[cfg(feature = "nvme")]
     #[arg(long)]
     blk_dev_path: Option<String>,
 
     /// Use the Linux PCIe extended configuration backend
     /// This is generally run on the Linux host machine
+    #[cfg(feature = "pci")]
     #[arg(short, long)]
     doe_pci_cfg: bool,
 
     /// PCIe Identifier, Vendor ID of the SPDM supported device
+    #[cfg(feature = "pci")]
     #[arg(long, default_value = "")]
     pcie_vid: String,
 
     /// PCIe Identifier, Device ID of the SPDM supported device
+    #[cfg(feature = "pci")]
     #[arg(long, default_value = "")]
     pcie_devid: String,
 
@@ -680,10 +688,12 @@ async fn main() -> Result<(), ()> {
 
     let mut count = 0;
 
+    #[cfg(feature = "nvme")]
     cli.nvme.then(|| {
         count += 1;
     });
 
+    #[cfg(feature = "pci")]
     cli.doe_pci_cfg.then(|| {
         count += 1;
     });
@@ -705,37 +715,28 @@ async fn main() -> Result<(), ()> {
         return Err(());
     }
 
-    if (cli.doe_pci_cfg || cli.usb_i2c) && u32::from(geteuid()) != 0 {
-        error!("This transport operation requires root privileges");
-        return Err(());
+    if u32::from(geteuid()) != 0 {
+        let mut need_root = false;
+        #[cfg(feature = "pci")]
+        if cli.doe_pci_cfg {
+            need_root = true;
+        }
+        #[cfg(feature = "nvme")]
+        if cli.nvme {
+            need_root = true;
+        }
+
+        if cli.usb_i2c {
+            need_root = true;
+        }
+
+        if need_root {
+            error!("This transport operation requires root privileges");
+            return Err(());
+        }
     }
 
-    if cli.doe_pci_cfg {
-        unsafe {
-            let (vid, dev_id) = if cli.pcie_vid.is_empty() && cli.pcie_devid.is_empty() {
-                // Try to detect and list devices with DoE support.
-                let doe_support_devs = doe_pci_cfg::get_doe_supported_devs();
-                if doe_support_devs.is_none() {
-                    error!("No DoE supported PCIe devices found");
-                    return Err(());
-                }
-                let doe_support_devs = doe_support_devs.unwrap();
-                let selected_dev_index = cli_helpers::pcie_devices_user_select(&doe_support_devs)?;
-                (
-                    doe_support_devs[selected_dev_index].vendor_id,
-                    doe_support_devs[selected_dev_index].device_id,
-                )
-            } else {
-                let (vid, dev_id) =
-                    cli_helpers::parse_pcie_identifiers(cli.pcie_vid, cli.pcie_devid)?;
-                // In an error case, `get_pcie_dev` will clean up
-                let (pacc, _, _) = doe_pci_cfg::get_pcie_dev(vid, dev_id)?;
-                pci_cleanup(pacc);
-                (vid, dev_id)
-            };
-            doe_pci_cfg::register_device(cntx_ptr, vid, dev_id)?;
-        }
-    } else if cli.socket_server {
+    if cli.socket_server {
         socket_server::register_device(cntx_ptr, cli.server_persist)?;
     } else if cli.socket_client {
         socket_client::register_device(cntx_ptr)?;
@@ -748,14 +749,6 @@ async fn main() -> Result<(), ()> {
         }
 
         usb_i2c::register_device(cntx_ptr, cli.usb_i2c_dev, cli.usb_i2c_baud)?;
-    } else if cli.nvme {
-        if let Err(e) = nvme::nvme_get_sec_info(&cli.blk_dev_path.clone().unwrap(), cli.nsid) {
-            if e == Errno::ENOTSUP {
-                error!("SPDM is not supported by this NVMe device");
-            }
-            return Err(());
-        }
-        nvme::register_device(cntx_ptr, &cli.blk_dev_path.clone().unwrap(), cli.nsid).unwrap();
     } else if cli.qemu_server {
         if let Commands::Request { .. } = cli.command {
             error!("QEMU Server does not support running an SPDM requester");
@@ -768,8 +761,51 @@ async fn main() -> Result<(), ()> {
             qemu_server::register_device(cntx_ptr, cli.qemu_port, spdm::TransportLayer::Doe)?;
         }
     } else {
-        error!("No supported backend specified");
-        return Err(());
+        #[cfg(feature = "pci")]
+        if cli.doe_pci_cfg {
+            unsafe {
+                let (vid, dev_id) = if cli.pcie_vid.is_empty() && cli.pcie_devid.is_empty() {
+                    // Try to detect and list devices with DoE support.
+                    let doe_support_devs = doe_pci_cfg::get_doe_supported_devs();
+                    if doe_support_devs.is_none() {
+                        error!("No DoE supported PCIe devices found");
+                        return Err(());
+                    }
+                    let doe_support_devs = doe_support_devs.unwrap();
+                    let selected_dev_index =
+                        cli_helpers::pcie_devices_user_select(&doe_support_devs)?;
+                    (
+                        doe_support_devs[selected_dev_index].vendor_id,
+                        doe_support_devs[selected_dev_index].device_id,
+                    )
+                } else {
+                    let (vid, dev_id) =
+                        cli_helpers::parse_pcie_identifiers(cli.pcie_vid, cli.pcie_devid)?;
+                    // In an error case, `get_pcie_dev` will clean up
+                    let (pacc, _, _) = doe_pci_cfg::get_pcie_dev(vid, dev_id)?;
+                    pci_cleanup(pacc);
+                    (vid, dev_id)
+                };
+                doe_pci_cfg::register_device(cntx_ptr, vid, dev_id)?;
+            }
+        }
+
+        #[cfg(feature = "nvme")]
+        if cli.nvme {
+            if let Err(e) = nvme::nvme_get_sec_info(&cli.blk_dev_path.clone().unwrap(), cli.nsid) {
+                if e == Errno::ENOTSUP {
+                    error!("SPDM is not supported by this NVMe device");
+                }
+                return Err(());
+            }
+            nvme::register_device(cntx_ptr, &cli.blk_dev_path.clone().unwrap(), cli.nsid).unwrap();
+        }
+
+        #[cfg(not(any(feature = "nvme", feature = "pci")))]
+        {
+            error!("No supported backend specified");
+            return Err(());
+        }
     }
 
     unsafe {
@@ -782,19 +818,24 @@ async fn main() -> Result<(), ()> {
                 spdm::TransportLayer::Mctp,
                 spdm::LIBSPDM_MAX_SPDM_MSG_SIZE,
             )?;
-        } else if cli.nvme {
-            spdm::setup_transport_layer(
-                cntx_ptr,
-                spdm::TransportLayer::Storage,
-                spdm::LIBSPDM_MAX_SPDM_MSG_SIZE,
-            )
-            .unwrap();
         } else {
-            spdm::setup_transport_layer(
-                cntx_ptr,
-                spdm::TransportLayer::Doe,
-                spdm::LIBSPDM_MAX_SPDM_MSG_SIZE,
-            )?;
+            #[cfg(feature = "nvme")]
+            if cli.nvme {
+                spdm::setup_transport_layer(
+                    cntx_ptr,
+                    spdm::TransportLayer::Storage,
+                    spdm::LIBSPDM_MAX_SPDM_MSG_SIZE,
+                )?;
+            }
+
+            #[cfg(not(feature = "nvme"))]
+            {
+                spdm::setup_transport_layer(
+                    cntx_ptr,
+                    spdm::TransportLayer::Doe,
+                    spdm::LIBSPDM_MAX_SPDM_MSG_SIZE,
+                )?;
+            }
         }
     }
 
@@ -951,13 +992,19 @@ async fn main() -> Result<(), ()> {
             responder::response_loop(cntx_ptr);
         }
         Commands::Tests => {
-            if cli.doe_pci_cfg {
-                test_suite::start_tests(cntx_ptr, test_suite::TestBackend::DoeBackend);
-            } else if cli.socket_server || cli.socket_client {
+            if cli.socket_server || cli.socket_client {
                 test_suite::start_tests(cntx_ptr, test_suite::TestBackend::SocketBackend);
             } else {
-                error!("The backend is not supported for testing");
-                return Err(());
+                #[cfg(feature = "pci")]
+                if cli.doe_pci_cfg {
+                    test_suite::start_tests(cntx_ptr, test_suite::TestBackend::DoeBackend);
+                }
+
+                #[cfg(not(feature = "pci"))]
+                {
+                    error!("Testing not supported for this backend");
+                    return Err(());
+                }
             }
         }
     }
