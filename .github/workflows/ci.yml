@@ -26,6 +26,31 @@ jobs:
           sudo apt-get install -y cmake libclang-dev libpci-dev libssl-dev python3-dev gem libnvme-dev; \
           sudo gem install cbor-diag;
 
+      # Ubuntu's 24.04 stock OpenSSL does not support ML-DSA.
+      # Note that 26.04 should support OpenSSL 3.5, which fixes this issue.
+      - name: Install OpenSSL 3.5 (for ML-DSA support)
+        run: |
+          set -e
+          OSSL_VER=3.5.0
+          OSSL_PREFIX=/opt/openssl-${OSSL_VER}
+          if [ ! -x "${OSSL_PREFIX}/bin/openssl" ]; then
+            curl -fsSL "https://github.com/openssl/openssl/releases/download/openssl-${OSSL_VER}/openssl-${OSSL_VER}.tar.gz" -o /tmp/openssl.tar.gz
+            tar -xzf /tmp/openssl.tar.gz -C /tmp
+            pushd /tmp/openssl-${OSSL_VER}
+
+            ./Configure --prefix=${OSSL_PREFIX} --openssldir=${OSSL_PREFIX}/ssl \
+              -Wl,-rpath,${OSSL_PREFIX}/lib64 -Wl,-rpath,${OSSL_PREFIX}/lib \
+              no-docs no-tests shared
+            make -j"$(nproc)"
+            sudo make install_sw install_ssldirs
+
+            popd
+          fi
+
+          echo "${OSSL_PREFIX}/bin" >> "$GITHUB_PATH"
+          ${OSSL_PREFIX}/bin/openssl version
+          ${OSSL_PREFIX}/bin/openssl list -signature-algorithms | grep -i mldsa || (echo "ML-DSA not available"; exit 1)
+
       - name: Build libspdm
         run: |
           pushd third-party/libspdm; \
