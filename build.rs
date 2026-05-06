@@ -112,19 +112,8 @@ fn main() {
 
     println!("cargo:rustc-link-arg=-Wl,--end-group");
 
-    if !Path::new("certs/bank-ecc384/alias/slot0/bundle_responder.certchain.der").is_file() {
-        Command::new("./setup_certs.sh")
-            .current_dir(env::current_dir().unwrap().join("certs/bank-ecc384/"))
-            .output()
-            .expect("Failed to execute command");
-    }
-
-    if !Path::new("certs/bank-mldsa87/alias/slot0/bundle_responder.certchain.der").is_file() {
-        Command::new("./setup_certs.sh")
-            .current_dir(env::current_dir().unwrap().join("certs/bank-mldsa87/"))
-            .output()
-            .expect("Failed to execute command");
-    }
+    run_setup_certs("certs/bank-ecc384");
+    run_setup_certs("certs/bank-mldsa87");
 
     // This script generates a `manifest.out.cbor` file that
     // is the serialised measurement manifest, to be used
@@ -186,5 +175,39 @@ fn main() {
             "\x1b[33mcargo:warning=Ruby script {script} not found : error {}\nSkipping fresh manifest generation\x1b[0m",
             e
         ),
+    }
+}
+
+/// Runs `setup_certs.sh` for the given bank directory if its responder bundle
+/// is missing. Panics with the script's stdout/stderr if the script fails so
+/// missing-cert problems surface at build time rather than as runtime panics.
+fn run_setup_certs(bank_dir: &str) {
+    let bundle = format!("{}/alias/slot0/bundle_responder.certchain.der", bank_dir);
+    if Path::new(&bundle).is_file() {
+        return;
+    }
+
+    let cwd = env::current_dir().unwrap().join(bank_dir);
+    let out = Command::new("./setup_certs.sh")
+        .current_dir(&cwd)
+        .output()
+        .unwrap_or_else(|e| panic!("Failed to spawn setup_certs.sh in {}: {}", bank_dir, e));
+
+    if !out.status.success() {
+        eprintln!(
+            "Unable to generate certificates for {bank_dir}. That bank won't be supported at runtime.",
+        );
+        if bank_dir == "certs/bank-mldsa87" {
+            eprintln!(
+                "Unable to generate PQC certificates. This probably means you aren't using OpenSSL 3.5+",
+            );
+        }
+
+        eprintln!(
+            "setup_certs.sh failed for {bank_dir} (exit {:?})\n--- stdout ---\n{}\n--- stderr ---\n{}",
+            out.status.code(),
+            String::from_utf8_lossy(&out.stdout),
+            String::from_utf8_lossy(&out.stderr),
+        );
     }
 }
