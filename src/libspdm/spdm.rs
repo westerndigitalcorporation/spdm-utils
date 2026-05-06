@@ -1120,22 +1120,167 @@ pub unsafe fn start_session(
     Ok(session_info)
 }
 
+/// Returns the `certs/bank-*/` directory name for the given PQC algorithm bitmask.
+#[cfg(not(feature = "no_std"))]
+pub fn pqc_bank_dir(pqc_asym_algo: u32) -> &'static str {
+    match pqc_asym_algo {
+        libspdm_rs::SPDM_ALGORITHMS_PQC_ASYM_ALGO_ML_DSA_44 => "bank-mldsa44",
+        libspdm_rs::SPDM_ALGORITHMS_PQC_ASYM_ALGO_ML_DSA_65 => "bank-mldsa65",
+        libspdm_rs::SPDM_ALGORITHMS_PQC_ASYM_ALGO_ML_DSA_87 => "bank-mldsa87",
+        _ => panic!("unsupported pqc_asym_algo: 0x{:x}", pqc_asym_algo),
+    }
+}
+
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn libspdm_requester_data_sign(
     _spdm_context: *mut c_void,
-    _spdm_version: libspdm_rs::spdm_version_number_t,
+    spdm_version: libspdm_rs::spdm_version_number_t,
     _key_pair_id: u8,
-    _op_code: u8,
-    _req_base_asym_alg: u16,
-    _req_pqc_asym_alg: u32,
-    _base_hash_algo: u32,
-    _is_data_hash: bool,
-    _message: *const u8,
-    _message_size: usize,
-    _signature: *mut u8,
-    _sig_size: *mut usize,
+    op_code: u8,
+    req_base_asym_alg: u16,
+    req_pqc_asym_alg: u32,
+    base_hash_algo: u32,
+    is_data_hash: bool,
+    message: *const u8,
+    message_size: usize,
+    signature: *mut u8,
+    sig_size: *mut usize,
 ) -> bool {
-    todo!();
+    let mut context: *mut c_void = ptr::null_mut();
+
+    #[cfg(not(feature = "no_std"))]
+    if req_pqc_asym_alg != 0 {
+        let bank = pqc_bank_dir(req_pqc_asym_alg);
+        let key_path = format!("certs/{}/slot0/end_requester.key", bank);
+
+        let path = Path::new(&key_path);
+        let buffer = fs::read(path).expect("couldn't open PQC requester key");
+        let buffer_len = buffer.len();
+        let key_buffer_layout = Layout::from_size_align(buffer_len, 8).unwrap();
+        let key_buffer = unsafe { alloc(key_buffer_layout) };
+        unsafe { key_buffer.copy_from(buffer.as_ptr(), buffer_len) };
+
+        let result = unsafe {
+            libspdm_req_pqc_asym_get_private_key_from_pem(
+                req_pqc_asym_alg,
+                key_buffer,
+                buffer_len,
+                ptr::null_mut(),
+                &mut context,
+            )
+        };
+        if !result {
+            unsafe { key_buffer.write_bytes(0, buffer_len) };
+            unsafe { dealloc(key_buffer, key_buffer_layout) };
+            return false;
+        }
+
+        let result = if is_data_hash {
+            unsafe {
+                libspdm_req_pqc_asym_sign_hash(
+                    spdm_version,
+                    op_code,
+                    req_pqc_asym_alg,
+                    base_hash_algo,
+                    context,
+                    message,
+                    message_size,
+                    signature,
+                    sig_size,
+                )
+            }
+        } else {
+            unsafe {
+                libspdm_req_pqc_asym_sign(
+                    spdm_version,
+                    op_code,
+                    req_pqc_asym_alg,
+                    base_hash_algo,
+                    context,
+                    message,
+                    message_size,
+                    signature,
+                    sig_size,
+                )
+            }
+        };
+
+        unsafe { libspdm_req_pqc_asym_free(req_pqc_asym_alg, context) };
+        unsafe { key_buffer.write_bytes(0, buffer_len) };
+        unsafe { dealloc(key_buffer, key_buffer_layout) };
+
+        return result;
+    }
+
+    let buffer;
+
+    #[cfg(feature = "no_std")]
+    {
+        buffer = include_bytes!("../../certs/bank-ecc384/slot0/end_requester.key");
+    }
+    #[cfg(not(feature = "no_std"))]
+    let file_data;
+    #[cfg(not(feature = "no_std"))]
+    {
+        let path = Path::new("certs/bank-ecc384/slot0/end_requester.key");
+        file_data = fs::read(path).expect("couldn't open end_requester.key");
+        buffer = file_data.as_slice();
+    }
+
+    let buffer_len = buffer.len();
+    let key_buffer_layout = Layout::from_size_align(buffer_len, 8).unwrap();
+    let key_buffer = unsafe { alloc(key_buffer_layout) };
+    unsafe { key_buffer.copy_from(buffer.as_ptr(), buffer_len) };
+
+    let result = unsafe {
+        libspdm_req_asym_get_private_key_from_pem(
+            req_base_asym_alg,
+            key_buffer,
+            buffer_len,
+            ptr::null_mut(),
+            &mut context,
+        )
+    };
+    if !result {
+        unsafe { key_buffer.write_bytes(0, buffer_len) };
+        unsafe { dealloc(key_buffer, key_buffer_layout) };
+        return false;
+    }
+
+    let result = if is_data_hash {
+        unsafe {
+            libspdm_req_asym_sign_hash(
+                spdm_version,
+                op_code,
+                req_base_asym_alg,
+                base_hash_algo,
+                context,
+                message,
+                message_size,
+                signature,
+                sig_size,
+            )
+        }
+    } else {
+        unsafe {
+            libspdm_req_asym_sign(
+                spdm_version,
+                op_code,
+                req_base_asym_alg,
+                base_hash_algo,
+                context,
+                message,
+                message_size,
+                signature,
+                sig_size,
+            )
+        }
+    };
+    unsafe { libspdm_req_asym_free(req_base_asym_alg, context) };
+    unsafe { key_buffer.write_bytes(0, buffer_len) };
+    unsafe { dealloc(key_buffer, key_buffer_layout) };
+
+    result
 }
 #[cfg(test)]
 libspdm_match_fn_prototypes!(

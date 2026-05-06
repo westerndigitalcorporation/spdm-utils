@@ -62,6 +62,8 @@ pub fn setup_capabilities(
             | SPDM_GET_CAPABILITIES_REQUEST_FLAGS_ENCRYPT_CAP
             | SPDM_GET_CAPABILITIES_REQUEST_FLAGS_KEY_EX_CAP
             | SPDM_GET_CAPABILITIES_REQUEST_FLAGS_MAC_CAP
+            | SPDM_GET_CAPABILITIES_REQUEST_FLAGS_MUT_AUTH_CAP
+            | SPDM_GET_CAPABILITIES_REQUEST_FLAGS_ENCAP_CAP
             | SPDM_GET_CAPABILITIES_REQUEST_FLAGS_CHUNK_CAP
             | SPDM_GET_CAPABILITIES_REQUEST_FLAGS_PSK_CAP_REQUESTER;
         let data_ptr = &mut data as *mut _ as *mut c_void;
@@ -258,11 +260,12 @@ pub fn setup_capabilities(
             return Err(());
         }
 
-        // Only support slot0
-        let path = match slot_id {
-            0 => Path::new("certs/bank-ecc384/alias/slot0/end_requester.cert.der"),
-            _ => unimplemented!(),
-        };
+        // Always provision the classical (ECC) requester cert chain up-front.
+        // If PQC is later negotiated, [`update_certificate_chain`] swaps in
+        // the matching PQC chain (banked architecture).
+        let cert_path: std::path::PathBuf =
+            format!("certs/bank-ecc384/alias/slot{slot_id}/end_requester.cert.der").into();
+        let path = cert_path.as_path();
 
         let buffer_vec = match std::fs::read(path) {
             Err(why) => panic!("couldn't open {}: {}", path.display(), why),
@@ -280,6 +283,19 @@ pub fn setup_capabilities(
             cert_chain_size,
         )) {
             error!("Failed to set [LIBSPDM_DATA_LOCAL_PUBLIC_CERT_CHAIN]");
+            return Err(());
+        }
+
+        let mut data: u8 = slot_id + 1;
+        let data_ptr = &mut data as *mut _ as *mut c_void;
+        if LibspdmReturnStatus::libspdm_status_is_error(libspdm_set_data(
+            context,
+            libspdm_data_type_t_LIBSPDM_DATA_LOCAL_SUPPORTED_SLOT_MASK,
+            &parameter as *const libspdm_data_parameter_t,
+            data_ptr,
+            core::mem::size_of::<u8>(),
+        )) {
+            error!("Failed to set [LIBSPDM_DATA_LOCAL_SUPPORTED_SLOT_MASK]");
             return Err(());
         }
     }
@@ -962,5 +978,162 @@ pub fn get_responder_capabilities(cntx_ptr: *mut c_void) {
         ) {
             info!(" -SPDM_GET_CAPABILITIES_RESPONSE_FLAGS_CERT_INSTALL_RESET_CAP");
         }
+    }
+}
+
+/// # Summary
+///
+/// Provisions slot 0 with the PQC requester cert chain from the matching
+/// `certs/bank-<algo>/alias/slot0/bundle_requester.certchain.der`. This is the
+/// requester counterpart to `responder::setup_pqc_cert_bank` and is used by
+/// [`update_certificate_chain`] to switch the requester's
+/// `LOCAL_PUBLIC_CERT_CHAIN` to PQC after a PQC algorithm is negotiated.
+///
+/// # Parameter
+///
+/// * `context`: The SPDM context
+/// * `slot_id`: Slot to provision (only slot 0 is currently supported)
+/// * `pqc_asym_algo`: Negotiated PQC algorithm bitmask
+/// * `hash_algo`: Negotiated base hash algorithm
+///
+/// # Returns
+///
+/// `Ok(())` on success, `Err(())` otherwise.
+pub fn setup_pqc_requester_cert_chain(
+    context: *mut c_void,
+    slot_id: u8,
+    pqc_asym_algo: u32,
+    hash_algo: u32,
+) -> Result<(), ()> {
+    let bank = libspdm::spdm::pqc_bank_dir(pqc_asym_algo);
+    let file_path = format!(
+        "certs/{}/alias/slot{}/bundle_requester.certchain.der",
+        bank, slot_id
+    );
+    let path = Path::new(&file_path);
+    let buffer = match std::fs::read(path) {
+        Err(why) => {
+            error!("couldn't open {}: {}", path.display(), why);
+            return Err(());
+        }
+        Ok(data) => data,
+    };
+
+    let (cert_chain_buffer, cert_chain_size) =
+        unsafe { get_local_certchain(&buffer, 0, hash_algo, true) };
+    let parameter = libspdm_data_parameter_t::new_local(slot_id);
+    if LibspdmReturnStatus::libspdm_status_is_error(unsafe {
+        libspdm_set_data(
+            context,
+            libspdm_data_type_t_LIBSPDM_DATA_LOCAL_PUBLIC_CERT_CHAIN,
+            &parameter as *const libspdm_data_parameter_t,
+            cert_chain_buffer,
+            cert_chain_size,
+        )
+    }) {
+        error!(
+            "Failed to set PQC requester [LIBSPDM_DATA_LOCAL_PUBLIC_CERT_CHAIN] for slot {}",
+            slot_id
+        );
+        return Err(());
+    }
+
+    Ok(())
+}
+
+/// # Summary
+///
+/// Refresh the requester's `LOCAL_PUBLIC_CERT_CHAIN` to match the algorithm
+/// negotiated during `GET_CAPABILITIES`/`NEGOTIATE_ALGORITHMS`.
+///
+/// `setup_capabilities` provisions the classical (ECC) requester cert chain
+/// up-front, before negotiation has happened. Once negotiation completes,
+/// this function inspects the negotiated requester signing algorithm and, if
+/// a PQC algorithm (SPDM 1.4+) was selected, swaps slot 0's cert chain to the
+/// matching PQC bundle from `certs/bank-<algo>/alias/slot0/`. This emulates
+/// the SPDM banked architecture on the requester side and ensures the
+/// encapsulated mutual-authentication flow's leaf-cert verification sees a
+/// cert whose public-key algorithm matches the negotiated
+/// `req_pqc_asym_alg`.
+///
+/// If a classical algorithm was negotiated (or the version is < 1.4) the
+/// existing ECC chain is left in place and the function is a no-op.
+///
+/// This function must be invoked after `libspdm_init_connection` has
+/// returned successfully - i.e. once the connection has reached
+/// `LIBSPDM_CONNECTION_STATE_NEGOTIATED`. libspdm only auto-fires its
+/// connection-state callback on the responder side (see
+/// `libspdm_set_connection_state` in `spdm_responder_lib`), so on the
+/// requester this is called explicitly from `main.rs` and `test_suite.rs`.
+///
+/// # Parameter
+///
+/// * `spdm_context`: The SPDM context, must already be in the
+///   `LIBSPDM_CONNECTION_STATE_NEGOTIATED` state.
+///
+/// # Safety
+///
+/// `spdm_context` must be a valid initialised libspdm requester context.
+#[cfg(not(feature = "no_std"))]
+pub unsafe fn update_certificate_chain(spdm_context: *mut c_void) {
+    let conn = libspdm_data_parameter_t {
+        location: 1, // LIBSPDM_DATA_LOCATION_CONNECTION
+        additional_data: [0; 4],
+    };
+
+    // PQC algorithms are only available in SPDM 1.4+.
+    let mut spdm_version: u16 = 0;
+    let mut data_size = core::mem::size_of::<u16>();
+    unsafe {
+        libspdm_get_data(
+            spdm_context,
+            libspdm_data_type_t_LIBSPDM_DATA_SPDM_VERSION,
+            &conn as *const libspdm_data_parameter_t,
+            &mut spdm_version as *mut _ as *mut c_void,
+            &mut data_size,
+        );
+    }
+    spdm_version >>= 8;
+
+    if spdm_version < SPDM_MESSAGE_VERSION_14 as u16 {
+        debug!(
+            "update_certificate_chain: SPDM 0x{:04x} < 1.4, skipping PQC",
+            spdm_version
+        );
+        return;
+    }
+
+    // Read negotiated requester PQC asymmetric algorithm.
+    let mut req_pqc_asym_alg: u32 = 0;
+    data_size = core::mem::size_of::<u32>();
+    unsafe {
+        libspdm_get_data(
+            spdm_context,
+            libspdm_data_type_t_LIBSPDM_DATA_REQ_PQC_ASYM_ALG,
+            &conn as *const libspdm_data_parameter_t,
+            &mut req_pqc_asym_alg as *mut _ as *mut c_void,
+            &mut data_size,
+        )
+    };
+    if req_pqc_asym_alg == 0 {
+        debug!("update_certificate_chain: ECC negotiated for requester, nothing to do");
+        return;
+    }
+
+    // Read negotiated base hash algorithm.
+    let mut hash_algo: u32 = 0;
+    data_size = core::mem::size_of::<u32>();
+    unsafe {
+        libspdm_get_data(
+            spdm_context,
+            libspdm_data_type_t_LIBSPDM_DATA_BASE_HASH_ALGO,
+            &conn as *const libspdm_data_parameter_t,
+            &mut hash_algo as *mut _ as *mut c_void,
+            &mut data_size,
+        );
+    }
+
+    if let Err(()) = setup_pqc_requester_cert_chain(spdm_context, 0, req_pqc_asym_alg, hash_algo) {
+        error!("update_certificate_chain: failed to load PQC requester cert chain");
     }
 }

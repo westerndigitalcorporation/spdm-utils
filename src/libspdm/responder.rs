@@ -78,6 +78,8 @@ pub fn setup_capabilities(
             | SPDM_GET_CAPABILITIES_RESPONSE_FLAGS_CHAL_CAP
             | SPDM_GET_CAPABILITIES_RESPONSE_FLAGS_MEAS_CAP_SIG
             | SPDM_GET_CAPABILITIES_RESPONSE_FLAGS_MAC_CAP
+            | SPDM_GET_CAPABILITIES_RESPONSE_FLAGS_MUT_AUTH_CAP
+            | SPDM_GET_CAPABILITIES_RESPONSE_FLAGS_ENCAP_CAP
             | SPDM_GET_CAPABILITIES_RESPONSE_FLAGS_CSR_CAP
             | SPDM_GET_CAPABILITIES_RESPONSE_FLAGS_SET_CERT_CAP
             | SPDM_GET_CAPABILITIES_RESPONSE_FLAGS_CERT_INSTALL_RESET_CAP
@@ -352,6 +354,36 @@ pub fn setup_capabilities(
         )) {
             error!("Failed to set [LIBSPDM_DATA_LOCAL_PUBLIC_CERT_CHAIN]");
             return Err(());
+        }
+
+        // Register a buffer for storing the requester's cert chain during the
+        // encapsulated mutual-auth flow (GET_DIGESTS/GET_CERTIFICATE).
+        let mut_auth_buf: &'static mut [u8] =
+            Box::leak(vec![0u8; LIBSPDM_MAX_CERT_CHAIN_SIZE as usize].into_boxed_slice());
+        libspdm_register_cert_chain_buffer(
+            context,
+            mut_auth_buf.as_mut_ptr() as *mut c_void,
+            mut_auth_buf.len(),
+        );
+
+        #[cfg(not(feature = "no_std"))]
+        {
+            let file_path = format!("certs/bank-ecc384/slot{slot_id}/ca.cert.der",);
+            let path = Path::new(&file_path);
+
+            let ca_cert = match fs::read(path) {
+                Err(why) => panic!("couldn't open {}: {}", path.display(), why),
+                Ok(data) => data,
+            };
+            let ca_cert_buf: &'static [u8] = Box::leak(ca_cert.into_boxed_slice());
+
+            libspdm_set_data(
+                context,
+                libspdm_data_type_t_LIBSPDM_DATA_PEER_PUBLIC_ROOT_CERT,
+                &parameter as *const libspdm_data_parameter_t,
+                ca_cert_buf.as_ptr() as *mut c_void,
+                ca_cert_buf.len(),
+            );
         }
     }
 

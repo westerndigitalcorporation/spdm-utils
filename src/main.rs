@@ -956,6 +956,7 @@ async fn main() -> Result<(), ()> {
                     spdm::initialise_connection(cntx_ptr, slot_id).map_err(|e| {
                         error!("Failed to initialise an SPDM connection: 0x{:x}", e);
                     })?;
+                    request::update_certificate_chain(cntx_ptr);
                     spdm::start_session(cntx_ptr, slot_id, use_psk_exchange).map_err(|e| {
                         error!("Failed to start session: 0x{:x}", e);
                     })?
