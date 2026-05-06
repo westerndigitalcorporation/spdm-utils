@@ -51,6 +51,7 @@ bindgen = "0.72.0"
 which = "6.0.0"
 
 [dependencies]
+const_format = "0.2.36"
 log = "0.4"
 serialport = { version = "4.3.0", optional = true }
 lazy_static = { version = "1.4.0", optional = true }
