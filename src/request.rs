@@ -772,6 +772,66 @@ pub fn prepare_request(
 
 /// # Summary
 ///
+/// If both requester and responder support `MUT_AUTH_CAP` and `ENCAP_CAP`,
+/// send `GET_ENCAPSULATED_REQUEST` to initiate mutual authentication.
+///
+/// # Parameter
+///
+/// * `cntx_ptr`: The SPDM context
+/// * `session_info`: Struct containing current session information
+///
+/// # Returns
+///
+/// Ok(()) on success or if mutual auth is not supported by both sides
+/// Err(error_code) on `libspdm` failures
+pub fn try_encapsulated_mut_auth(
+    cntx_ptr: *mut c_void,
+    session_info: &SpdmSessionInfo,
+) -> Result<(), u32> {
+    unsafe {
+        let both_support_mut_auth = libspdm_is_capabilities_flag_supported(
+            cntx_ptr as *const libspdm_context_t,
+            true,
+            SPDM_GET_CAPABILITIES_REQUEST_FLAGS_MUT_AUTH_CAP
+                | SPDM_GET_CAPABILITIES_REQUEST_FLAGS_ENCAP_CAP,
+            SPDM_GET_CAPABILITIES_RESPONSE_FLAGS_MUT_AUTH_CAP
+                | SPDM_GET_CAPABILITIES_RESPONSE_FLAGS_ENCAP_CAP,
+        );
+
+        if !both_support_mut_auth {
+            info!("Mutual authentication via encapsulated request not supported by both sides");
+            return Ok(());
+        }
+
+        debug!(
+            "Requester and Responder supports support MUT_AUTH_CAP + ENCAP_CAP, sending GET_ENCAPSULATED_REQUEST"
+        );
+
+        let ret = libspdm_send_receive_encap_request(
+            cntx_ptr,
+            if session_info.session_id == 0 {
+                ptr::null_mut()
+            } else {
+                &session_info.session_id as *const u32
+            },
+        );
+
+        if LibspdmReturnStatus::libspdm_status_is_error(ret) {
+            error!(
+                "Failed to complete encapsulated mutual authentication: 0x{:x}",
+                ret
+            );
+            return Err(ret);
+        }
+
+        info!("Encapsulated mutual authentication completed successfully");
+    }
+
+    Ok(())
+}
+
+/// # Summary
+///
 /// Using the established SPDM context (`cntx_ptr`), probe all responder
 /// capabilities and print only the supported capabilities.
 ///

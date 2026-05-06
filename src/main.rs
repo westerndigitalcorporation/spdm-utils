@@ -972,6 +972,13 @@ async fn main() -> Result<(), ()> {
                 }
             };
 
+            // If both sides support MUT_AUTH + ENCAP, send GET_ENCAPSULATED_REQUEST
+            if !cli.no_session {
+                request::try_encapsulated_mut_auth(cntx_ptr, &session_info).map_err(|e| {
+                    error!("Encapsulated mutual authentication failed: 0x{:x}", e);
+                })?;
+            }
+
             // Process one or more requests specified
             for req in requests {
                 request::prepare_request(
