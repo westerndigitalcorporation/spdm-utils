@@ -42,8 +42,37 @@ mod tcg_concise_evidence_binding;
 mod test_suite;
 mod usb_i2c;
 
+use const_format::formatcp;
+
+#[cfg(not(feature = "nvme"))]
+const NVME_MSG: &str = "  - NVMe support (compile with --features nvme)\n";
+#[cfg(feature = "nvme")]
+const NVME_MSG: &str = "";
+
+#[cfg(not(feature = "pci"))]
+const PCI_MSG: &str = "  - PCI/DOE support (compile with --features pci)\n";
+#[cfg(feature = "pci")]
+const PCI_MSG: &str = "";
+
+const DISABLED_FEATURES: &str = formatcp!(
+    "{}{}{}",
+    if cfg!(all(feature = "nvme", feature = "pci")) {
+        ""
+    } else {
+        "DISABLED FEATURES:\n"
+    },
+    NVME_MSG,
+    PCI_MSG
+);
+
 #[derive(Parser)]
-#[command(author, version, about, long_about = None)]
+#[command(
+    author,
+    version,
+    about,
+    long_about = None,
+    after_help = DISABLED_FEATURES
+)]
 struct Args {
     #[command(subcommand)]
     command: Commands,
