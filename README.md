@@ -54,7 +54,7 @@ dependencies needed by `spdm-utils` to enable all supported transports.
 However, `spdm-utils` can be built with only the desired transports enabled,
 see the `Building` section.
 
-## Fedora or Ubuntu Based
+## Fedora or Ubuntu based
 
 Note: `dnf` commands are for Fedora, and `apt` is used for Debian/Ubuntu based
 distributions.
@@ -73,7 +73,7 @@ $ sudo apt install cmake clang libclang-dev pciutils libpci-dev openssl libssl-d
 manifest encoding and decoding. Similar to the implementation of this [CBOR parsing](https://cbor.me/)
 online tool.
 
-You will first need to have `gem` installed, this is a the package manager for ruby.
+You will first need to have `gem` installed, this is the package manager for ruby.
 For example, for Fedora you can install it with:
 
 ```shell
@@ -249,13 +249,13 @@ You can run SPDM-Utils completely on the host using TCP/IP and localhost.
 In this case you can run the server side with
 
 ```shell
-cargo run -- --tcp-server request get-digests
+$ cargo run -- --tcp-server request get-digests
 ```
 
 and the client side with
 
 ```shell
-./target/debug/spdm_utils --tcp-client response
+$ ./target/debug/spdm_utils --tcp-client response
 ```
 
 Note that the server must be run first. You can also swap the server/client
@@ -264,7 +264,7 @@ specification between the request or response side as well.
 You can also run the libspdm tests by running tests on the tcp server with:
 
 ```shell
-cargo run -- --tcp-server tests
+$ cargo run -- --tcp-server tests
 ```
 
 ## Testing over a network (TCP/IP)
@@ -281,15 +281,15 @@ To use SPDM with TCP/IP, first setup a server:
 $ ./target/debug/spdm_utils --tcp-server --server-persist response
 ```
 
-On another machine with network access to the server run:
+On another machine with network access to the server, run:
 
 ```shell
-$ /target/debug/spdm_utils --tcp-client --ip <ip_addr> request get-version
+$ ./target/debug/spdm_utils --tcp-client --ip <ip_addr> request get-version
 ```
 
 If desired, the `port` option can be used to specify a port on both ends.
 
-### Issuing a list of request
+### Issuing a list of requests
 
 `spdm-utils` can issue a user defined list of SPDM request(s).
 It is the responsibility of the user to ensure, the SPDM requests are ordered
@@ -300,31 +300,31 @@ Usage is as follows, as demonstrated over the network model. Ensure you have an
 SPDM responder server running in responder mode prior to issuing this
 command.
 
-```
-$./target/debug/spdm_utils --tcp-client --no-session request get-version,get-capabilities,negotiate-algorithms
+```shell
+$ ./target/debug/spdm_utils --tcp-client --no-session request get-version,get-capabilities,negotiate-algorithms
 ```
 
 Request sub-commands can be specified as follows, refer to usage `request --help`
 for available options.
 
-```
-$./target/debug/spdm_utils --tcp-client request --no-session get-version,get-measurement[index=1]
+```shell
+$ ./target/debug/spdm_utils --tcp-client request --no-session get-version,get-measurement[index=1]
 ```
 
 ### Direct SPDM requests with no session establishment
 
 `spdm-utils` can send SPDM request(s) directly, without establishing a session.
-This maybe useful for development, testing and CI. The `--no-session` argument
+This may be useful for development, testing and CI. The `--no-session` argument
 shall be specified to indicate this. In this mode, it is the responsibility of
 the user to ensure that the requests are ordered in an SPDM specification
 compliant way. `spdm-utils` or `libspdm` do not check the request order, instead
 directly issues them to the responder.
 
-```
+```shell
 $ ./target/debug/spdm_utils --tcp-client --no-session request get-version,get-capabilities,negotiate-algorithms,get-digests,get-certificate,challenge
 ```
 
-This command with issue the requests listed in the order in which they are listed
+This command will issue the requests listed in the order in which they are listed
 to the responder.
 
 ## Testing a real device
@@ -351,7 +351,7 @@ Where `Vendor ID = 0x1002` and `Device ID = 0xab28`. `spdm-utils` can then be
 invoked as below:
 
 ```shell
-./target/debug/spdm_utils --pcie-vid <VendorID> --pcie-devid <DeviceID> --doe-pci-cfg request get-digests
+$ ./target/debug/spdm_utils --pcie-vid <VendorID> --pcie-devid <DeviceID> --doe-pci-cfg request get-digests
 ```
 ### SPDM for NVMe over the SPDM Storage Transport
 
@@ -367,7 +367,7 @@ $ ./target/debug/spdm_utils --blk-dev-path /dev/nvme0 --nvme --no-session reques
 You can retrieve the list of certificates from the device by running
 
 ```shell
-./target/debug/spdm_utils <DeviceOptions> request get-certificate
+$ ./target/debug/spdm_utils <DeviceOptions> request get-certificate
 ```
 
 Which will create a file `retrieved_slot_id0` with the full certificate chain.
@@ -378,20 +378,20 @@ can be verified by also including the `--tcg-dice-evidence-binding-checks` argum
 The certificate chain can be decoded with `openssl` by running the following:
 
 ```shell
-while openssl x509 -noout -text; do :; done < ~/retrieved_slot_id0
+$ while openssl x509 -noout -text; do :; done < ~/retrieved_slot_id0
 ```
 
 ## Setting the certificate
 
 From a host you can set the certificate of the device. As SPDM-Utils uses
 the Alias cert model you can only set the root certificate to the device
-certificate with the `SET_CERTIFICATE` command (see section 117 on the
+certificate with the `SET_CERTIFICATE` command (see section 117 of the
 SPDM spec).
 
 For example to set the certificate run:
 
 ```shell
-spdm_utils --pcie-vid <VendorID> --pcie-devid <DeviceID> --doe-pci-cfg request --cert-path ./certs/alias/slot0/immutable.der set-certificate
+$ spdm_utils --pcie-vid <VendorID> --pcie-devid <DeviceID> --doe-pci-cfg request --cert-path ./certs/alias/slot0/immutable.der set-certificate
 ```
 
 You can additionally specify `--cert-slot-id` to specify the target slot number, valid slot numbers range from
@@ -403,14 +403,14 @@ A requester can get the Certificate Signing Request (CSR) from the device
 with a command similar to this:
 
 ```shell
-spdm_utils --pcie-vid <VendorID> --pcie-devid <DeviceID> --doe-pci-cfg request get-csr
+$ spdm_utils --pcie-vid <VendorID> --pcie-devid <DeviceID> --doe-pci-cfg request get-csr
 ```
 
 Which will save the file to `csr_response.der`. You can then verify the CSR
 with openssl
 
 ```shell
-openssl req -text -noout -inform der -verify -in ./csr_response.der
+$ openssl req -text -noout -inform der -verify -in ./csr_response.der
 ```
 
 ## Signing a Certificate Signing Request
@@ -419,46 +419,46 @@ Once you have a `csr_response.der` from the responder, you first want to
 convert it to a PEM format with
 
 ```shell
-openssl req -inform der -in ./csr_response.der -out csr_response.req
+$ openssl req -inform der -in ./csr_response.der -out csr_response.req
 ```
 
 You can now sign the CSR
 
 ```shell
-openssl x509 -req -in csr_response.req -out csr_response.cert -CA ./certs/slot0/inter.der -sha384 -days 3650 -set_serial 2 -extensions device_ca -extfile ./certs/alias/openssl.cnf
+$ openssl x509 -req -in csr_response.req -out csr_response.cert -CA ./certs/slot0/inter.der -sha384 -days 3650 -set_serial 2 -extensions device_ca -extfile ./certs/alias/openssl.cnf
 ```
 
 Then convert the certificate back to DER
 
 ```shell
-openssl asn1parse -in csr_response.cert -out csr_response.cert.der
+$ openssl asn1parse -in csr_response.cert -out csr_response.cert.der
 ```
 
 Combine all of the immutable certs
 
 ```shell
-cat ./certs/slot0/ca.cert.der ./certs/slot0/inter.cert.der ./csr_response.cert.der > set-cert.der
+$ cat ./certs/slot0/ca.cert.der ./certs/slot0/inter.cert.der ./csr_response.cert.der > set-cert.der
 ```
 
 Now you can set the certificate of a slot
 
 ```shell
-spdm_utils --pcie-vid <VendorID> --pcie-devid <DeviceID> --doe-pci-cfg request --cert-slot-id 1 --cert-path ./set-cert.der set-certificate
+$ spdm_utils --pcie-vid <VendorID> --pcie-devid <DeviceID> --doe-pci-cfg request --cert-slot-id 1 --cert-path ./set-cert.der set-certificate
 ```
 
 Then you request the certificate back
 
 ```shell
-spdm_utils --pcie-vid <VendorID> --pcie-devid <DeviceID> --doe-pci-cfg request --cert-slot-id 1 get-certificate
+$ spdm_utils --pcie-vid <VendorID> --pcie-devid <DeviceID> --doe-pci-cfg request --cert-slot-id 1 get-certificate
 ```
 
 If you are running the tcp server/client mode you will have to simulate a
 device reset and certificate re-gen. That can be done by running this
 
 ```shell
-cd certs
-./setup_certs.sh ../target/debug/spdm_utils
-cd ../
+$ cd certs
+$ ./setup_certs.sh ../target/debug/spdm_utils
+$ cd ../
 ```
 
 # QEMU SPDM Device Emulation
@@ -466,7 +466,7 @@ cd ../
 SPDM-Utils supports binding to QEMU to implement an SPDM responder side to
 an emulated device in QEMU. SPDM support for QEMU is not upstream yet, however,
 [this fork](https://github.com/qemu/qemu/compare/master...twilfredo:qemu:wilfred/spdm-a)
-has the necessary changes required to emulated an NVMe device with SPDM support
+has the necessary changes required to emulate an NVMe device with SPDM support
 over DOE.
 
 For example, this may be an emulated NVMe device
