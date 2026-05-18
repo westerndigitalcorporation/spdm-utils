@@ -3300,18 +3300,24 @@ libspdm_match_fn_prototypes!(
 ///
 /// # Returns
 ///
-/// Returns a tuple with a buffer containing the certificate chain and it's size
+/// Returns an owned `Vec<u8>` containing the certificate chain. The
+/// caller controls its lifetime: if the chain is being handed to
+/// `libspdm_set_data(LIBSPDM_DATA_LOCAL_PUBLIC_CERT_CHAIN, ...)` then
+/// libspdm stores the raw pointer (no copy) and the buffer must outlive
+/// the SPDM context — `Box::leak`/`mem::forget` it in that case. For
+/// APIs that copy the data (e.g. `libspdm_set_certificate`) the buffer
+/// can be dropped after the call.
 ///
 /// # Panics
 ///
 /// Panics if `path` is invalid or if a file I/O error occurs.
 /// Panics if the cert chain failed to verify in `libspdm`
-pub unsafe fn get_local_certchain(
+pub fn get_local_certchain(
     buffer: &[u8],
     _asym_algo: u32,
     hash_algo: u32,
     _is_requester_cert: bool,
-) -> (*mut c_void, usize) {
+) -> Vec<u8> {
     let mut root_cert_buffer: *const u8 = ptr::null_mut();
     let mut root_cert_size = 0;
 
@@ -3331,36 +3337,31 @@ pub unsafe fn get_local_certchain(
 
     let digest_size = unsafe { libspdm_rs::libspdm_get_hash_size(hash_algo) as usize };
 
-    let cert_chain_size =
-        core::mem::size_of::<libspdm_rs::spdm_cert_chain_t>() + digest_size + buffer_len;
-    let cert_chain_layout = Layout::from_size_align(cert_chain_size, 8).unwrap();
-    let cert_chain_buffer = unsafe { alloc(cert_chain_layout) };
+    let header_size = core::mem::size_of::<libspdm_rs::spdm_cert_chain_t>();
+    let cert_chain_size = header_size + digest_size + buffer_len;
+    let mut cert_chain = vec![0u8; cert_chain_size];
 
-    assert!(!cert_chain_buffer.is_null());
-
-    let cert_chain_ptr = cert_chain_buffer as *mut libspdm_rs::spdm_cert_chain_t;
-    // SAFETY: `cert_chain_buffer` is allocated above and cast to `spdm_cert_chain_t`
-    let cert_chain = unsafe { &mut *cert_chain_ptr as &mut libspdm_rs::spdm_cert_chain_t };
-
-    cert_chain.length = cert_chain_size as u32;
+    // SAFETY: `cert_chain` is at least `size_of::<spdm_cert_chain_t>()`
+    // bytes and `Vec<u8>` allocations on the global allocator are
+    // sufficiently aligned for a `u32` write.
+    let cert_chain_hdr =
+        unsafe { &mut *(cert_chain.as_mut_ptr() as *mut libspdm_rs::spdm_cert_chain_t) };
+    cert_chain_hdr.length = cert_chain_size as u32;
 
     unsafe {
         if !libspdm_rs::libspdm_hash_all(
             hash_algo,
             root_cert_buffer as *const _ as *const c_void,
             root_cert_size,
-            cert_chain_buffer.add(core::mem::size_of::<libspdm_rs::spdm_cert_chain_t>()),
+            cert_chain.as_mut_ptr().add(header_size),
         ) {
             panic!("Unable to hash data");
         }
     }
 
-    let cert_buffer_location = unsafe {
-        cert_chain_buffer.add(core::mem::size_of::<libspdm_rs::spdm_cert_chain_t>() + digest_size)
-    };
-    unsafe { cert_buffer_location.copy_from(buffer.as_ptr(), buffer_len) };
+    cert_chain[header_size + digest_size..].copy_from_slice(buffer);
 
-    (cert_chain_buffer as *mut c_void, cert_chain_size)
+    cert_chain
 }
 
 /// # Summary

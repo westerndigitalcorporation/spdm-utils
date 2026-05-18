@@ -303,7 +303,7 @@ pub fn setup_capabilities(
             return Err(());
         }
 
-        let (cert_chain_buffer, cert_chain_size);
+        let cert_chain_vec: Vec<u8>;
         #[cfg(feature = "no_std")]
         {
             assert!(slot_id == 0);
@@ -311,14 +311,12 @@ pub fn setup_capabilities(
                 let buffer = include_bytes!(
                     "../../certs/bank-ecc384/alias/slot0/bundle_responder.certchain.der"
                 );
-                (cert_chain_buffer, cert_chain_size) =
-                    get_local_certchain(buffer, asym_algo, hash_algo, false);
+                cert_chain_vec = get_local_certchain(buffer, asym_algo, hash_algo, false);
             } else {
                 let buffer = include_bytes!(
                     "../../certs/bank-ecc384/device/slot0/bundle_responder.certchain.der"
                 );
-                (cert_chain_buffer, cert_chain_size) =
-                    get_local_certchain(buffer, asym_algo, hash_algo, false);
+                cert_chain_vec = get_local_certchain(buffer, asym_algo, hash_algo, false);
             }
         }
         #[cfg(not(feature = "no_std"))]
@@ -341,16 +339,19 @@ pub fn setup_capabilities(
                 Ok(data) => data,
             };
 
-            (cert_chain_buffer, cert_chain_size) =
-                get_local_certchain(&buffer, asym_algo, hash_algo, false);
+            cert_chain_vec = get_local_certchain(&buffer, asym_algo, hash_algo, false);
         }
+
+        // libspdm stores the raw pointer (no copy) for the lifetime of
+        // the context, so leak the buffer intentionally.
+        let cert_chain: &'static mut [u8] = Box::leak(cert_chain_vec.into_boxed_slice());
 
         if LibspdmReturnStatus::libspdm_status_is_error(libspdm_set_data(
             context,
             libspdm_data_type_t_LIBSPDM_DATA_LOCAL_PUBLIC_CERT_CHAIN,
             &parameter as *const libspdm_data_parameter_t,
-            cert_chain_buffer,
-            cert_chain_size,
+            cert_chain.as_mut_ptr() as *mut c_void,
+            cert_chain.len(),
         )) {
             error!("Failed to set [LIBSPDM_DATA_LOCAL_PUBLIC_CERT_CHAIN]");
             return Err(());
@@ -446,16 +447,18 @@ pub fn setup_pqc_cert_bank(
         Ok(data) => data,
     };
 
-    let (cert_chain_buffer, cert_chain_size) =
-        unsafe { get_local_certchain(&buffer, 0, hash_algo, false) };
+    // libspdm stores the raw pointer (no copy) for the lifetime of the
+    // context, so leak the buffer intentionally.
+    let cert_chain: &'static mut [u8] =
+        Box::leak(get_local_certchain(&buffer, 0, hash_algo, false).into_boxed_slice());
     let parameter = libspdm_data_parameter_t::new_local(slot_id);
     if LibspdmReturnStatus::libspdm_status_is_error(unsafe {
         libspdm_set_data(
             context,
             libspdm_data_type_t_LIBSPDM_DATA_LOCAL_PUBLIC_CERT_CHAIN,
             &parameter as *const libspdm_data_parameter_t,
-            cert_chain_buffer,
-            cert_chain_size,
+            cert_chain.as_mut_ptr() as *mut c_void,
+            cert_chain.len(),
         )
     }) {
         error!(
