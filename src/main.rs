@@ -38,6 +38,7 @@ mod request;
 mod storage_standards;
 mod tcg_concise_evidence_binding;
 mod tcp_client;
+mod tcp_common;
 mod tcp_server;
 mod test_suite;
 mod usb_i2c;
