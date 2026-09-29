@@ -13,7 +13,6 @@
 use crate::*;
 use core::ffi::c_void;
 use libspdm::spdm::{LIBSPDM_MAX_SPDM_MSG_SIZE, TransportLayer};
-use std::io::{Read, Write};
 use std::net::TcpStream;
 use std::slice::{from_raw_parts, from_raw_parts_mut};
 use std::time::Duration;
@@ -63,8 +62,11 @@ unsafe extern "C" fn tcp_client_send_message(
             .expect("Couldn't set write timeout");
     }
 
-    stream.write_all(msg_buf).unwrap();
-    stream.flush().unwrap();
+    tcp_common::write_message(
+        stream,
+        msg_buf,
+        state.transport.expect("Transport layer was never set"),
+    );
     0
 }
 
@@ -111,11 +113,11 @@ unsafe extern "C" fn tcp_client_receive_message(
             .expect("Couldn't set read timeout");
     }
 
-    let mut read_len = stream.read(msg_buf);
-    while read_len.is_err() {
-        read_len = stream.read(msg_buf);
-    }
-    let read_len = read_len.unwrap();
+    let read_len = tcp_common::read_message(
+        stream,
+        msg_buf,
+        state.transport.expect("Transport layer was never set"),
+    );
 
     if read_len == 0 {
         // when read() return 0, the two likely cases are:
@@ -179,11 +181,13 @@ pub fn register_device(
             Some(tcp_client_send_message),
             Some(tcp_client_receive_message),
         );
-        io_buffers::libspdm_setup_io_buffers(
-            context,
-            SEND_RECEIVE_BUFFER_LEN,
-            SEND_RECEIVE_BUFFER_LEN,
-        )?;
+        let spdm_msg_len = if trans == TransportLayer::Mctp {
+            tcp_common::MCTP_SPDM_MSG_LEN
+        } else {
+            SEND_RECEIVE_BUFFER_LEN
+        };
+
+        io_buffers::libspdm_setup_io_buffers(context, SEND_RECEIVE_BUFFER_LEN, spdm_msg_len)?;
     }
 
     Ok(())
