@@ -12,7 +12,7 @@
 
 use crate::*;
 use core::ffi::c_void;
-use libspdm::spdm::LIBSPDM_MAX_SPDM_MSG_SIZE;
+use libspdm::spdm::{LIBSPDM_MAX_SPDM_MSG_SIZE, TransportLayer};
 use std::io::{Read, Write};
 use std::net::TcpStream;
 use std::slice::{from_raw_parts, from_raw_parts_mut};
@@ -138,6 +138,7 @@ unsafe extern "C" fn tcp_client_receive_message(
 /// # Parameter
 ///
 /// * `context`: The SPDM context
+/// * `trans`: The transport protocol used to frame messages on the wire
 ///
 /// # Returns
 ///
@@ -146,7 +147,12 @@ unsafe extern "C" fn tcp_client_receive_message(
 /// # Panics
 ///
 /// Panics if `SEND_BUFFER/RECEIVE_BUFFER` is occupied
-pub fn register_device(context: *mut c_void, port: u16, ip: Option<String>) -> Result<(), ()> {
+pub fn register_device(
+    context: *mut c_void,
+    port: u16,
+    ip: Option<String>,
+    trans: TransportLayer,
+) -> Result<(), ()> {
     let ip_addr = ip.ok_or(())?;
     let ip_port = format!("{}:{}", ip_addr.clone(), port);
 
@@ -163,6 +169,7 @@ pub fn register_device(context: *mut c_void, port: u16, ip: Option<String>) -> R
 
     let mut state = Box::<tcp_common::TcpDeviceState>::default();
     state.stream = Some(stream);
+    state.transport = Some(trans);
 
     tcp_common::attach_state(context, state);
 
