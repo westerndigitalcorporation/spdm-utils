@@ -12,7 +12,7 @@
 
 use crate::*;
 use core::ffi::c_void;
-use libspdm::spdm::LIBSPDM_MAX_SPDM_MSG_SIZE;
+use libspdm::spdm::{LIBSPDM_MAX_SPDM_MSG_SIZE, TransportLayer};
 use std::io::{Read, Write};
 use std::net::TcpListener;
 use std::slice::{from_raw_parts, from_raw_parts_mut};
@@ -191,6 +191,7 @@ fn tcp_server_listen(state: &mut TcpDeviceState) -> Result<(), ()> {
 /// # Parameter
 ///
 /// * `context`: The SPDM context
+/// * `trans`: The transport protocol used to frame messages on the wire
 ///
 /// # Returns
 ///
@@ -199,13 +200,19 @@ fn tcp_server_listen(state: &mut TcpDeviceState) -> Result<(), ()> {
 /// # Panics
 ///
 /// Panics if `SEND_BUFFER/RECEIVE_BUFFER` is occupied
-pub fn register_device(context: *mut c_void, port: u16, server_persist: bool) -> Result<(), ()> {
+pub fn register_device(
+    context: *mut c_void,
+    port: u16,
+    server_persist: bool,
+    trans: TransportLayer,
+) -> Result<(), ()> {
     let mut state = Box::<TcpDeviceState>::default();
 
     // Capture the listener for subsequent incoming connections if the
     // intiial connection drops but the user has asked us to persist
     state.listener = Some(tcp_server_bind(port)?);
     state.server_persist = server_persist;
+    state.transport = Some(trans);
 
     tcp_server_listen(&mut state)?;
 

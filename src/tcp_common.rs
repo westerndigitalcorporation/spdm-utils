@@ -4,7 +4,7 @@
 
 use core::ffi::c_void;
 use libspdm::libspdm_rs;
-use libspdm::spdm::LibspdmReturnStatus;
+use libspdm::spdm::{LibspdmReturnStatus, TransportLayer};
 use std::net::{TcpListener, TcpStream};
 use std::ptr;
 
@@ -23,6 +23,8 @@ pub struct TcpDeviceState {
     pub listener: Option<TcpListener>,
     /// Server only: if the client drops, keep the server alive.
     pub server_persist: bool,
+    /// The transport protocol used to frame the messages on the wire.
+    pub transport: Option<TransportLayer>,
 }
 
 /// # Summary
