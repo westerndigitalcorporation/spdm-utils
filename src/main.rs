@@ -820,10 +820,10 @@ async fn main() -> Result<(), ()> {
 
     if cli.tcp_server {
         info!("TCP Server: transport: {:?}", trans_proto.as_ref().unwrap());
-        tcp_server::register_device(cntx_ptr, cli.port, cli.server_persist)?;
+        tcp_server::register_device(cntx_ptr, cli.port, cli.server_persist, trans_proto.unwrap())?;
     } else if cli.tcp_client {
         info!("TCP Client: transport: {:?}", trans_proto.as_ref().unwrap());
-        tcp_client::register_device(cntx_ptr, cli.port, cli.ip)?;
+        tcp_client::register_device(cntx_ptr, cli.port, cli.ip, trans_proto.unwrap())?;
     } else if cli.usb_i2c {
         if let Some(proto) = trans_proto
             && proto != spdm::TransportLayer::Mctp
