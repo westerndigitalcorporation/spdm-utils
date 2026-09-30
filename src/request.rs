@@ -663,6 +663,9 @@ pub fn prepare_request(
                     0,
                     csr_form_get_ptr,
                     &mut csr_form_len,
+                    0,
+                    0,
+                    ptr::null_mut(),
                 );
 
                 if LibspdmReturnStatus::libspdm_status_is_error(ret) {
