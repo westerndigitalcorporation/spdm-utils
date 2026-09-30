@@ -11,6 +11,7 @@ use crate::spdm::get_local_certchain;
 #[cfg(feature = "no_std")]
 use alloc::vec::Vec;
 use core::ffi::c_void;
+use core::sync::atomic::{AtomicPtr, Ordering};
 #[cfg(not(feature = "no_std"))]
 use std::fs;
 use std::fs::OpenOptions;
@@ -357,16 +358,6 @@ pub fn setup_capabilities(
             return Err(());
         }
 
-        // Register a buffer for storing the requester's cert chain during the
-        // encapsulated mutual-auth flow (GET_DIGESTS/GET_CERTIFICATE).
-        let mut_auth_buf: &'static mut [u8] =
-            Box::leak(vec![0u8; LIBSPDM_MAX_CERT_CHAIN_SIZE as usize].into_boxed_slice());
-        libspdm_register_cert_chain_buffer(
-            context,
-            mut_auth_buf.as_mut_ptr() as *mut c_void,
-            mut_auth_buf.len(),
-        );
-
         #[cfg(not(feature = "no_std"))]
         {
             let file_path = format!("certs/bank-ecc384/slot{slot_id}/ca.cert.der",);
@@ -681,6 +672,121 @@ pub fn register_algs_negotiated_callback(context: *mut c_void, cert_mode: CertMo
             context,
             Some(device_connection_state_callback),
         );
+    }
+}
+
+/// Buffer used by libspdm to accumulate the requester certificate chain
+/// during encapsulated GET_CERTIFICATE requests.
+/// libspdm retains this buffer after the handler returns, so it cannot be
+/// on the stack.
+static ENCAP_CERT_CHAIN: AtomicPtr<u8> = AtomicPtr::new(core::ptr::null_mut());
+
+/// # Summary
+///
+/// Encapsulated flow handler registered with libspdm, used to produce each
+/// encapsulated request.
+///
+/// This function is called when the Responder receives a GET_ENCAPSULATED_REQUEST
+/// or DELIVER_ENCAPSULATED_RESPONSE.
+///
+/// This is based on the "Basic Mutual Authentication" example in
+/// encapsulated_flow_user_guide.md
+///
+/// Refer to `libspdm_encap_flow_handler_func()` for more details.
+///
+/// # Parameter
+///
+/// * `spdm_context`: The SPDM context
+/// * `session_id`: The session ID, if the flow belongs to a session
+/// * `encap_flow_type`: The type of the encapsulated flow
+/// * `last_request_code`: The request code the previous encapsulated
+///                        message answered, or 0 if no request has been
+///                        sent yet
+/// * `error_code`: The error code when the requester delivered an
+///                 encapsulated ERROR, 0 otherwise
+/// * `terminate_flow`: Set to true to terminate the encapsulated flow
+/// * `encap_request_size`: On input, the size of the encapsulated request
+///                         buffer, on output the size of the request
+/// * `encap_request`: A buffer for the encapsulated request
+///
+/// # Returns
+///
+/// A libspdm return status
+#[unsafe(no_mangle)]
+unsafe extern "C" fn encap_flow_handler(
+    spdm_context: *mut c_void,
+    session_id: *const u32,
+    encap_flow_type: libspdm_encap_flow_type_t,
+    last_request_code: u8,
+    error_code: u8,
+    terminate_flow: *mut bool,
+    encap_request_size: *mut usize,
+    encap_request: *mut c_void,
+) -> libspdm_return_t {
+    // The requester delivered an encapsulated ERROR, terminate the flow
+    if error_code != 0 {
+        unsafe { *terminate_flow = true };
+        return crate::spdm::_LIBSPDM_STATUS_SUCCESS;
+    }
+
+    match last_request_code as u32 {
+        0 => unsafe {
+            libspdm_get_encap_request_get_digests(
+                spdm_context,
+                session_id,
+                encap_request_size,
+                encap_request,
+            )
+        },
+        SPDM_GET_DIGESTS => unsafe {
+            libspdm_get_encap_request_get_certificate(
+                spdm_context,
+                session_id,
+                0,
+                SPDM_MAX_CERTIFICATE_CHAIN_SIZE as usize,
+                ENCAP_CERT_CHAIN.load(Ordering::Relaxed) as *mut c_void,
+                encap_request_size,
+                encap_request,
+            )
+        },
+        SPDM_GET_CERTIFICATE
+            if encap_flow_type == libspdm_encap_flow_type_t_LIBSPDM_ENCAP_FLOW_BASIC_MUT_AUTH =>
+        unsafe {
+            libspdm_get_encap_request_challenge(
+                spdm_context,
+                0,
+                core::ptr::null(),
+                encap_request_size,
+                encap_request,
+            )
+        },
+        // Chain retrieval completed, terminate the flow
+        _ => {
+            unsafe { *terminate_flow = true };
+            crate::spdm::_LIBSPDM_STATUS_SUCCESS
+        }
+    }
+}
+
+/// # Summary
+///
+/// Registers [`encap_flow_handler`] with libspdm. libspdm calls the handler
+/// to obtain each encapsulated request, so a handler must be registered
+/// when the responder advertises ENCAP_CAP.
+///
+/// # Parameter
+///
+/// * `cntx_ptr`: The SPDM context
+pub fn register_encap_flow_handler(cntx_ptr: *mut c_void) {
+    if ENCAP_CERT_CHAIN.load(Ordering::Relaxed).is_null() {
+        let chain = alloc::boxed::Box::leak(
+            alloc::vec![0; SPDM_MAX_CERTIFICATE_CHAIN_SIZE as usize].into_boxed_slice(),
+        );
+        ENCAP_CERT_CHAIN.store(chain.as_mut_ptr(), Ordering::Relaxed);
+    }
+
+    unsafe {
+        libspdm_register_encap_flow_handler(cntx_ptr, Some(encap_flow_handler));
     }
 }
 
