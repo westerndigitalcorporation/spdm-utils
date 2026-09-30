@@ -1075,6 +1075,8 @@ async fn main() -> Result<(), ()> {
                 responder::register_algs_negotiated_callback(cntx_ptr, CertModel::Device);
             }
 
+            responder::register_encap_flow_handler(cntx_ptr);
+
             // We need to make sure the hashes are generated before starting the
             // response loop
             if let Some(t) = tasks {

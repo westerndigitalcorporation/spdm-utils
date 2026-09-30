@@ -25,8 +25,8 @@
 #ifdef LIBSPDM_TESTS
 #include <library/spdm_responder_conformance_test_lib.h>
 #endif
-#include <os_stub/spdm_crypt_ext_lib/spdm_crypt_ext_lib.h>
-#include <os_stub/spdm_crypt_ext_lib/cryptlib_ext.h>
+#include <os_stub/include/library/spdm_crypt_ext_lib.h>
+#include <os_stub/include/hal/library/cryptlib_ext.h>
 #include <internal/libspdm_common_lib.h>
 #include <internal/libspdm_requester_lib.h>
 #include <industry_standard/pcidoe.h>
