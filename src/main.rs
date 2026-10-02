@@ -40,6 +40,7 @@ mod scsi;
 mod storage_standards;
 mod tcg_concise_evidence_binding;
 mod tcp_client;
+mod tcp_common;
 mod tcp_server;
 mod test_suite;
 mod usb_i2c;
@@ -819,10 +820,10 @@ async fn main() -> Result<(), ()> {
 
     if cli.tcp_server {
         info!("TCP Server: transport: {:?}", trans_proto.as_ref().unwrap());
-        tcp_server::register_device(cntx_ptr, cli.port, cli.server_persist)?;
+        tcp_server::register_device(cntx_ptr, cli.port, cli.server_persist, trans_proto.unwrap())?;
     } else if cli.tcp_client {
         info!("TCP Client: transport: {:?}", trans_proto.as_ref().unwrap());
-        tcp_client::register_device(cntx_ptr, cli.port, cli.ip)?;
+        tcp_client::register_device(cntx_ptr, cli.port, cli.ip, trans_proto.unwrap())?;
     } else if cli.usb_i2c {
         if let Some(proto) = trans_proto
             && proto != spdm::TransportLayer::Mctp
@@ -1113,6 +1114,8 @@ async fn main() -> Result<(), ()> {
             } else {
                 responder::register_algs_negotiated_callback(cntx_ptr, CertModel::Device);
             }
+
+            responder::register_encap_flow_handler(cntx_ptr);
 
             // We need to make sure the hashes are generated before starting the
             // response loop

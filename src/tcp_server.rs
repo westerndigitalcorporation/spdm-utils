@@ -12,18 +12,13 @@
 
 use crate::*;
 use core::ffi::c_void;
-use libspdm::spdm::LIBSPDM_MAX_SPDM_MSG_SIZE;
-use once_cell::sync::Lazy;
-use std::io::{Read, Write};
-use std::net::{TcpListener, TcpStream};
+use libspdm::spdm::{LIBSPDM_MAX_SPDM_MSG_SIZE, TransportLayer};
+use std::net::TcpListener;
 use std::slice::{from_raw_parts, from_raw_parts_mut};
-use std::sync::Mutex;
 use std::time::Duration;
+use tcp_common::TcpDeviceState;
 
 const SEND_RECEIVE_BUFFER_LEN: usize = LIBSPDM_MAX_SPDM_MSG_SIZE as usize;
-static TCP_STREAM: Lazy<Mutex<Option<TcpStream>>> = Lazy::new(|| Mutex::new(None));
-static TCP_LISTENER: Lazy<Mutex<Option<TcpListener>>> = Lazy::new(|| Mutex::new(None));
-static SERVER_PERSIST: Lazy<Mutex<bool>> = Lazy::new(|| Mutex::new(false));
 
 /// # Summary
 ///
@@ -32,7 +27,7 @@ static SERVER_PERSIST: Lazy<Mutex<bool>> = Lazy::new(|| Mutex::new(false));
 ///
 /// # Parameter
 ///
-/// * `_context`: The SPDM context
+/// * `context`: The SPDM context
 /// * `message_size`: Number of elements in `message_ptr` to send
 /// * `message_ptr`: A pointer to the data buffer to be sent
 /// * `timeout`: Transaction timeout
@@ -47,13 +42,13 @@ static SERVER_PERSIST: Lazy<Mutex<bool>> = Lazy::new(|| Mutex::new(false));
 /// failure.
 #[unsafe(no_mangle)]
 unsafe extern "C" fn tcp_server_send_message(
-    _context: *mut c_void,
+    context: *mut c_void,
     message_size: usize,
     message_ptr: *const c_void,
     timeout: u64,
 ) -> u32 {
-    let guard = TCP_STREAM.lock().unwrap();
-    let mut stream = guard.as_ref().expect("No client connection");
+    let state = unsafe { &mut *tcp_common::state_from_context(context) };
+    let stream = state.stream.as_mut().expect("No client connection");
 
     let message = message_ptr as *const u8;
     let msg_buf = unsafe { from_raw_parts(message, message_size) };
@@ -68,8 +63,11 @@ unsafe extern "C" fn tcp_server_send_message(
             .expect("Couldn't set write timeout");
     }
 
-    stream.write_all(msg_buf).unwrap();
-    stream.flush().unwrap();
+    tcp_common::write_message(
+        stream,
+        msg_buf,
+        state.transport.expect("Transport layer was never set"),
+    );
     0
 }
 
@@ -96,56 +94,50 @@ unsafe extern "C" fn tcp_server_send_message(
 /// failure.
 #[unsafe(no_mangle)]
 unsafe extern "C" fn tcp_server_receive_message(
-    _context: *mut c_void,
+    context: *mut c_void,
     message_size: *mut usize,
     msg_buf_ptr: *mut *mut c_void,
     timeout: u64,
 ) -> u32 {
+    let state = unsafe { &mut *tcp_common::state_from_context(context) };
     let mut server_reset = false;
     let message = unsafe { *msg_buf_ptr as *mut u8 };
     let msg_buf = unsafe { from_raw_parts_mut(message, SEND_RECEIVE_BUFFER_LEN) };
 
-    // Scope the gaurd lock, it must be released incase we need to listen
-    // again
-    {
-        let guard = TCP_STREAM.lock().unwrap();
-        let mut stream = guard.as_ref().expect("No client connection");
+    let stream = state.stream.as_mut().expect("No client connection");
 
-        if timeout == 0 {
-            stream
-                .set_read_timeout(None)
-                .expect("Couldn't set read timeout");
-        } else {
-            stream
-                .set_read_timeout(Some(Duration::from_micros(timeout)))
-                .expect("Couldn't set read timeout");
-        }
-
-        let mut read_len = stream.read(msg_buf);
-        while read_len.is_err() {
-            read_len = stream.read(msg_buf);
-        }
-        let read_len = read_len.unwrap();
-
-        if read_len == 0 {
-            // when read() return 0, the two likely cases are:
-            // 1. stream shut down correctly
-            // 2. reader has reached its “end of file” and will likely no longer be
-            //    able to produce bytes
-            warn!("Connection dropped to client, exiting...");
-            if !(*(SERVER_PERSIST.lock().unwrap())) {
-                std::process::exit(0);
-            } else {
-                server_reset = true;
-            }
-        }
-        unsafe { *message_size = read_len };
+    if timeout == 0 {
+        stream
+            .set_read_timeout(None)
+            .expect("Couldn't set read timeout");
+    } else {
+        stream
+            .set_read_timeout(Some(Duration::from_micros(timeout)))
+            .expect("Couldn't set read timeout");
     }
 
+    let read_len = tcp_common::read_message(
+        stream,
+        msg_buf,
+        state.transport.expect("Transport layer was never set"),
+    );
+
+    if read_len == 0 {
+        // when read() return 0, the two likely cases are:
+        // 1. stream shut down correctly
+        // 2. reader has reached its “end of file” and will likely no longer be
+        //    able to produce bytes
+        warn!("Connection dropped to client, exiting...");
+        if !state.server_persist {
+            std::process::exit(0);
+        } else {
+            server_reset = true;
+        }
+    }
+    unsafe { *message_size = read_len };
+
     if server_reset {
-        let guard = TCP_LISTENER.lock().unwrap();
-        let listener = guard.as_ref().expect("TCP_LISTENER was not initialized");
-        _ = tcp_server_listen(listener);
+        _ = tcp_server_listen(state);
     }
 
     0
@@ -160,7 +152,12 @@ fn tcp_server_bind(port: u16) -> Result<TcpListener, ()> {
     Ok(listener)
 }
 
-fn tcp_server_listen(listener: &TcpListener) -> Result<(), ()> {
+fn tcp_server_listen(state: &mut TcpDeviceState) -> Result<(), ()> {
+    let listener = state
+        .listener
+        .as_ref()
+        .expect("TCP_LISTENER was not initialized");
+
     if let Ok(local_addr) = listener.local_addr() {
         info!(
             "Listening for TCP connections on port: {}",
@@ -176,7 +173,7 @@ fn tcp_server_listen(listener: &TcpListener) -> Result<(), ()> {
                 if let Ok(addr) = s.peer_addr() {
                     info!("Connection accepted from {}", addr);
                 }
-                *(TCP_STREAM.lock().unwrap()) = Some(s);
+                state.stream = Some(s);
                 break;
             }
             Err(e) => {
@@ -196,6 +193,7 @@ fn tcp_server_listen(listener: &TcpListener) -> Result<(), ()> {
 /// # Parameter
 ///
 /// * `context`: The SPDM context
+/// * `trans`: The transport protocol used to frame messages on the wire
 ///
 /// # Returns
 ///
@@ -204,27 +202,37 @@ fn tcp_server_listen(listener: &TcpListener) -> Result<(), ()> {
 /// # Panics
 ///
 /// Panics if `SEND_BUFFER/RECEIVE_BUFFER` is occupied
-pub fn register_device(context: *mut c_void, port: u16, server_persist: bool) -> Result<(), ()> {
-    let listener = tcp_server_bind(port)?;
-    tcp_server_listen(&listener)?;
+pub fn register_device(
+    context: *mut c_void,
+    port: u16,
+    server_persist: bool,
+    trans: TransportLayer,
+) -> Result<(), ()> {
+    let mut state = Box::<TcpDeviceState>::default();
 
-    // Capture this for subsequent incoming connection if the intiial connection
-    // drops but the user has asked us to persist
-    *(TCP_LISTENER.lock().unwrap()) = Some(listener);
+    // Capture the listener for subsequent incoming connections if the
+    // intiial connection drops but the user has asked us to persist
+    state.listener = Some(tcp_server_bind(port)?);
+    state.server_persist = server_persist;
+    state.transport = Some(trans);
+
+    tcp_server_listen(&mut state)?;
+
+    tcp_common::attach_state(context, state);
 
     unsafe {
-        *(SERVER_PERSIST.lock().unwrap()) = server_persist;
-
         libspdm_register_device_io_func(
             context,
             Some(tcp_server_send_message),
             Some(tcp_server_receive_message),
         );
-        io_buffers::libspdm_setup_io_buffers(
-            context,
-            SEND_RECEIVE_BUFFER_LEN,
-            SEND_RECEIVE_BUFFER_LEN,
-        )?;
+        let spdm_msg_len = if trans == TransportLayer::Mctp {
+            tcp_common::MCTP_SPDM_MSG_LEN
+        } else {
+            SEND_RECEIVE_BUFFER_LEN
+        };
+
+        io_buffers::libspdm_setup_io_buffers(context, SEND_RECEIVE_BUFFER_LEN, spdm_msg_len)?;
     }
 
     Ok(())

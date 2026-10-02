@@ -43,7 +43,6 @@ use {
     alloc::string::String,
     alloc::vec::Vec,
     core::alloc::Layout,
-    core::ffi::{c_uchar, c_uint},
 };
 
 #[cfg(not(feature = "no_std"))]
@@ -54,7 +53,7 @@ use {
     minicbor::CborLen,
     once_cell::sync::Lazy,
     std::alloc::{Layout, alloc, dealloc},
-    std::ffi::{CString, c_uchar, c_uint},
+    std::ffi::CString,
     std::fs::{self, OpenOptions},
     std::io::{BufWriter, Write},
     std::path::Path,
@@ -1505,46 +1504,36 @@ libspdm_match_fn_prototypes!(
 /// # Summary
 ///
 /// Saves a certificate pointed to by `cert_chain` to device non-volatile memory
-/// into the respective `slot_id`. Once saved, import the file and use it as
-///  the certificate
-///
-/// # Parameter
-///
-/// * `slot_id`: The number of slot for the certificate chain
-/// * `cert_chain`: The pointer for the certificate chain to set
-/// * `cert_chain_size`: The size of the certificate chain to set
-/// * `base_hash_algo`: Indicates the negotiated hash algorithm.
-/// * `base_asym_algo`: Indicates the negotiated signing algorithms.
-///
-/// # Returns
+/// into the respective `slot_id`.
 ///
 /// True if certificate saved to NV successfully, otherwise, false
-#[allow(unused)]
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn libspdm_write_certificate_to_nvm(
-    _spdm_context: *mut c_void,
+fn libspdm_write_certificate_to_nvm(
     slot_id: u8,
-    cert_chain: *const c_void,
-    cert_chain_size: usize,
-    _base_hash_algo: u32,
-    _base_asym_algo: u32,
-    _pqc_asym_algo: u32,
-    _need_reset: *mut bool,
-    _is_busy: *mut bool,
-) -> bool {
+    cert_chain: &[u8],
+    cert_model: u8,
+) -> Result<(), std::io::Error> {
     #[cfg(feature = "no_std")]
     {
         todo!("implement: non-volatile storage");
     }
     #[cfg(not(feature = "no_std"))]
     {
-        // TODO: We have no way to know if this is an alias or device
-        // certificate.
-        let dir_name = format!("certs/bank-ecc384/alias/slot{}", slot_id);
+        let dir_name;
+        match cert_model as u32 {
+            SPDM_CERTIFICATE_INFO_CERT_MODEL_DEVICE_CERT
+            | SPDM_CERTIFICATE_INFO_CERT_MODEL_GENERIC_CERT => {
+                dir_name = format!("certs/bank-ecc384/device/slot{}", slot_id);
+            }
+            SPDM_CERTIFICATE_INFO_CERT_MODEL_ALIAS_CERT => {
+                dir_name = format!("certs/bank-ecc384/alias/slot{}", slot_id);
+            }
+            _ => unreachable!(),
+        }
+
         let file_name = format!("{}/immutable.der", dir_name);
         let path = Path::new(&file_name);
 
-        std::fs::create_dir_all(dir_name).unwrap();
+        std::fs::create_dir_all(dir_name)?;
 
         let file = match OpenOptions::new()
             .read(true)
@@ -1558,34 +1547,17 @@ pub unsafe extern "C" fn libspdm_write_certificate_to_nvm(
         };
 
         let mut writer = BufWriter::new(file);
-        let slice = unsafe { from_raw_parts(cert_chain as *const u8, cert_chain_size) };
 
-        writer.write_all(slice).unwrap();
+        writer.write_all(cert_chain)?;
 
-        true
+        Ok(())
     }
 }
-#[cfg(test)]
-libspdm_match_fn_prototypes!(
-    unsafe extern "C" fn(
-        *mut c_void,
-        u8,
-        *const c_void,
-        usize,
-        u32,
-        u32,
-        u32,
-        *mut bool,
-        *mut bool,
-    ) -> bool,
-    libspdm_write_certificate_to_nvm
-);
 
 /// # Summary
 ///
-/// Saves a certificate pointed to by `cert_chain` to device non-volatile memory
-/// into the respective `slot_id`. Once saved, import the file and use it as
-///  the certificate
+/// Generates a CSR to device non-volatile memory into the respective
+/// `slot_id`. Once saved, import the file and use it as the certificate
 ///
 /// # Parameter
 ///
@@ -1601,14 +1573,21 @@ libspdm_match_fn_prototypes!(
 ///                  For output, csr_pointer is address for stored CSR.
 ///                  The csr_pointer address will be changed.
 ///
+/// * `req_cert_model`:     libspdm Certificate model
+/// * `req_csr_tracking_tag`: Responder provided CsrTrackingTag (>=SPDM1.3)
+/// * `overwrite`:        If set, the Responder shall stop processing any existing GET_CSR
+///                       request and overwrite it with this request.
+///
 /// # Returns
 ///
 /// True if CSR generation was a success, false otherwise
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn libspdm_gen_csr(
     _spdm_context: *mut c_void,
+    _session_id: *const u32,
     base_hash_algo: u32,
     base_asym_algo: u32,
+    _pqc_asym_algo: u32,
     need_reset: *mut bool,
     _request: *const c_void,
     _request_size: usize,
@@ -1618,13 +1597,30 @@ pub unsafe extern "C" fn libspdm_gen_csr(
     _opaque_data_length: u16,
     csr_len: *mut usize,
     csr_pointer: *mut u8,
-    is_device_cert_model: bool,
+    req_cert_model: u8,
+    req_csr_tracking_tag: *mut u8,
+    _req_key_pair_id: u8,
+    overwrite: bool,
     _is_busy: *mut bool,
     _unexpected_request: *mut bool,
 ) -> bool {
     let mut ec_context: *mut c_void = ptr::null_mut();
     let csr_buffer_size: usize = unsafe { *csr_len };
     let key_buffer;
+
+    // TODO: The CSR generation supported by spdm-utils based responder does
+    //       not currently support CSR caching, i.e in a situation where the
+    //       responder needs a reset to process a GET_CSR request.
+    //       So an spdm-utils requester should never request to see a cached
+    //       CSR using a csr_tracking_tag value of [1, 7].
+    if !req_csr_tracking_tag.is_null() {
+        assert_eq!(unsafe { *req_csr_tracking_tag }, 0);
+    }
+
+    // TODO: Overwrite is not supported
+    assert!(!overwrite);
+
+    let is_device_cert_model = req_cert_model == SPDM_CERTIFICATE_INFO_CERT_MODEL_DEVICE_CERT as u8;
 
     unsafe { *need_reset = false };
 
@@ -1745,6 +1741,8 @@ pub unsafe extern "C" fn libspdm_gen_csr(
 libspdm_match_fn_prototypes!(
     unsafe extern "C" fn(
         *mut c_void,
+        *const u32,
+        u32,
         u32,
         u32,
         *mut bool,
@@ -1756,6 +1754,9 @@ libspdm_match_fn_prototypes!(
         u16,
         *mut usize,
         *mut u8,
+        u8,
+        *mut u8,
+        u8,
         bool,
         *mut bool,
         *mut bool,
@@ -3171,125 +3172,6 @@ libspdm_match_fn_prototypes!(
     libspdm_encap_challenge_opaque_data
 );
 
-/// # Summary
-///
-/// NOTE: This function currently wraps around `libspdm_gen_csr()` to implement
-///       GET_CSR support for libspmd for SPDM versions >= 1.3. We only offer
-///       limited support in that:
-///            i. The responder NEVER returns a CsrTrackingTag, Csr generation
-///                 in immediate (no reset needed).
-///           ii. Requester must not request a CsrTrackingTag [1, 7], only 0
-///                 allowed.
-///
-/// If an spdm-utils responder and requester is used, this should not
-/// be problematic.
-///
-/// Saves a certificate pointed to by `cert_chain` to device non-volatile memory
-/// into the respective `slot_id`. Once saved, import the file and use it as
-///  the certificate
-///
-/// # Parameter
-///
-/// * `base_hash_algo`: Indicates the hash algo for signing
-/// * `base_asym_algo`: The asymmetric public key to set
-/// * `need_reset`: The device needs reset to generate a CSR
-/// * `requester_info`: Requester information to generate a CSR
-/// * `requester_info_length`: The length of `requester_info`
-/// * `csr_len`: For input, csr_len is the size of store CSR buffer.
-///              For output, csr_len is CSR len for DER format
-///
-/// * `csr_pointer`: For input, csr_pointer is buffer address to store CSR.
-///                  For output, csr_pointer is address for stored CSR.
-///                  The csr_pointer address will be changed.
-///
-/// * `req_cert_model`:   libspdm Certificate model
-/// * `csr_tracking_tag`: Responder provided CsrTrackingTag (>=SPDM1.3)
-/// * `overwrite`:        If set, the Responder shall stop processing any existing GET_CSR
-///                       request and overwrite it with this request.
-/// # Returns
-///
-/// True if CSR generation was a success, false otherwise
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn libspdm_gen_csr_ex(
-    spdm_context: *mut c_void,
-    base_hash_algo: c_uint,
-    base_asym_algo: c_uint,
-    _pqc_asym_algo: c_uint,
-    need_reset: *mut bool,
-    request: *const c_void,
-    request_size: usize,
-    requester_info: *mut c_uchar,
-    requester_info_length: usize,
-    opaque_data: *mut c_uchar,
-    opaque_data_length: u16,
-    csr_len: *mut usize,
-    csr_pointer: *mut c_uchar,
-    req_cert_model: c_uchar,
-    csr_tracking_tag: *mut c_uchar,
-    _req_key_pair_id: u8,
-    overwrite: bool,
-    _is_busy: *mut bool,
-    _unexpected_request: *mut bool,
-) -> bool {
-    // TODO: The CSR generation supported by spdm-utils based responder does not currently
-    //       support CSR caching, i.e in a situation where the responder needs a resetto process a
-    //       GET_CSCSR request.
-    //
-    //       so an spdm-utils requester should never request to see a cached
-    //       CSR using a csr_tracking_tag value of [1, 7].
-    unsafe {
-        assert!(*csr_tracking_tag == 0);
-    }
-    // TODO: Overwrite is not supported
-    assert!(!overwrite);
-    let is_device_cert_model = { req_cert_model == 1 };
-    unsafe {
-        libspdm_gen_csr(
-            spdm_context,
-            base_hash_algo,
-            base_asym_algo,
-            need_reset,
-            request,
-            request_size,
-            requester_info,
-            requester_info_length,
-            opaque_data,
-            opaque_data_length,
-            csr_len,
-            csr_pointer,
-            is_device_cert_model,
-            core::ptr::null_mut(),
-            core::ptr::null_mut(),
-        )
-    }
-}
-
-#[cfg(test)]
-libspdm_match_fn_prototypes!(
-    unsafe extern "C" fn(
-        *mut c_void,
-        c_uint,
-        c_uint,
-        c_uint,
-        *mut bool,
-        *const c_void,
-        usize,
-        *mut c_uchar,
-        usize,
-        *mut c_uchar,
-        u16,
-        *mut usize,
-        *mut c_uchar,
-        c_uchar,
-        *mut c_uchar,
-        u8,
-        bool,
-        *mut bool,
-        *mut bool,
-    ) -> bool,
-    libspdm_gen_csr_ex
-);
-
 /// for the LIBSPDM_DATA_BASE_HASH_ALGO data.
 ///
 /// # Parameter
@@ -3552,12 +3434,15 @@ pub unsafe fn get_negotiated_algos(cntx_ptr: *mut c_void, slot_id: u8) -> Result
 
 /// return if current code is running in a trusted environment.
 #[unsafe(no_mangle)]
-pub unsafe extern "C" fn libspdm_is_in_trusted_environment(_spdm_context: *mut c_void) -> bool {
+pub unsafe extern "C" fn libspdm_is_in_trusted_environment(
+    _spdm_context: *mut c_void,
+    _session_id: *const u32,
+) -> bool {
     true
 }
 #[cfg(test)]
 libspdm_match_fn_prototypes!(
-    unsafe extern "C" fn(*mut c_void) -> bool,
+    unsafe extern "C" fn(*mut c_void, *const u32) -> bool,
     libspdm_is_in_trusted_environment
 );
 
@@ -3573,6 +3458,250 @@ pub unsafe extern "C" fn libspdm_get_cert_chain_slot_storage_size(
 libspdm_match_fn_prototypes!(
     unsafe extern "C" fn(*mut c_void, u8) -> u32,
     libspdm_get_cert_chain_slot_storage_size
+);
+
+/// # Summary
+///
+/// Refresh the spdm_context local certificate after a successful
+/// SET_CERTIFICATE. This is a port of the sample
+/// `libspdm_update_local_cert_chain()` from
+/// `os_stub/spdm_device_secret_lib_sample/set_cert.c`.
+///
+/// After a successful SET_CERTIFICATE this callback is called. The new and
+/// old certificates are supplied as arguments. This function stores the new
+/// certificate chain in non-volatile memory. If the `cert_chain` is NULL
+/// and `cert_chain_size` is 0, the certificate chain is erased instead.
+///
+/// If a reset isn't required, then the local certificate chain is updated
+/// in libspdm (`LIBSPDM_DATA_LOCAL_PUBLIC_CERT_CHAIN`) to reference the new
+/// chain. The buffer for the new chain is intentionally leaked, as libspdm
+/// stores the raw pointer for the lifetime of the context.
+///
+/// # Parameter
+///
+/// * `spdm_context`: The SPDM context
+/// * `slot_id`: The number of slot for the certificate chain
+/// * `base_hash_algo`: Indicates the negotiated hash algorithm
+/// * `base_asym_algo`: Indicates the negotiated signing algorithms
+/// * `pqc_asym_algo`: Indicates the negotiated PQC signing algorithms
+/// * `hash_size`: Size of the negotiated base hash
+/// * `old_cert_chain`: Pointer to the current certificate chain
+/// * `old_cert_chain_size`: Size of the current certificate chain
+/// * `cert_chain`: The new certificate chain, or NULL to erase
+/// * `cert_chain_size`: Size of the new certificate chain, updated with the
+///                      final size for the ALIAS_CERT model
+/// * `cert_model`: The certificate model (one of
+///                 SPDM_CERTIFICATE_INFO_CERT_MODEL_*)
+/// * `need_reset`: Indicates whether the device needs to be reset to
+///                 complete, on input CERT_INSTALL_RESET_CAP
+/// * `is_busy`: Set to true if the chain can not be written now, but may
+///              succeed later
+///
+/// # Returns
+///
+/// True if the certificate chain was successfully written to non-volatile
+/// memory and set in libspdm, otherwise false
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn libspdm_update_local_cert_chain(
+    spdm_context: *mut c_void,
+    _session_id: *const u32,
+    slot_id: u8,
+    base_hash_algo: u32,
+    _base_asym_algo: u32,
+    _pqc_asym_algo: u32,
+    hash_size: usize,
+    old_cert_chain: *const c_void,
+    old_cert_chain_size: usize,
+    cert_chain: *const c_void,
+    cert_chain_size: *mut usize,
+    cert_model: u8,
+    _need_reset: *mut bool,
+    _is_busy: *mut bool,
+) -> bool {
+    if slot_id as u32 >= SPDM_MAX_SLOT_COUNT {
+        return false;
+    }
+
+    let header_size = core::mem::size_of::<spdm_cert_chain_t>() + hash_size;
+    let chain_size = unsafe { *cert_chain_size };
+
+    if !cert_chain.is_null() && chain_size != 0 {
+        if chain_size < header_size {
+            return false;
+        }
+
+        // Store the certificates (without the `spdm_cert_chain_t` header
+        // and the root certificate hash) to non-volatile memory
+        let chain = unsafe { (cert_chain as *const u8).add(header_size) as *const c_void };
+        let slice = unsafe { from_raw_parts(chain as *const u8, chain_size - header_size) };
+
+        if libspdm_write_certificate_to_nvm(slot_id, slice, cert_model).is_err() {
+            return false;
+        }
+    } else {
+        // Erasing the chain
+        if libspdm_write_certificate_to_nvm(slot_id, &[], cert_model).is_err() {
+            return false;
+        }
+    }
+
+    let new_buffer: Option<Box<[u8]>> = if cert_chain.is_null() || chain_size == 0 {
+        None
+    } else {
+        let new_chain = unsafe { from_raw_parts(cert_chain as *const u8, chain_size) };
+
+        match cert_model as u32 {
+            // Device/generic certificate model: replace the entire local
+            // chain
+            SPDM_CERTIFICATE_INFO_CERT_MODEL_DEVICE_CERT
+            | SPDM_CERTIFICATE_INFO_CERT_MODEL_GENERIC_CERT => {
+                Some(new_chain.to_vec().into_boxed_slice())
+            }
+            SPDM_CERTIFICATE_INFO_CERT_MODEL_ALIAS_CERT => {
+                // Alias Cert Model: the new `cert_chain` contains a partial
+                // certificate chain from the root CA to the Device
+                // Certificate CA. Replace the old certificates up to the
+                // Device Certificate CA and keep the rest. Then update the
+                // hash and the size.
+                let new_certs = &new_chain[header_size..];
+
+                let mut old_certs: &[u8] = &[];
+                let mut mutable_cert_offset = 0;
+
+                if !old_cert_chain.is_null() && old_cert_chain_size >= header_size {
+                    old_certs = unsafe {
+                        from_raw_parts(
+                            (old_cert_chain as *const u8).add(header_size),
+                            old_cert_chain_size - header_size,
+                        )
+                    };
+
+                    // First, find the offset of the Device Certificate CA
+                    // in the old certs. This should contain the Hardware
+                    // identity OID.
+                    let mut cert_index = 0;
+                    loop {
+                        let mut cert: *const u8 = ptr::null();
+                        let mut cert_size: usize = 0;
+
+                        if !unsafe {
+                            libspdm_rs::libspdm_x509_get_cert_from_cert_chain(
+                                old_certs.as_ptr(),
+                                old_certs.len(),
+                                cert_index,
+                                &mut cert,
+                                &mut cert_size,
+                            )
+                        } {
+                            return false;
+                        }
+
+                        mutable_cert_offset += cert_size;
+
+                        if unsafe { libspdm_rs::libspdm_contains_hardware_id_oid(cert, cert_size) }
+                        {
+                            // We found the Device Certificate CA
+                            break;
+                        }
+
+                        cert_index += 1;
+                    }
+                }
+
+                // The new chain is made up of the new immutable certificates
+                // followed by the old mutable certificates
+                let new_chain_size = (old_certs.len() - mutable_cert_offset) + chain_size;
+                let mut buffer = alloc::vec![0u8; new_chain_size];
+
+                // Copy the new immutable certificates
+                buffer[header_size..header_size + new_certs.len()].copy_from_slice(new_certs);
+                // Copy the old mutable certificates
+                buffer[header_size + new_certs.len()..]
+                    .copy_from_slice(&old_certs[mutable_cert_offset..]);
+
+                // Update the size
+                unsafe { *cert_chain_size = new_chain_size };
+
+                // Update the length field of the chain header
+                buffer[0..core::mem::size_of::<spdm_cert_chain_t>()]
+                    .copy_from_slice(&(new_chain_size as u32).to_le_bytes());
+
+                // Update the root certificate hash
+                let mut root_cert: *const u8 = ptr::null();
+                let mut root_cert_len: usize = 0;
+                if !unsafe {
+                    libspdm_rs::libspdm_x509_get_cert_from_cert_chain(
+                        buffer[header_size..].as_ptr(),
+                        new_chain_size - header_size,
+                        0,
+                        &mut root_cert,
+                        &mut root_cert_len,
+                    )
+                } {
+                    return false;
+                }
+                if !unsafe {
+                    libspdm_rs::libspdm_hash_all(
+                        base_hash_algo,
+                        root_cert as *const c_void,
+                        root_cert_len,
+                        buffer[core::mem::size_of::<spdm_cert_chain_t>()..].as_mut_ptr(),
+                    )
+                } {
+                    return false;
+                }
+
+                Some(buffer.into_boxed_slice())
+            }
+            _ => return false,
+        }
+    };
+
+    // libspdm stores the raw pointer (no copy) for the lifetime of the
+    // context, so leak the buffer intentionally. The old certificate chain
+    // can be freed at this point, as we can't free() the previous buffer
+    // stored in libspdm, implementations need to keep track of the buffer
+    // separately.
+    let (chain_ptr, chain_len) = match new_buffer {
+        Some(chain) => {
+            let chain: &'static mut [u8] = Box::leak(chain);
+            (chain.as_mut_ptr() as *const c_void, chain.len())
+        }
+        None => (ptr::null(), 0),
+    };
+
+    let parameter = libspdm_rs::libspdm_data_parameter_t::new_local(slot_id);
+    let status = unsafe {
+        libspdm_rs::libspdm_set_data(
+            spdm_context,
+            libspdm_data_type_t_LIBSPDM_DATA_LOCAL_PUBLIC_CERT_CHAIN,
+            &parameter as *const libspdm_rs::libspdm_data_parameter_t,
+            chain_ptr,
+            chain_len,
+        )
+    };
+
+    !LibspdmReturnStatus::libspdm_status_is_error(status)
+}
+#[cfg(test)]
+libspdm_match_fn_prototypes!(
+    unsafe extern "C" fn(
+        *mut c_void,
+        *const u32,
+        u8,
+        u32,
+        u32,
+        u32,
+        usize,
+        *const c_void,
+        usize,
+        *const c_void,
+        *mut usize,
+        u8,
+        *mut bool,
+        *mut bool,
+    ) -> bool,
+    libspdm_update_local_cert_chain
 );
 
 /// # Summary

@@ -12,16 +12,12 @@
 
 use crate::*;
 use core::ffi::c_void;
-use libspdm::spdm::LIBSPDM_MAX_SPDM_MSG_SIZE;
-use once_cell::sync::Lazy;
-use std::io::{Read, Write};
+use libspdm::spdm::{LIBSPDM_MAX_SPDM_MSG_SIZE, TransportLayer};
 use std::net::TcpStream;
 use std::slice::{from_raw_parts, from_raw_parts_mut};
-use std::sync::Mutex;
 use std::time::Duration;
 
 const SEND_RECEIVE_BUFFER_LEN: usize = LIBSPDM_MAX_SPDM_MSG_SIZE as usize;
-static TCP_STREAM: Lazy<Mutex<Option<TcpStream>>> = Lazy::new(|| Mutex::new(None));
 
 /// # Summary
 ///
@@ -30,7 +26,7 @@ static TCP_STREAM: Lazy<Mutex<Option<TcpStream>>> = Lazy::new(|| Mutex::new(None
 ///
 /// # Parameter
 ///
-/// * `_context`: The SPDM context
+/// * `context`: The SPDM context
 /// * `message_size`: Number of elements in `message_ptr` to send
 /// * `message_ptr`: A pointer to the data buffer to be sent
 /// * `timeout`: Transaction timeout
@@ -45,13 +41,13 @@ static TCP_STREAM: Lazy<Mutex<Option<TcpStream>>> = Lazy::new(|| Mutex::new(None
 /// failure.
 #[unsafe(no_mangle)]
 unsafe extern "C" fn tcp_client_send_message(
-    _context: *mut c_void,
+    context: *mut c_void,
     message_size: usize,
     message_ptr: *const c_void,
     timeout: u64,
 ) -> u32 {
-    let guard = TCP_STREAM.lock().unwrap();
-    let mut stream = guard.as_ref().expect("No client connection");
+    let state = unsafe { &mut *tcp_common::state_from_context(context) };
+    let stream = state.stream.as_mut().expect("No server connection");
 
     let message = message_ptr as *const u8;
     let msg_buf = unsafe { from_raw_parts(message, message_size) };
@@ -66,8 +62,11 @@ unsafe extern "C" fn tcp_client_send_message(
             .expect("Couldn't set write timeout");
     }
 
-    stream.write_all(msg_buf).unwrap();
-    stream.flush().unwrap();
+    tcp_common::write_message(
+        stream,
+        msg_buf,
+        state.transport.expect("Transport layer was never set"),
+    );
     0
 }
 
@@ -78,7 +77,7 @@ unsafe extern "C" fn tcp_client_send_message(
 ///
 /// # Parameter
 ///
-/// * `_context`: The SPDM context
+/// * `context`: The SPDM context
 /// * `message_size`: Returns the number of bytes received in this transaction
 /// * `message_ptr`: A pointer to a data buffer of a minimum size of
 ///                 `SEND_RECEIVE_BUFFER_LEN` to capture the received bytes.
@@ -94,13 +93,13 @@ unsafe extern "C" fn tcp_client_send_message(
 /// failure.
 #[unsafe(no_mangle)]
 unsafe extern "C" fn tcp_client_receive_message(
-    _context: *mut c_void,
+    context: *mut c_void,
     message_size: *mut usize,
     msg_buf_ptr: *mut *mut c_void,
     timeout: u64,
 ) -> u32 {
-    let guard = TCP_STREAM.lock().unwrap();
-    let mut stream = guard.as_ref().expect("No server connection");
+    let state = unsafe { &mut *tcp_common::state_from_context(context) };
+    let stream = state.stream.as_mut().expect("No server connection");
     let message = unsafe { *msg_buf_ptr as *mut u8 };
     let msg_buf = unsafe { from_raw_parts_mut(message, SEND_RECEIVE_BUFFER_LEN) };
 
@@ -114,11 +113,11 @@ unsafe extern "C" fn tcp_client_receive_message(
             .expect("Couldn't set read timeout");
     }
 
-    let mut read_len = stream.read(msg_buf);
-    while read_len.is_err() {
-        read_len = stream.read(msg_buf);
-    }
-    let read_len = read_len.unwrap();
+    let read_len = tcp_common::read_message(
+        stream,
+        msg_buf,
+        state.transport.expect("Transport layer was never set"),
+    );
 
     if read_len == 0 {
         // when read() return 0, the two likely cases are:
@@ -141,6 +140,7 @@ unsafe extern "C" fn tcp_client_receive_message(
 /// # Parameter
 ///
 /// * `context`: The SPDM context
+/// * `trans`: The transport protocol used to frame messages on the wire
 ///
 /// # Returns
 ///
@@ -149,7 +149,12 @@ unsafe extern "C" fn tcp_client_receive_message(
 /// # Panics
 ///
 /// Panics if `SEND_BUFFER/RECEIVE_BUFFER` is occupied
-pub fn register_device(context: *mut c_void, port: u16, ip: Option<String>) -> Result<(), ()> {
+pub fn register_device(
+    context: *mut c_void,
+    port: u16,
+    ip: Option<String>,
+    trans: TransportLayer,
+) -> Result<(), ()> {
     let ip_addr = ip.ok_or(())?;
     let ip_port = format!("{}:{}", ip_addr.clone(), port);
 
@@ -163,7 +168,12 @@ pub fn register_device(context: *mut c_void, port: u16, ip: Option<String>) -> R
     };
 
     info!("Connection success!");
-    *(TCP_STREAM.lock().unwrap()) = Some(stream);
+
+    let mut state = Box::<tcp_common::TcpDeviceState>::default();
+    state.stream = Some(stream);
+    state.transport = Some(trans);
+
+    tcp_common::attach_state(context, state);
 
     unsafe {
         libspdm_register_device_io_func(
@@ -171,11 +181,13 @@ pub fn register_device(context: *mut c_void, port: u16, ip: Option<String>) -> R
             Some(tcp_client_send_message),
             Some(tcp_client_receive_message),
         );
-        io_buffers::libspdm_setup_io_buffers(
-            context,
-            SEND_RECEIVE_BUFFER_LEN,
-            SEND_RECEIVE_BUFFER_LEN,
-        )?;
+        let spdm_msg_len = if trans == TransportLayer::Mctp {
+            tcp_common::MCTP_SPDM_MSG_LEN
+        } else {
+            SEND_RECEIVE_BUFFER_LEN
+        };
+
+        io_buffers::libspdm_setup_io_buffers(context, SEND_RECEIVE_BUFFER_LEN, spdm_msg_len)?;
     }
 
     Ok(())
