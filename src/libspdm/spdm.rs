@@ -674,17 +674,17 @@ pub fn process_cbor_measurement_manifest(
             error!("Failed to generate direct manifest: {e:?}");
         })?;
 
-    let mut direct_manifest = [0u8; 1024];
-    let original_len = measurement_manifest.len();
-    assert!(original_len < 1024);
-    minicbor::Encoder::new(direct_manifest.as_mut())
+    let mut direct_manifest = Vec::new();
+    minicbor::Encoder::new(&mut direct_manifest)
         .encode(&spdm_toc)
         .map_err(|e| {
             error!("Failed to create direct manifest: {e:?}");
         })?;
     let length = spdm_toc.cbor_len(&mut ());
 
-    print_measurement_manifest(&direct_manifest[0..length], true)?;
+    assert_eq!(length, direct_manifest.len());
+
+    print_measurement_manifest(&direct_manifest, true)?;
 
     Ok(())
 }
