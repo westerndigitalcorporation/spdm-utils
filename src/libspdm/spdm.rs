@@ -3961,3 +3961,165 @@ pub unsafe fn requester_respond_if_ready(
 
     Ok(())
 }
+
+#[cfg(all(test, not(feature = "no_std")))]
+mod measurement_manifest_tests {
+    use super::*;
+    use minicbor::data::Tag;
+    use std::sync::Mutex;
+
+    /// `process_cbor_measurement_manifest()` writes to a fixed set of paths,
+    /// so serialise tests that touch those files.
+    static MANIFEST_FILE_LOCK: Mutex<()> = Mutex::new(());
+
+    /// Lock the manifest output files, ignoring poisoning so that one
+    /// panicked test does not fail the remaining tests as well.
+    fn lock_manifest_files() -> std::sync::MutexGuard<'static, ()> {
+        MANIFEST_FILE_LOCK.lock().unwrap_or_else(|e| e.into_inner())
+    }
+
+    const OUTPUT_FILES: [&str; 4] = [
+        "manifest/direct_responder_manifest.cbor",
+        "manifest/direct_responder_manifest.pretty",
+        "manifest/responder_manifest.cbor",
+        "manifest/responder_manifest.pretty",
+    ];
+
+    /// Build a minimal, valid CBOR encoded spdm-toc manifest. It contains no
+    /// `spdm-indirect` measurements, so processing it never touches the
+    /// libspdm context.
+    fn build_test_manifest() -> Vec<u8> {
+        let mut buffer = Vec::new();
+        let mut enc = minicbor::Encoder::new(&mut buffer);
+
+        let oid: [u8; 9] = [0x06, 0x07, 0x2B, 0x06, 0x01, 0x04, 0x01, 0xA8, 0x07];
+        let auth: [u8; 4] = [0xDE, 0xAD, 0xBE, 0xEF];
+
+        enc.tag(Tag::new(570)).unwrap(); // spdm-toc
+        enc.map(2).unwrap(); // tagged-evidence
+        enc.u8(0).unwrap(); // tagged-evidence key
+        enc.array(1).unwrap();
+        enc.tag(Tag::new(571)).unwrap(); // ce.ev-triples
+        enc.map(1).unwrap();
+        enc.u8(0).unwrap(); // ce.ev-triples key
+        enc.map(1).unwrap();
+        enc.u8(0).unwrap(); // ce.evidence-triples key
+        enc.array(1).unwrap(); // one ce.evidence-triple
+        enc.array(2).unwrap(); // (environment-map, [measurement-map])
+        // environment-map
+        enc.map(1).unwrap();
+        enc.u8(0).unwrap(); // class
+        enc.map(2).unwrap();
+        enc.u8(0).unwrap(); // class-id
+        enc.tag(Tag::new(111)).unwrap(); // tagged-oid-type
+        enc.bytes(&oid).unwrap();
+        enc.u8(1).unwrap(); // vendor
+        enc.str("spdm-utils-test").unwrap();
+        // measurement entries
+        enc.array(1).unwrap(); // [measurement-map]
+        enc.map(2).unwrap();
+        enc.u8(1).unwrap(); // mval
+        enc.map(2).unwrap();
+        enc.u8(0).unwrap(); // version
+        enc.str("1.0.0").unwrap();
+        enc.u8(11).unwrap(); // name
+        enc.str("test-firmware").unwrap();
+        enc.u8(2).unwrap(); // authorised-by
+        enc.array(1).unwrap();
+        enc.tag(Tag::new(560)).unwrap(); // tagged-bytes
+        enc.bytes(&auth).unwrap();
+        // rim-locators (none)
+        enc.u8(1).unwrap();
+        enc.array(0).unwrap();
+
+        buffer
+    }
+
+    fn cleanup_output_files() {
+        for path in OUTPUT_FILES {
+            let _ = fs::remove_file(path);
+        }
+    }
+
+    #[test]
+    fn test_process_cbor_measurement_manifest_valid() {
+        let _lock = lock_manifest_files();
+        cleanup_output_files();
+
+        let manifest = build_test_manifest();
+
+        // The manifest has no `spdm-indirect` entries, so the libspdm
+        // context is never dereferenced and a null pointer can be used.
+        assert_eq!(
+            process_cbor_measurement_manifest(ptr::null_mut(), 0, &manifest),
+            Ok(())
+        );
+
+        // The decoded (diagnostic and pretty) manifests should have been
+        // written out for both the raw and direct manifests.
+        for path in OUTPUT_FILES {
+            let contents = fs::read_to_string(path)
+                .unwrap_or_else(|e| panic!("expected {path} to be created: {e}"));
+            assert!(!contents.is_empty(), "expected {path} to be non-empty");
+        }
+
+        // The re-encoded "direct" manifest should carry the same values as
+        // the manifest we supplied.
+        let direct =
+            fs::read_to_string("manifest/responder_manifest.cbor").expect("direct manifest saved");
+        assert!(direct.contains("test-firmware"));
+        assert!(direct.contains("1.0.0"));
+
+        cleanup_output_files();
+    }
+
+    #[test]
+    fn test_process_cbor_measurement_manifest_invalid() {
+        let _lock = lock_manifest_files();
+        cleanup_output_files();
+
+        // Garbage input should fail CBOR decoding.
+        let garbage = [0xFF; 32];
+        assert_eq!(
+            process_cbor_measurement_manifest(ptr::null_mut(), 0, &garbage),
+            Err(())
+        );
+
+        cleanup_output_files();
+    }
+
+    #[test]
+    fn test_process_cbor_measurement_manifest_existing_manifest() {
+        let _lock = lock_manifest_files();
+        cleanup_output_files();
+
+        // This is copied from process_cbor_measurement_manifest(), but
+        // avoids calls to generate_direct_manifest() so we don't need SPDM state
+        let manifest = fs::read("manifest/manifest.out.cbor").expect("read repo manifest");
+
+        let spdm_toc: manifest::SpdmToc = minicbor::decode(&manifest).expect("valid spdm-toc");
+
+        let mut reencoded = Vec::new();
+        minicbor::Encoder::new(&mut reencoded)
+            .encode(&spdm_toc)
+            .expect("re-encode spdm-toc");
+        let length = spdm_toc.cbor_len(&mut ());
+        assert_eq!(length, reencoded.len());
+        assert_eq!(reencoded, manifest, "spdm-toc should round-trip");
+
+        print_measurement_manifest(&manifest, false).expect("print repo manifest");
+
+        for path in [
+            "manifest/direct_responder_manifest.cbor",
+            "manifest/direct_responder_manifest.pretty",
+        ] {
+            let contents = fs::read_to_string(path)
+                .unwrap_or_else(|e| panic!("expected {path} to be created: {e}"));
+            assert!(contents.contains("Western Digital Test"));
+            assert!(contents.contains("ROM"));
+            assert!(contents.contains("Firmware"));
+        }
+
+        cleanup_output_files();
+    }
+}
