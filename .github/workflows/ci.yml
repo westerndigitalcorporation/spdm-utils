@@ -75,6 +75,7 @@ jobs:
                   -DLIBSPDM_ENABLE_CAPABILITY_SET_CERT_CAP=1 \
                   -DLIBSPDM_ENABLE_CAPABILITY_CERT_CAP=1 \
                   -DLIBSPDM_ENABLE_CAPABILITY_KEY_EX_CAP=1 \
+                  -fPIC \
                   " \
             .. ; \
           make -j8; \
