@@ -98,6 +98,22 @@ jobs:
           sleep 1; \
           ./target/debug/spdm_utils --tcp-client tests;
 
+      - name: Test runtime measurement manifest processing
+        run: |
+          # The `--tcp-client tests` run above fetches the measurement
+          # manifest (index 0xFD as raw-bitstream), which is passed to
+          # `process_cbor_measurement_manifest()`. Failures are only
+          # logged, so check that the received (indirect) manifest and the
+          # generated direct manifest were both written out.
+          test -s manifest/direct_responder_manifest.cbor; \
+          test -s manifest/direct_responder_manifest.pretty; \
+          test -s manifest/responder_manifest.cbor; \
+          test -s manifest/responder_manifest.pretty; \
+          # The received manifest contains spdm-indirect measurements... \
+          grep -q '12: {0: \[' manifest/direct_responder_manifest.cbor; \
+          # ... which must have been resolved in the direct manifest. \
+          ! grep -q '12: {0: \[' manifest/responder_manifest.cbor;
+
       - name: Clippy
         uses: actions-rs/cargo@v1
         with:
